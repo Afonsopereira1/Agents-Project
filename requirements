@@ -1,0 +1,74 @@
+## Requirements 
+
+### Goals:
+
+> Detetar ameaças de caça, verificar veracidade dos eventos detetados e coordenar respostas sem autoridade central.
+>
+> Deteção:
+>> Detetar/monitorizar a reserva e reportar eventos suspeitos.
+> 
+> Verificação:
+>> Confirmar se informação é verdadeira ou um false positive
+> 
+> Gestão de Reputação:
+>> Avaliar fiabilidade de quem reporta os alertas (confiança em sensores e informadores)
+> 
+> Distribuição de tarefas:
+>> Coordenar e enviar patrulhas para o local de ameaça equilibrando rapidez e precisão
+
+### Atores:
+
+> Sensores estáticos -> Aúdio e visual
+> 
+> Informadores -> Comunidade local que reporta eventos
+> 
+> Patrulhas móveis -> _Drones_, veículos
+> 
+> Rangers -> Humanos que atuam e intercetam 
+
+### Requesitos Funcionais:
+
+> RF1:
+>> Sensores ou informadores detetam e enviam alertas (Local, tipo de acontecimento, ...)
+> 
+> RF2:
+>> Os sensores próximos podem comunicar e cruzar dados para verificar a veracidade.
+> 
+> RF3:
+>> Pontuação de confiança em sensores e informadores.
+> 
+> RF4:
+>> Comunicação entre sensores e informadores/sensores, informadores e patrulhas, rangers/patrulhas e rangers 
+
+### Requesitos Não Funcionais:
+
+> RNF1:
+>> Descentralização
+> 
+> RNF2:
+>> False Positives
+> 
+> RNF3:
+>> Atraso/não receção de mensagens (problemas de conectividade)
+> 
+> RNF4:
+>> Limite de recursos (patrulhas e rangers) sendo necessário combinar rapidez e precisão
+> 
+> RNF5:
+>> Distanciâs que patrulhas e rangers têm de percorrer(tempo que demora a ir de A a B)
+> 
+> RNF6:
+>> Bateria/gasóleo dos recursos existentes 
+
+### Ideias principais:
+
+> **Passo 1**: Sensores ou informadores vão captar imagens/dados suspeitos e recolher a informação de sensores próximos que possam ajudar a confirmar a informação.
+> 
+> **Passo 2**: Depois de comunicarem entre si vão transmitir essa informação às patrulhas e rangers.
+> 
+> **Passo 3**: Consoante o nível de confiança da informação pode:
+>> Caso 1: Se a informação não for de confiança(Apenas 1 sensor captou ou um informador que costuma estar sempre errado reportou) pode decidir não enviar ninguém para verificar o evento.
+> 
+>> Caso 2: Se a informação for, por exemplo, entre 30% a 75% envia um _drone_ ou veículo(se disponíveis) para verificar a veracidade da informação e depois comunicar com os rangers para combater a ameaça.
+> 
+>> Caso 3: Se for uma informação com elevada confiança envia uma equipa de rangers para combater a ameaça.
