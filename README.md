@@ -42,4 +42,56 @@ O simulador mantém a verdade dos acontecimentos apenas para avaliação; os age
 
 ## Executar o projeto
 
-Ainda não existe aplicação Python executável nesta branch. Quando a Etapa 0 e a comunicação SPADE estiverem efetivamente testadas, colocar aqui os comandos de instalação, execução e testes validados.
+
+## Executar o projeto
+
+### Requisitos
+- Python 3.12
+- SPADE 4.1.4
+- Git
+
+### 1. Preparar o ambiente Python
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
+
+### 2. Iniciar o servidor XMPP
+
+No primeiro terminal:
+
+```bash
+spade run
+```
+
+Manter o servidor em execução.
+
+### 3. Executar o primeiro agente
+
+Abrir um segundo terminal e ativar o ambiente:
+
+```bash
+source .venv/bin/activate
+python hello_agent.py
+```
+
+### Resultado esperado
+
+```text
+A iniciar o agente...
+Olá! Sou o agente teste_isia@localhost
+Agente terminou corretamente.
+```
+
+### Terminar
+
+Para parar o servidor XMPP, utilizar Ctrl+C
+no terminal em que foi iniciado.
+
+### Estado do desenvolvimento
+
+Etapa 0: primeiro agente SPADE testado localmente.
+A comunicação entre vários agentes será implementada
+nas etapas seguintes.
