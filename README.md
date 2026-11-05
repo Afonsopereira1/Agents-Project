@@ -1,91 +1,45 @@
-# ISIA — Tema C: Monitorização descentralizada de fauna e patrulhas contra a caça furtiva
+# ISIA — Tema C: Monitorização descentralizada da vida selvagem
 
-> **Estado:** proposta técnica para discussão pelos três elementos do grupo. **Nenhuma arquitetura, política ou distribuição de trabalho aqui descrita foi formalmente aprovada pelo grupo.**
->
-> **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (ISIA), 2026/2027 — Assignment 1.
-> **Tema oficial:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*.
+**Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
+**Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-## Objetivo
+> **Estado:** documentação de planeamento; arquitetura B1 proposta, ainda a validar em grupo. Não há implementação Python verificada nesta branch.
 
-Conceber, implementar e avaliar, com **SPADE** (Python/XMPP), um **sistema multiagente descentralizado** numa reserva natural simulada. Sensores e informadores comunicam observações potencialmente suspeitas; agentes distintos corroboram a evidência; recursos móveis e equipas de rangers cooperam para verificar ocorrências e coordenar respostas, sem um despachante com autoridade central.
+## O projeto
 
-O enunciado propõe explicitamente falsos positivos, conectividade intermitente e recursos limitados. Exige a documentação das escolhas de conceção, formatos de mensagem, modos de falha, métricas e avaliação em **pelo menos três cenários contrastantes**, bem como código, apresentação e visualização/demonstração. Ver [fontes e requisitos](docs/references.md) e [avaliação](docs/evaluation.md).
+Vamos simular uma reserva onde sensores e informadores detetam atividade suspeita e **corroboram evidências**. Drones, veículos e rangers podem propor e executar missões, sem despachante central. Na **abordagem B1**, cada ocorrência tem um iniciador local temporário; os outros agentes decidem autonomamente se colaboram. Utilizaremos **SPADE (Python/XMPP)**.
 
-**Situação do projeto:** documentação de planeamento; não existe ainda implementação funcional verificada na branch `main` à data da auditoria (20-10-2026). Esta informação deve ser atualizada quando o código for integrado.
+O simulador mantém a verdade dos acontecimentos apenas para avaliação; os agentes recebem observações imperfeitas e mensagens.
 
-## Navegação pela documentação
+## Onde encontrar cada coisa?
 
-| Documento | O que contém |
+| Preciso de… | Ficheiro |
 |---|---|
-| [Estratégia de implementação](docs/implementation-strategy.md) | Problema, decisões, alternativas, fundamentação, MVP e limitações |
-| [Arquitetura](docs/architecture.md) | Ambiente, agentes, responsabilidades, estados e fluxo integral |
-| [Plano de desenvolvimento](docs/development-plan.md) | Etapas 0–10, dependências, ficheiros, testes, resultados e checklists |
-| [Protocolos](docs/protocols.md) | Contratos de dados, mensagens SPADE/FIPA, sequências e falhas |
-| [Avaliação](docs/evaluation.md) | Métricas, três cenários, experiências e matriz de verificação |
-| [Organização da equipa](docs/team-tasks.md) | Divisão equilibrada, dependências, paralelismo e revisão no GitHub |
-| [Decisões pendentes](docs/decisions.md) | Estatuto de cada decisão, perguntas a aprovar e registo das decisões |
-| [Referências](docs/references.md) | Enunciado, slides, bibliografia e referências científicas |
+| Objetivos e ideias originais do colega | [requirements.md](requirements.md) |
+| **Tarefas e ordem de implementação (Etapas 0–10)** | [docs/development-plan.md](docs/development-plan.md) |
+| Arquitetura, agentes, algoritmos e decisões pendentes | [docs/architecture.md](docs/architecture.md) |
+| Mensagens e protocolos de comunicação | [docs/protocols.md](docs/protocols.md) |
+| Testes, métricas e três cenários | [docs/evaluation.md](docs/evaluation.md) |
+| Organização flexível dos colegas | [docs/team-tasks.md](docs/team-tasks.md) e [Issues](https://github.com/Afonsopereira1/Agents-Project/issues) |
 
-O ficheiro [requirements](requirements) é a **contribuição original de um colega**, com objetivos, RF1–RF4, RNF1–RNF6 e ideias de funcionamento. Não é um `requirements.txt` de dependências Python; não deve ser apagado nem reescrito sem discussão.
+**MVP previsto:** ocorrência → observação → evidências → avaliação → propostas de recursos → missão → resultado. O MVP não substitui os requisitos da entrega final.
 
-## Proposta técnica num relance
+## Requisitos e fontes
 
-> Tudo nesta secção é **[PROPOSTA]**, exceto o uso de SPADE e a descentralização, que decorrem do enunciado.
+**Enunciado oficial** — `ISIA 2026-2027 - Assignment 1 - Theme suggestions [simple].pdf`:
+- **Tema C, p. 1:** deteção de ameaças, corroboração e coordenação descentralizada de patrulhas/respostas comunitárias.
+- **Instruções gerais, p. 4:** SPADE; decisões justificadas sobre agentes, mensagens, protocolos, confiança e falhas; pelo menos **três cenários contrastantes**; métricas e limitações; código com instruções, documentação, relatório, visualização ou gravação, apresentação. Testes automatizados surgem como opcionais, mas são recomendáveis.
 
-- **Agentes:** `SensorAgent`, `InformantAgent`, `DroneAgent`, `VehicleAgent` e `RangerAgent`.
-- **Arquitetura interna:** sensores sobretudo reativos; patrulhas/rangers com objetivos, estado interno e máquina de estados explícita; abordagem híbrida simplificada, inspirada na matéria da cadeira.
-- **Comunicação:** SPADE/XMPP, metadados com semântica FIPA-ACL e conteúdo JSON versionado.
-- **Deteção:** observações imperfeitas, identificação de ocorrências e corroboração distribuída entre fontes próximas.
-- **Decisão:** pontuação de evidência com pesos e reputação (não confundir com probabilidade calibrada).
-- **Coordenação:** *Contract Net* simplificado e iniciador local por ocorrência, sem gestor global de missões.
-- **Ambiente:** reserva 2D configurável; estado verdadeiro isolado do conhecimento de cada agente.
-- **Robustez:** atrasos, mensagens perdidas/duplicadas, recursos ocupados e limites de combustível/bateria.
-- **Avaliação:** funcionamento normal; observações ruidosas; rede degradada e recursos escassos.
+**Materiais oficiais da cadeira** (PDF fornecidos no âmbito da UC; não publicados neste repositório):
+- `ISIA_0 (2026-27).pdf` — enquadramento, ferramentas e datas;
+- `ISIA_1 - Agent-based Computing.pdf` — conceitos de agentes e MAS;
+- `ISIA_2 - Intelligent Agents.pdf` — arquiteturas reativas, deliberativas e híbridas;
+- `ISIA_3 - Multi-Agent Systems.pdf` — comunicação FIPA-ACL, coordenação e Contract Net.
 
-```mermaid
-flowchart LR
-    W[Ambiente simulado] --> S[Sensores e informadores]
-    S --> C[Corroboração entre pares]
-    C --> D[Avaliação local de evidência]
-    D --> N[Negociação de missão]
-    N --> P[Patrulhas / rangers]
-    P --> W
-    P --> C
-```
+**Referências técnicas e teóricas essenciais:** [SPADE](https://spade-mas.readthedocs.io/), [GitHub SPADE](https://github.com/javipalanca/spade), [FIPA](http://www.fipa.org/), [GitHub Docs](https://docs.github.com/en/), Wooldridge (*An Introduction to MultiAgent Systems*, 2009), Russell e Norvig (*Artificial Intelligence: A Modern Approach*, 4.ª ed.), [Gaia (Wooldridge, Jennings e Kinny, 2000)](https://link.springer.com/article/10.1023/A:1010071910869).
 
-Este diagrama é **lógico**. O bloco de avaliação não designa um servidor central: cada ocorrência pode ser avaliada por um iniciador local e os agentes mantêm autonomia para participar ou recusar tarefas.
+**Nota:** as fórmulas, os limiares de confiança, o mapa 2D e o protocolo Contract Net simplificado são **propostas de engenharia**, não exigências literais do enunciado.
 
-## Roteiro resumido
+## Executar o projeto
 
-O plano completo, com tarefas e critérios verificáveis, está em [development-plan.md](docs/development-plan.md).
-
-| Fase | Etapas | Marco verificável |
-|---|---|---|
-| Preparação | 0–2 | Repositório auditado, contratos definidos e ambiente simulável |
-| Interação | 3–5 | Agentes SPADE comunicam, corroboram e negoceiam |
-| **MVP** | **6** | Uma ocorrência decorre de observação a resposta e encerramento |
-| Robustez e ciência | 7–9 | Reputação, falhas simuladas e três experiências avaliadas |
-| Entrega | 10 | Documentação, métricas e demonstração reproduzível |
-
-**Primeira tarefa quando a proposta for aprovada:** executar a [Etapa 0](docs/development-plan.md#etapa-0--auditoria-e-preparação), analisando novamente o estado do repositório, validando Python/SPADE e acordando convenções. **Não iniciar implementação antes da revisão coletiva**.
-
-## Como discutir e aprovar esta proposta
-
-1. Ler [decisions.md](docs/decisions.md) e comentar cada decisão pendente.
-2. Propor alterações a estes Markdown numa branch dedicada.
-3. Abrir um *Pull Request* para `main`, solicitar revisão aos restantes elementos e debater nos comentários das linhas correspondentes.
-4. Registar as deliberações em `docs/decisions.md`, atualizar documentos afetados e integrar **após aprovação**.
-5. Criar GitHub Issues para tarefas aprovadas; utilizar GitHub Projects apenas se o quadro visual facilitar o acompanhamento.
-
-A consulta deste `README.md` não substitui a leitura do [enunciado](docs/references.md#documentos-oficiais) nem a análise das fontes.
-
-## Estado dos entregáveis
-
-- [x] Estratégia de documentação preparada para revisão.
-- [ ] Documentação discutida e aprovada pelo grupo.
-- [ ] Etapa 0: ambiente e repositório preparados.
-- [ ] Etapa 6: MVP funcional.
-- [ ] Etapa 9: avaliação dos três cenários.
-- [ ] Etapa 10: demonstração e apresentação finalizadas.
-
-**Nota de rigor:** as caixas assinaladas refletem apenas a preparação dos documentos, não testes de software nem acordo dos colegas.
+Ainda não existe aplicação Python executável nesta branch. Quando a Etapa 0 e a comunicação SPADE estiverem efetivamente testadas, colocar aqui os comandos de instalação, execução e testes validados.
