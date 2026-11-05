@@ -2,7 +2,7 @@
 
 > **Estado:** proposta de conceção, a rever pelos três elementos. Nenhum destes componentes está declarado como implementado.
 
-[README](../README.md) · [Estratégia](implementation-strategy.md) · [Protocolos](protocols.md) · [Decisões](decisions.md)
+[README](../README.md) · [Plano](development-plan.md) · [Protocolos](protocols.md) · [Decisões pendentes](#decisões-pendentes)
 
 ## 1. Princípios de conceção
 
@@ -181,4 +181,67 @@ Este é um **cenário ilustrativo**, não uma execução realizada nem resultado
 - [ ] Graus mínimos de autonomia e critérios de reserva para patrulhas/rangers.
 - [ ] Fronteiras entre camada SPADE e funções Python testáveis.
 
-Ver também [protocols.md](protocols.md) e [decisions.md](decisions.md).
+Ver também [protocols.md](protocols.md) e [decisões pendentes](#decisões-pendentes).
+
+
+## 9. Estratégia técnica e algoritmos
+
+**Tudo nesta secção é uma proposta de conceção, não uma funcionalidade já implementada nem um método imposto pelo docente.** A abordagem B1 combina sensores sobretudo reativos com recursos que mantêm estados e objetivos; não pressupõe um interpretador BDI completo. Um agente coordena temporariamente cada ocorrência, mas não existe despachante global.
+
+### Alternativas e escolhas
+
+| Problema | Proposta simples | Alternativas/limitações |
+|---|---|---|
+| Arquitetura | Reatividade + estado interno e objetivos | BDI completo e aprendizagem por reforço aumentariam a complexidade do MVP |
+| Atribuição | Contract Net simplificado por ocorrência | Patrulha elegível mais próxima é baseline útil; otimização global é mais exigente |
+| Corroboração | Pontuação ponderada e reputação | Contar alertas ignora fiabilidade/correlação; modelo probabilístico requer calibração |
+| Ambiente | Reserva 2D, relógio coerente e observações imperfeitas | Não é preciso áudio/imagens reais ou simulação física detalhada |
+
+### Algoritmos candidatos
+
+**Associação:** agrupar observações pelo tipo e proximidade espacial e temporal. Cada observação usa event_id; uma ocorrência agrupada usa incident_id. Não contar retransmissões ou observações correlacionadas como fontes independentes.
+
+**Pontuação heurística de evidência:**
+
+$$
+S=\frac{\sum_{i=1}^{n}w_i c_i}{\sum_{i=1}^{n}w_i},\qquad w_i\geq 0,\quad \sum_i w_i>0.
+$$
+
+c_i indica força da evidência e w_i peso dependente de fiabilidade/atualidade. S **não é uma probabilidade calibrada**. Se todos os pesos forem nulos, devolver «evidência insuficiente».
+
+**Reputação com suavização:**
+
+$$
+R_i=\frac{\alpha_0+a_i}{\alpha_0+\beta_0+a_i+b_i}.
+$$
+
+a_i representa observações posteriormente confirmadas e b_i incorretas; α₀ e β₀ são pseudocontagens iniciais. Só atualizar com resultados suficientemente validados, não por simples concordância entre sensores. Esta estatística não mede automaticamente ameaças nunca reportadas.
+
+**Política de resposta:** WATCH, VERIFY, RESPOND, CLOSE/EXPIRE, com limiares configuráveis, gravidade e disponibilidade de recursos. Os 30%/75% do requirements.md são **exemplos não calibrados**.
+
+**Custo de propostas elegíveis:**
+
+$$
+J_j=\lambda_t\widehat{T}_j+\lambda_e\widehat{E}_j+\lambda_l\widehat{L}_j,
+$$
+
+com tempo, energia e carga **normalizados** e pesos escolhidos/testados pelo grupo. Primeiro filtrar recursos disponíveis, capazes e sem reserva incompatível. Comparar com a alternativa mais simples de escolher a patrulha elegível mais próxima.
+
+**Riscos prioritários:** verdade do simulador acessível indevidamente aos agentes; alertas repetidos; duas missões incompatíveis no mesmo recurso; falha do iniciador; timeouts/mensagens atrasadas; custos de energia mal definidos. Utilizar IDs, reservas atómicas, prazos, estados explícitos e testes de integração. A comunicação por XMPP não demonstra tolerância à falha do servidor.
+
+## 10. Decisões pendentes
+
+Estatutos: **OFICIAL** = exigência do enunciado; **PROPOSTA** = por aprovar coletivamente; **PENDENTE** = precisa de escolha/teste. Guardar aprovações e respetiva justificação numa Issue ou PR, com data.
+
+| Referências da proposta original | Situação |
+|---|---|
+| D01–D03 | SPADE é **OFICIAL**; Python/XMPP, cinco tipos de agente e arquitetura híbrida simplificada são **PROPOSTAS** |
+| D04–D06 | Grelha 2D, verdade de referência separada e mensagens JSON/FIPA: **PROPOSTAS** |
+| D07–D10 | Associação, corroboração, reputação e limiares de decisão: **PROPOSTAS** por parametrizar |
+| D11–D13 | Contract Net local, reserva, timeouts e custo de missão: **PROPOSTAS**; recuperar iniciador ainda pendente |
+| D14 | Pelo menos três cenários é **OFICIAL**; normal/ruidoso/degradado são **PROPOSTAS** |
+| D15 | A divisão fixa A/B/C foi substituída, por pedido do utilizador, por tarefas flexíveis em [team-tasks.md](team-tasks.md); ainda requer coordenação com os restantes colegas |
+| D16 | Estrutura modular src/isia/, tests/, config/, docs/: **PROPOSTA** |
+| D17–D20 | Versões de Python/SPADE; descoberta de vizinhos e substituição de iniciador; parâmetros de erro/energia/velocidades; visualização: **PENDENTES** |
+
+**Antes de implementar:** decidir âmbito do MVP, identificadores e contratos, relógio da simulação, prevenção de ocorrências duplicadas, protocolo mínimo, tratamento de falhas e integração GitHub. Ver [plano de desenvolvimento](development-plan.md), [protocolos](protocols.md) e [avaliação](evaluation.md). Os [requisitos originais](../requirements.md) permanecem intactos.
