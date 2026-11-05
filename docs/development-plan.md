@@ -41,7 +41,7 @@ Alguma documentação e infraestrutura de testes da Etapa 10 podem começar ante
 
 **Pré-requisitos:** acesso ao repositório `Agents-Project`, Git e Python nos computadores dos três elementos; consenso para iniciar implementação.
 
-**Ficheiros envolvidos:** atuais `README.md`, `requirements` (manter inalterado), `.gitignore`, futuros `requirements.txt`/`requirements-dev.txt` e configuração do ambiente; documentação em `docs/`.
+**Ficheiros envolvidos:** atuais `README.md`, `requirements.md` (manter inalterado), `.gitignore`, futuros `requirements.txt`/`requirements-dev.txt` e configuração do ambiente; documentação em `docs/`.
 
 **Tarefas concretas:**
 
