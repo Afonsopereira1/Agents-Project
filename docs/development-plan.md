@@ -1,8 +1,8 @@
 # Plano de desenvolvimento incremental — Etapas 0 a 10
 
-> **Proposta para aprovação.** Este roteiro deriva da [estratégia](implementation-strategy.md) e dos [requisitos](references.md). As tarefas marcadas `- [ ]` **não estão concluídas**. Ficheiros Python e estruturas são sugeridos, não código já existente.
+> **Proposta para aprovação.** Este roteiro deriva da [estratégia](architecture.md#estratégia-técnica-e-algoritmos) e dos [requisitos](../README.md#requisitos-e-fontes). As tarefas marcadas `- [ ]` **não estão concluídas**. Ficheiros Python e estruturas são sugeridos, não código já existente.
 
-[README](../README.md) · [Arquitetura](architecture.md) · [Protocolos](protocols.md) · [Equipa](team-tasks.md) · [Avaliação](evaluation.md) · [Decisões](decisions.md)
+[README](../README.md) · [Arquitetura](architecture.md) · [Protocolos](protocols.md) · [Equipa](team-tasks.md) · [Avaliação](evaluation.md) · [Decisões](architecture.md#decisões-pendentes)
 
 ## Regras de progressão
 
@@ -48,7 +48,7 @@ Alguma documentação e infraestrutura de testes da Etapa 10 podem começar ante
 - [ ] Confirmar a aprovação da documentação e identificar a branch de trabalho.
 - [ ] Listar todos os ficheiros e branches do repositório; examinar código desenvolvido entretanto.
 - [ ] Inventariar partes funcionais, dependências, funcionalidades incompletas e riscos.
-- [ ] Distinguir o ficheiro existente `requirements` da futura lista Python `requirements.txt`.
+- [ ] Distinguir o ficheiro existente `requirements.md` da futura lista Python `requirements.txt`.
 - [ ] Acordar versão de Python e testar instalação do SPADE em cada computador.
 - [ ] Configurar e testar a infraestrutura XMPP prevista para os testes locais.
 - [ ] Criar `.gitignore` para ambientes virtuais, caches, segredos e resultados volumosos.
@@ -380,7 +380,7 @@ Alguma documentação e infraestrutura de testes da Etapa 10 podem começar ante
 
 ## Primeiro trabalho efetivo após aprovação
 
-1. Reabrir [decisions.md](decisions.md), registar a aprovação do âmbito do MVP e dos contratos mínimos.
+1. Reabrir [decisões pendentes](architecture.md#decisões-pendentes), registar a aprovação do âmbito do MVP e dos contratos mínimos.
 2. Criar **Issue «Etapa 0 — auditoria e ambiente SPADE»** com as caixas desta etapa.
 3. Criar branch de implementação separada da branch de documentação.
 4. Auditar código já existente; **não presumir que a `main` continua vazia**.
