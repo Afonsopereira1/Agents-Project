@@ -2,7 +2,7 @@
 
 > **Estado:** contrato inicial para discussão. **Não existe implementação confirmada**; os nomes de mensagens e os exemplos JSON não são exigências literais do docente.
 
-[README](../README.md) · [Arquitetura](architecture.md) · [Plano](development-plan.md) · [Decisões](decisions.md)
+[README](../README.md) · [Arquitetura](architecture.md) · [Plano](development-plan.md) · [Decisões](architecture.md#decisões-pendentes)
 
 ## 1. Camadas da comunicação
 
