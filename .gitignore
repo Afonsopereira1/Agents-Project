@@ -1,0 +1,22 @@
+
+# Ambientes virtuais
+.venv/
+venv/
+spade_venv/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Base de dados local do servidor SPADE
+server.db
+server.db-shm
+server.db-wal
+
+# Credenciais e configurações privadas
+.env
+.env.*
+
+# Ficheiros locais do editor
+.vscode/
