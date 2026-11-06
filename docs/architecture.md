@@ -127,9 +127,9 @@ stateDiagram-v2
     WATCHING --> VERIFYING: Nova evidência
     ASSESSING --> ALLOCATING: Missão necessária
     ALLOCATING --> RESPONDING: Recurso reservado
-    ALLOCATING --> UNRESOLVED: Sem propostas ou timeout máximo
-    RESPONDING --> CLOSED: Missão concluída / resultado validado
-    RESPONDING --> ALLOCATING: Recurso falhou; tentar novamente
+    ALLOCATING --> UNRESOLVED: Alternativas / tentativas / prazo total esgotados
+    RESPONDING --> CLOSED: Objetivo cumprido / resultado validado / sem ação adicional
+    RESPONDING --> ALLOCATING: Inconclusivo / intervenção adicional / falha
     WATCHING --> EXPIRED: Sem nova evidência até ao prazo
     CLOSED --> [*]
     EXPIRED --> [*]
