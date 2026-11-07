@@ -1,5 +1,6 @@
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from enum import Enum
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,7 @@ class Position:
 
         if self.x < 0 or self.y < 0:
             raise ValueError("As coordenadas não podem ser negativas.")
+
 
 
 @dataclass(frozen=True)
@@ -71,3 +73,87 @@ class Incident:
 
         if len(ids) != len(set(ids)):
             raise ValueError("Não podem existir observações repetidas.")
+
+
+
+class MissionStatus(Enum):
+    PROPOSED = "proposed"
+    RESERVED = "reserved"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
+
+@dataclass(frozen=True)
+class Mission:
+    mission_id: str
+    incident_id: str
+    task: str
+    target: Position
+    required_capability: str
+    priority: int
+    status: MissionStatus = MissionStatus.PROPOSED  #Inicia, por defeito, no estado "proposed"
+
+    def __post_init__(self):
+        if not isinstance(self.mission_id, str) or not self.mission_id.strip():
+            raise ValueError("O identificador da missão não pode estar vazio.")
+
+        if not isinstance(self.incident_id, str) or not self.incident_id.strip():
+            raise ValueError("O identificador do incidente não pode estar vazio.")
+
+        if not isinstance(self.task, str) or not self.task.strip():
+            raise ValueError("O tipo da tarefa não pode estar vazio.")
+
+        if not isinstance(self.target, Position):
+            raise TypeError("O destino deve ser do tipo Position.")
+
+        if not isinstance(self.required_capability, str) or not self.required_capability.strip():
+            raise ValueError("A capacidade necessária não pode estar vazia.")
+
+        if type(self.priority) is not int or self.priority < 0:
+            raise ValueError("A prioridade deve ser um inteiro não negativo.")
+
+        if not isinstance(self.status, MissionStatus):
+            raise TypeError("O estado da missão deve ser do tipo MissionStatus.")
+
+    def change_status(self, new_status: MissionStatus):
+        allowed_transitions = {
+            MissionStatus.PROPOSED: {MissionStatus.RESERVED},
+            MissionStatus.RESERVED: {MissionStatus.RUNNING},
+            MissionStatus.RUNNING: {MissionStatus.DONE, MissionStatus.FAILED},
+            MissionStatus.DONE: set(),
+            MissionStatus.FAILED: set()
+        }
+
+        if not isinstance(new_status, MissionStatus):
+            raise TypeError("O novo estado é inválido.")
+
+        if new_status not in allowed_transitions[self.status]:
+            raise ValueError("Transição de estado não permitida.")
+
+        return replace(self, status=new_status)
+
+@dataclass(frozen=True)
+class Bid:
+    mission_id: str
+    resource_id: str
+    eta: float
+    energy_cost: float
+    load: float
+
+    def __post_init__(self):
+        if not isinstance(self.mission_id, str) or not self.mission_id.strip():
+            raise ValueError("O identificador da missão não pode estar vazio.")
+
+        if not isinstance(self.resource_id, str) or not self.resource_id.strip():
+            raise ValueError("O identificador do recurso não pode estar vazio.")
+
+        if isinstance(self.eta, bool) or not isinstance(self.eta, (int, float)) or not 0 <= self.eta < float("inf"):
+            raise ValueError("O tempo estimado deve ser finito e não negativo.")
+
+        if isinstance(self.energy_cost, bool) or not isinstance(self.energy_cost,(int, float)) or not 0 <= self.energy_cost < float("inf"):
+            raise ValueError("O custo energético deve ser finito e não negativo.")
+
+        if isinstance(self.load, bool) or not isinstance(self.load, (int, float)) or not 0 <= self.load < float("inf"):
+            raise ValueError("A carga de trabalho deve ser finita e não negativa.")
