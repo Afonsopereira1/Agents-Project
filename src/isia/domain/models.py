@@ -77,6 +77,16 @@ class Incident:
 
 
 class MissionStatus(Enum):
+    """
+    Represent the possible status of a patrol mission.
+
+    Attributes:
+        PROPOSED: Mission created and awaiting resource allocation.
+        RESERVED: Mission assigned to a resource but not started yet.
+        RUNNING: Mission currently being executed.
+        DONE: Mission successfully completed.
+        FAILED: Mission execution failed
+    """
     PROPOSED = "proposed"
     RESERVED = "reserved"
     RUNNING = "running"
@@ -87,6 +97,19 @@ class MissionStatus(Enum):
 
 @dataclass(frozen=True)
 class Mission:
+    """
+    Represent a patrol mission created in response to an incident.
+
+    Attributes:
+        mission_id (str): Unique identifier of the mission.
+        incident_id (str): Identifier of the associated incident.
+        task (str): Task to be performed during the mission.
+        target (Position): Target position of the mission.
+        required_capability (str): Required capability to execute the mission.
+        priority (int): Non-negative integer representing the priority of the mission.
+        status (MissionStatus): Current mission status, initially PROPOSED.
+    """
+
     mission_id: str
     incident_id: str
     task: str
@@ -96,6 +119,13 @@ class Mission:
     status: MissionStatus = MissionStatus.PROPOSED  #Inicia, por defeito, no estado "proposed"
 
     def __post_init__(self):
+        """
+        Validate the mission attributes after initialization.
+
+        Raises:
+            ValueError: If an identifier, task or required capability is missing or the priority is invalid.
+            TypeError: If the target or status has an invalid type.
+        """
         if not isinstance(self.mission_id, str) or not self.mission_id.strip():
             raise ValueError("O identificador da missão não pode estar vazio.")
 
@@ -118,6 +148,19 @@ class Mission:
             raise TypeError("O estado da missão deve ser do tipo MissionStatus.")
 
     def change_status(self, new_status: MissionStatus):
+        """
+        Return a new mission with the updated status if the transition is valid.
+
+        Args:
+            new_status (MissionStatus): Requested new mission status.
+
+        Returns:
+            Mission: A new mission instance with updated status.
+
+        Raises:
+            TypeError: If the new status is not a MissionStatus.
+            ValueError: If the requested status transition is invalid.
+        """
         allowed_transitions = {
             MissionStatus.PROPOSED: {MissionStatus.RESERVED},
             MissionStatus.RESERVED: {MissionStatus.RUNNING},
@@ -136,6 +179,17 @@ class Mission:
 
 @dataclass(frozen=True)
 class Bid:
+    """
+    Represents a resource's bid to execute a patrol mission.
+
+    Attributes:
+        mission_id (str): Identifier of the mission being bid on.
+        resource_id (str): Identifier of the resource submitting the bid.
+        eta (float): Estimated time of arrival at the mission target.
+        energy_cost (float): Estimated energy cost of executing the mission.
+        load (float): Workload value reported by the resource.
+    """
+
     mission_id: str
     resource_id: str
     eta: float
@@ -143,6 +197,12 @@ class Bid:
     load: float
 
     def __post_init__(self):
+        """Validate the bid attributes after initialization.
+
+        Raises:
+            ValueError: If an identifier is missing or if the eta, energy_cost and load is not a non-negative finite number.
+        """
+
         if not isinstance(self.mission_id, str) or not self.mission_id.strip():
             raise ValueError("O identificador da missão não pode estar vazio.")
 
