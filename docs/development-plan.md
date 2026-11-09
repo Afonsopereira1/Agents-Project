@@ -77,13 +77,25 @@ Alguma documentação e infraestrutura de testes da Etapa 10 podem começar ante
 
 **Tarefas concretas:**
 
-- [ ] Definir `Position` (coordenadas válidas), `Observation` (fonte, tipo, instante, posição, intensidade), `Incident`, `ResourceState`, `Mission` e `Bid`.
-- [ ] Escolher unidades: coordenadas, distância, tempo da simulação, energia, prioridade e ETA.
-- [ ] Definir `event_id`, `incident_id`, `mission_id`, `message_id` e `conversation-id` sem sobreposição semântica.
-- [ ] Criar enumerações de estados para incidentes e recursos; especificar transições permitidas.
-- [ ] Definir esquema JSON com `schema_version` e validação de campos obrigatórios.
-- [ ] Especificar invariantes: nenhuma dupla missão ativa incompatível; eventos duplicados não contam duas vezes.
-- [ ] Escrever exemplos válidos e inválidos; pedir revisão cruzada a quem implementará agentes e simulação.
+- [x] Definir `Position` (coordenadas válidas), `Observation` (fonte, tipo, instante, posição), `Incident`, `ResourceState`, `Mission` e `Bid`.
+- [x] Separar `intensity_score` opcional de `confidence_score`, mantendo ambos entre 0 e 1.
+- [x] Escolher unidades: posições inteiras na grelha, distância euclidiana, tempo/ETA em segundos simulados, autonomia percentual, custo energético em pontos percentuais, prioridade inteira e carga entre 0 e 1.
+- [x] Definir `event_id`, `incident_id`, `mission_id`, `message_id` e `conversation-id` sem sobreposição semântica.
+- [x] Criar enumerações de estados para incidentes e recursos; especificar transições permitidas.
+- [x] Definir esquema JSON com `schema_version` e validação de campos obrigatórios.
+- [x] Especificar a deduplicação local por `message_id`; a reserva atómica e a prevenção de dupla missão permanecem para as etapas posteriores.
+- [x] Escrever exemplos válidos e inválidos.
+- [ ] Pedir revisão cruzada dos exemplos a quem implementará agentes e simulação.
+
+**Implementação verificada nesta branch:** `IncidentState`, contratos JSON
+independentes de SPADE, serialização/desserialização dos modelos e
+deduplicação por `message_id` estão implementados e testados. O contrato
+estrutural de `CFP` exige missão, incidente, conversa, tarefa, destino,
+capacidade, prioridade e prazo. A retenção proposta de mensagens duplicadas é
+de 600 segundos simulados, sem expiração operacional nesta etapa. Mantêm-se
+pendentes a revisão cruzada e a aprovação formal dos contratos pelos três
+elementos; a reserva atómica e missões incompatíveis pertencem às etapas
+posteriores.
 
 **Dependências:** Etapa 0. Bloqueia a integração das Etapas 2, 3, 4 e 5 até os contratos serem acordados.
 
