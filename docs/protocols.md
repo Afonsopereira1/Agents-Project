@@ -32,6 +32,48 @@ Proposta de contrato para o **corpo JSON** (campos obrigatórios mínimos marcad
 | `source_id` | string | Fonte original da observação, quando aplicável |
 | `payload`* | objeto JSON | Dados específicos do tipo de mensagem |
 
+### Contrato implementado na Etapa 1
+
+O módulo `isia.communication.messages` implementa este contrato sem depender de
+SPADE ou XMPP. A versão atual usa:
+
+- `schema_version`: inteiro `1`.
+- `message_id`, `event_id`, `incident_id`, `mission_id`, `source_id` e
+  `conversation_id`: strings não vazias; cada identificador tem o seu domínio
+  semântico e não deve ser reutilizado entre entidades.
+- `message_type`: um dos tipos `ALERT`, `VERIFY_REQUEST`, `VERIFY_RESPONSE`,
+  `CFP`, `PROPOSAL`, `ACCEPT`, `REJECT`, `MISSION_RESULT`, `STATUS` ou
+  `INCIDENT_CLOSED`.
+- `created_at`: número finito em segundos de tempo simulado. Não é um timestamp
+  de parede nem uma data ISO-8601.
+- `payload`: objeto JSON, validado como dicionário no limite do contrato. A
+  validação específica do conteúdo de cada tipo será aprofundada nas etapas de
+  verificação e negociação.
+
+As mensagens podem ser convertidas com `Message.to_json()` e
+`Message.from_json()`. Os modelos de domínio suportados podem ser convertidos
+com `serialize_model()`/`deserialize_model()`, usando enums pelos seus valores
+JSON e tuplos como listas JSON. `MessageDeduplicator` considera repetida uma
+mensagem cujo `message_id` já foi aceite; não deduplica por conteúdo nem por
+`event_id`.
+
+As unidades partilhadas dos modelos são: coordenadas inteiras não negativas em
+`Position`; instantes, ETA e custos numéricos não negativos e finitos; autonomia
+como percentagem entre `0` e `100`; prioridade como inteiro não negativo. A
+unidade concreta de distância, velocidade e energia ainda não é necessária para
+estes contratos e será definida antes da simulação e da negociação.
+
+Os estados de incidente implementados em `domain.incident_state` são
+`DETECTED`, `VERIFYING`, `ASSESSING`, `WATCHING`, `ALLOCATING`, `RESPONDING`,
+`CLOSED`, `EXPIRED` e `UNRESOLVED`. As transições seguem o diagrama da
+arquitetura e são imutáveis: cada mudança devolve um novo `IncidentState`.
+
+**Decisões ainda sujeitas a aprovação dos três elementos:** confirmar a unidade
+do tempo simulado em segundos, a política de retenção/expiração do registo de
+mensagens duplicadas e o conjunto final de campos obrigatórios específicos de
+cada `message_type`. Esta implementação fornece o contrato mínimo da Etapa 1;
+não implementa transporte, agentes SPADE, corroboração ou Contract Net.
+
 Metadados SPADE recomendados: `performative`, `ontology`, `protocol`, `conversation-id` (ou correlação por `thread`, a validar no SPADE escolhido), `reply-with` e `in-reply-to` quando aplicáveis. O endereço do remetente/destinatário deverá ser obtido e validado pela infraestrutura SPADE, evitando confiar cegamente num `source_id` declarado no corpo.
 
 ### Exemplo — observação de um sensor
