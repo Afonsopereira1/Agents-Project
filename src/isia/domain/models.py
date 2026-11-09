@@ -1,6 +1,7 @@
 
 from dataclasses import dataclass, replace
 from enum import Enum
+from math import isfinite
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,15 @@ class Incident:
             raise ValueError("Não podem existir observações repetidas.")
 
 
+class ResourceStatus(Enum):
+    AVAILABLE = "available"
+    RESERVED = "reserved"
+    MOVING = "moving"
+    VERIFYING = "verifying"
+    RETURNING = "returning"
+    UNAVAILABLE = "unavailable"
+
+
 @dataclass(frozen=True)
 class ResourceState:
     resource_id: str
@@ -82,6 +92,7 @@ class ResourceState:
     position: Position
     available: bool
     autonomy_percent: float | None = None
+    status: ResourceStatus | None = None
 
     def __post_init__(self):
         if not isinstance(self.resource_id, str) or not self.resource_id.strip():
@@ -96,13 +107,58 @@ class ResourceState:
         if not isinstance(self.available, bool):
             raise TypeError("A disponibilidade deve ser True ou False.")
 
-        
         if self.autonomy_percent is not None and (
             isinstance(self.autonomy_percent, bool)
             or not isinstance(self.autonomy_percent, (int, float))
+            or not isfinite(self.autonomy_percent)
             or not 0 <= self.autonomy_percent <= 100
         ):
             raise ValueError("A autonomia deve estar entre 0 e 100.")
+
+        status = self.status
+        if status is None:
+            status = (
+                ResourceStatus.AVAILABLE
+                if self.available
+                else ResourceStatus.UNAVAILABLE
+            )
+            object.__setattr__(self, "status", status)
+        elif not isinstance(status, ResourceStatus):
+            raise TypeError("O estado do recurso deve ser do tipo ResourceStatus.")
+
+        expected_available = status is ResourceStatus.AVAILABLE
+        if self.available != expected_available:
+            raise ValueError(
+                "A disponibilidade não é coerente com o estado do recurso."
+            )
+
+    def change_status(self, new_status: ResourceStatus):
+        allowed_transitions = {
+            ResourceStatus.AVAILABLE: {ResourceStatus.RESERVED},
+            ResourceStatus.RESERVED: {
+                ResourceStatus.MOVING,
+                ResourceStatus.AVAILABLE,
+            },
+            ResourceStatus.MOVING: {ResourceStatus.VERIFYING, ResourceStatus.UNAVAILABLE},
+            ResourceStatus.VERIFYING: {
+                ResourceStatus.RETURNING,
+                ResourceStatus.UNAVAILABLE,
+            },
+            ResourceStatus.RETURNING: {ResourceStatus.AVAILABLE},
+            ResourceStatus.UNAVAILABLE: {ResourceStatus.AVAILABLE},
+        }
+
+        if not isinstance(new_status, ResourceStatus):
+            raise TypeError("O novo estado deve ser do tipo ResourceStatus.")
+
+        if new_status not in allowed_transitions[self.status]:
+            raise ValueError("Transição de estado não permitida.")
+
+        return replace(
+            self,
+            available=new_status is ResourceStatus.AVAILABLE,
+            status=new_status,
+        )
 
 class MissionStatus(Enum):
     """

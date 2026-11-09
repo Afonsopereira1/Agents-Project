@@ -7,6 +7,7 @@ from isia.domain.models import (
     Observation,
     Incident,
     ResourceState,
+    ResourceStatus,
     Mission,
     MissionStatus,
     Bid,
@@ -166,6 +167,17 @@ class TestResourceState(unittest.TestCase):
                 autonomy_percent=80.0,
             )
 
+    def test_tipo_de_recurso_invalido(self):
+        with self.assertRaises(ValueError):
+            ResourceState("r1", "  ", Position(5, 7), True)
+
+        with self.assertRaises(ValueError):
+            ResourceState("r1", 42, Position(5, 7), True)
+
+    def test_identificador_de_recurso_com_tipo_invalido(self):
+        with self.assertRaises(ValueError):
+            ResourceState(42, "drone", Position(5, 7), True)
+
     def test_disponibilidade_invalida(self):
         with self.assertRaises(TypeError):
             ResourceState(
@@ -196,6 +208,128 @@ class TestResourceState(unittest.TestCase):
         )
 
         self.assertIsNone(recurso.autonomy_percent)
+
+    def test_estado_por_omissao_mantem_compatibilidade(self):
+        disponivel = ResourceState("r1", "drone", Position(1, 1), True)
+        indisponivel = ResourceState("r2", "drone", Position(1, 1), False)
+
+        self.assertIs(disponivel.status, ResourceStatus.AVAILABLE)
+        self.assertIs(indisponivel.status, ResourceStatus.UNAVAILABLE)
+
+    def test_todos_os_estados(self):
+        self.assertEqual(
+            {status.value for status in ResourceStatus},
+            {"available", "reserved", "moving", "verifying", "returning", "unavailable"},
+        )
+
+    def test_estado_explicitamente_valido(self):
+        recurso = ResourceState(
+            "drone_01",
+            "drone",
+            Position(1, 1),
+            False,
+            status=ResourceStatus.RESERVED,
+        )
+
+        self.assertIs(recurso.status, ResourceStatus.RESERVED)
+        self.assertFalse(recurso.available)
+
+    def test_estado_tem_de_ser_resource_status(self):
+        with self.assertRaises(TypeError):
+            ResourceState("r1", "drone", Position(1, 1), False, status="reserved")
+
+    def test_estado_e_disponibilidade_coerentes(self):
+        with self.assertRaises(ValueError):
+            ResourceState(
+                "r1",
+                "drone",
+                Position(1, 1),
+                True,
+                status=ResourceStatus.RESERVED,
+            )
+
+        with self.assertRaises(ValueError):
+            ResourceState(
+                "r1",
+                "drone",
+                Position(1, 1),
+                False,
+                status=ResourceStatus.AVAILABLE,
+            )
+
+    def test_transicoes_permitidas(self):
+        caminhos = (
+            (ResourceStatus.AVAILABLE, ResourceStatus.RESERVED),
+            (ResourceStatus.RESERVED, ResourceStatus.MOVING),
+            (ResourceStatus.MOVING, ResourceStatus.VERIFYING),
+            (ResourceStatus.VERIFYING, ResourceStatus.RETURNING),
+            (ResourceStatus.RETURNING, ResourceStatus.AVAILABLE),
+            (ResourceStatus.RESERVED, ResourceStatus.AVAILABLE),
+            (ResourceStatus.MOVING, ResourceStatus.UNAVAILABLE),
+            (ResourceStatus.VERIFYING, ResourceStatus.UNAVAILABLE),
+            (ResourceStatus.UNAVAILABLE, ResourceStatus.AVAILABLE),
+        )
+
+        for origem, destino in caminhos:
+            with self.subTest(origem=origem, destino=destino):
+                recurso = ResourceState(
+                    "r1",
+                    "drone",
+                    Position(1, 1),
+                    origem is ResourceStatus.AVAILABLE,
+                    status=origem,
+                )
+                resultado = recurso.change_status(destino)
+
+                self.assertIs(resultado.status, destino)
+                self.assertEqual(resultado.available, destino is ResourceStatus.AVAILABLE)
+                self.assertIs(recurso.status, origem)
+
+    def test_transicoes_proibidas(self):
+        for origem in ResourceStatus:
+            for destino in ResourceStatus:
+                permitida = {
+                    (ResourceStatus.AVAILABLE, ResourceStatus.RESERVED),
+                    (ResourceStatus.RESERVED, ResourceStatus.MOVING),
+                    (ResourceStatus.RESERVED, ResourceStatus.AVAILABLE),
+                    (ResourceStatus.MOVING, ResourceStatus.VERIFYING),
+                    (ResourceStatus.MOVING, ResourceStatus.UNAVAILABLE),
+                    (ResourceStatus.VERIFYING, ResourceStatus.RETURNING),
+                    (ResourceStatus.VERIFYING, ResourceStatus.UNAVAILABLE),
+                    (ResourceStatus.RETURNING, ResourceStatus.AVAILABLE),
+                    (ResourceStatus.UNAVAILABLE, ResourceStatus.AVAILABLE),
+                }
+                if (origem, destino) in permitida:
+                    continue
+
+                with self.subTest(origem=origem, destino=destino):
+                    recurso = ResourceState(
+                        "r1",
+                        "drone",
+                        Position(1, 1),
+                        origem is ResourceStatus.AVAILABLE,
+                        status=origem,
+                    )
+                    with self.assertRaises(ValueError):
+                        recurso.change_status(destino)
+
+    def test_transicao_tem_de_receber_resource_status(self):
+        recurso = ResourceState("r1", "drone", Position(1, 1), True)
+
+        with self.assertRaises(TypeError):
+            recurso.change_status("reserved")
+
+    def test_resource_state_e_imutavel(self):
+        recurso = ResourceState("r1", "drone", Position(1, 1), True)
+
+        with self.assertRaises(FrozenInstanceError):
+            recurso.status = ResourceStatus.RESERVED
+
+    def test_autonomia_rejeita_valores_invalidos(self):
+        for autonomia in (-1, 101, float("nan"), float("inf"), float("-inf"), True, "80"):
+            with self.subTest(autonomia=autonomia):
+                with self.assertRaises(ValueError):
+                    ResourceState("r1", "drone", Position(1, 1), True, autonomia)
 
 
 class TestMission(unittest.TestCase):
