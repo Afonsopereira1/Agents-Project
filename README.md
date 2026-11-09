@@ -3,7 +3,7 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado:** documentação de planeamento; arquitetura B1 proposta, ainda a validar em grupo. Não há implementação Python verificada nesta branch.
+> **Estado:** a Etapa 1 tem modelos de domínio, estados de incidentes e contratos JSON Python implementados e testados. A arquitetura B1 e os contratos continuam sujeitos a revisão do grupo; SPADE, simulação e negociação pertencem a etapas posteriores.
 
 ## O projeto
 
@@ -39,9 +39,6 @@ O simulador mantém a verdade dos acontecimentos apenas para avaliação; os age
 **Referências técnicas e teóricas essenciais:** [SPADE](https://spade-mas.readthedocs.io/), [GitHub SPADE](https://github.com/javipalanca/spade), [FIPA](http://www.fipa.org/), [GitHub Docs](https://docs.github.com/en/), Wooldridge (*An Introduction to MultiAgent Systems*, 2009), Russell e Norvig (*Artificial Intelligence: A Modern Approach*, 4.ª ed.), [Gaia (Wooldridge, Jennings e Kinny, 2000)](https://link.springer.com/article/10.1023/A:1010071910869).
 
 **Nota:** as fórmulas, os limiares de confiança, o mapa 2D e o protocolo Contract Net simplificado são **propostas de engenharia**, não exigências literais do enunciado.
-
-## Executar o projeto
-
 
 ## Executar o projeto
 
@@ -92,6 +89,6 @@ no terminal em que foi iniciado.
 
 ### Estado do desenvolvimento
 
-Etapa 0: primeiro agente SPADE testado localmente.
-A comunicação entre vários agentes será implementada
-nas etapas seguintes.
+Etapa 1: modelos, estados de incidentes e contratos JSON testados localmente.
+O transporte SPADE e a comunicação entre agentes serão implementados nas
+etapas seguintes.

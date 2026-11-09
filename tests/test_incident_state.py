@@ -51,10 +51,41 @@ class TestIncidentState(unittest.TestCase):
         self.assertIn(IncidentStatus.ALLOCATING, allowed_transitions(IncidentStatus.RESPONDING))
 
     def test_transicao_invalida_e_estado_terminal(self):
-        state = IncidentState("incident-001", IncidentStatus.CLOSED)
+        for terminal in (
+            IncidentStatus.CLOSED,
+            IncidentStatus.EXPIRED,
+            IncidentStatus.UNRESOLVED,
+        ):
+            with self.subTest(terminal=terminal):
+                state = IncidentState("incident-001", terminal)
+                for destination in IncidentStatus:
+                    with self.assertRaises(ValueError):
+                        state.change_status(destination)
 
-        with self.assertRaises(ValueError):
-            state.change_status(IncidentStatus.DETECTED)
+    def test_todas_as_combinacoes_de_transicao(self):
+        allowed = {
+            (IncidentStatus.DETECTED, IncidentStatus.VERIFYING),
+            (IncidentStatus.VERIFYING, IncidentStatus.ASSESSING),
+            (IncidentStatus.ASSESSING, IncidentStatus.WATCHING),
+            (IncidentStatus.ASSESSING, IncidentStatus.ALLOCATING),
+            (IncidentStatus.WATCHING, IncidentStatus.VERIFYING),
+            (IncidentStatus.WATCHING, IncidentStatus.EXPIRED),
+            (IncidentStatus.ALLOCATING, IncidentStatus.RESPONDING),
+            (IncidentStatus.ALLOCATING, IncidentStatus.UNRESOLVED),
+            (IncidentStatus.RESPONDING, IncidentStatus.CLOSED),
+            (IncidentStatus.RESPONDING, IncidentStatus.ALLOCATING),
+        }
+
+        for origin in IncidentStatus:
+            for destination in IncidentStatus:
+                with self.subTest(origin=origin, destination=destination):
+                    state = IncidentState("incident-001", origin)
+                    if (origin, destination) in allowed:
+                        result = state.change_status(destination)
+                        self.assertIs(result.status, destination)
+                    else:
+                        with self.assertRaises(ValueError):
+                            state.change_status(destination)
 
     def test_validacao(self):
         with self.assertRaises(ValueError):

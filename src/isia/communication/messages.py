@@ -35,6 +35,31 @@ def _require_identifier(value: Any, name: str) -> str:
     return value
 
 
+def _validate_json_value(value: Any, path: str = "payload") -> None:
+    """Valida valores JSON estritos antes de serializar ou aceitar payloads."""
+    if value is None or isinstance(value, (str, bool, int)):
+        return
+    if isinstance(value, float):
+        if not isfinite(value):
+            raise ValueError(f"{path} não pode conter NaN ou infinito.")
+        return
+    if isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            _validate_json_value(item, f"{path}[{index}]")
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise TypeError(f"{path} só pode ter chaves string.")
+            _validate_json_value(item, f"{path}.{key}")
+        return
+    raise TypeError(f"{path} contém um valor não serializável.")
+
+
+def _reject_json_constant(value: str):
+    raise ValueError(f"Constante JSON inválida: {value}.")
+
+
 def model_to_dict(model: Any) -> dict[str, Any]:
     """Converte um modelo de domínio num dicionário JSON-compatível."""
     if not is_dataclass(model) or isinstance(model, type):
@@ -86,7 +111,8 @@ def model_from_dict(data: dict[str, Any], model_type: type[T]) -> T:
         if model_type is Mission:
             values = dict(data)
             values["target"] = model_from_dict(values["target"], Position)
-            values["status"] = MissionStatus(values["status"])
+            if "status" in values:
+                values["status"] = MissionStatus(values["status"])
             return Mission(**values)
         if model_type is Bid:
             return Bid(**data)
@@ -97,12 +123,19 @@ def model_from_dict(data: dict[str, Any], model_type: type[T]) -> T:
 
 
 def serialize_model(model: Any) -> str:
-    return json.dumps(model_to_dict(model), ensure_ascii=False, sort_keys=True)
+    data = model_to_dict(model)
+    _validate_json_value(data, "model")
+    return json.dumps(
+        data,
+        ensure_ascii=False,
+        sort_keys=True,
+        allow_nan=False,
+    )
 
 
 def deserialize_model(payload: str, model_type: type[T]) -> T:
     try:
-        data = json.loads(payload)
+        data = json.loads(payload, parse_constant=_reject_json_constant)
     except (TypeError, json.JSONDecodeError) as error:
         raise ValueError("JSON inválido.") from error
     return model_from_dict(data, model_type)
@@ -128,10 +161,15 @@ class Message:
         self.message_id = _require_identifier(message_id, "message_id")
         if not isinstance(message_type, MessageType):
             raise TypeError("message_type deve ser MessageType.")
-        if type(created_at) not in (int, float) or not isfinite(created_at):
-            raise ValueError("created_at deve ser um número finito.")
+        if (
+            type(created_at) not in (int, float)
+            or not isfinite(created_at)
+            or created_at < 0
+        ):
+            raise ValueError("created_at deve ser finito e não negativo.")
         if not isinstance(payload, dict):
             raise TypeError("payload deve ser um objeto JSON.")
+        _validate_json_value(payload)
         if type(schema_version) is not int or schema_version != 1:
             raise ValueError("schema_version deve ser o inteiro 1.")
         for name, value in (
@@ -168,7 +206,14 @@ class Message:
         return data
 
     def to_json(self) -> str:
-        return json.dumps(self.to_dict(), ensure_ascii=False, sort_keys=True)
+        data = self.to_dict()
+        _validate_json_value(data, "message")
+        return json.dumps(
+            data,
+            ensure_ascii=False,
+            sort_keys=True,
+            allow_nan=False,
+        )
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]):
@@ -198,7 +243,7 @@ class Message:
     @classmethod
     def from_json(cls, payload: str):
         try:
-            data = json.loads(payload)
+            data = json.loads(payload, parse_constant=_reject_json_constant)
         except (TypeError, json.JSONDecodeError) as error:
             raise ValueError("JSON inválido.") from error
         return cls.from_dict(data)

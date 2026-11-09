@@ -44,11 +44,13 @@ SPADE ou XMPP. A versão atual usa:
 - `message_type`: um dos tipos `ALERT`, `VERIFY_REQUEST`, `VERIFY_RESPONSE`,
   `CFP`, `PROPOSAL`, `ACCEPT`, `REJECT`, `MISSION_RESULT`, `STATUS` ou
   `INCIDENT_CLOSED`.
-- `created_at`: número finito em segundos de tempo simulado. Não é um timestamp
-  de parede nem uma data ISO-8601.
+- `created_at`: número finito e não negativo em segundos de tempo simulado. O
+  relógio começa em `0.0`; este campo não é um timestamp de parede nem uma data
+  ISO-8601. Valores negativos, `NaN` e infinitos são inválidos.
 - `payload`: objeto JSON, validado como dicionário no limite do contrato. A
-  validação específica do conteúdo de cada tipo será aprofundada nas etapas de
-  verificação e negociação.
+  validação rejeita valores não serializáveis, chaves que não sejam strings,
+  `NaN` e infinito. A validação específica do conteúdo de cada tipo será
+  aprofundada nas etapas de verificação e negociação.
 
 As mensagens podem ser convertidas com `Message.to_json()` e
 `Message.from_json()`. Os modelos de domínio suportados podem ser convertidos
@@ -68,11 +70,15 @@ Os estados de incidente implementados em `domain.incident_state` são
 `CLOSED`, `EXPIRED` e `UNRESOLVED`. As transições seguem o diagrama da
 arquitetura e são imutáveis: cada mudança devolve um novo `IncidentState`.
 
-**Decisões ainda sujeitas a aprovação dos três elementos:** confirmar a unidade
-do tempo simulado em segundos, a política de retenção/expiração do registo de
-mensagens duplicadas e o conjunto final de campos obrigatórios específicos de
-cada `message_type`. Esta implementação fornece o contrato mínimo da Etapa 1;
-não implementa transporte, agentes SPADE, corroboração ou Contract Net.
+**Decisões ainda sujeitas a aprovação dos três elementos:** confirmar a
+convenção do relógio simulado em segundos iniciado em zero, a distinção entre
+`confidence_score` e intensidade da observação, a política de
+retenção/expiração do registo de mensagens duplicadas e o conjunto final de
+campos obrigatórios específicos de cada `message_type` (em particular `CFP`).
+Também permanecem por aprovar as unidades de distância, ETA, energia, carga e
+prioridade e a aprovação formal dos contratos pelo grupo. Esta implementação
+fornece o contrato mínimo da Etapa 1; não implementa transporte, agentes SPADE,
+corroboração ou Contract Net.
 
 Metadados SPADE recomendados: `performative`, `ontology`, `protocol`, `conversation-id` (ou correlação por `thread`, a validar no SPADE escolhido), `reply-with` e `in-reply-to` quando aplicáveis. O endereço do remetente/destinatário deverá ser obtido e validado pela infraestrutura SPADE, evitando confiar cegamente num `source_id` declarado no corpo.
 
@@ -96,7 +102,17 @@ Metadados SPADE recomendados: `performative`, `ontology`, `protocol`, `conversat
 }
 ```
 
-Aqui `confidence_score` é a pontuação atribuída pela fonte ao sinal e **não** uma probabilidade calibrada de caça furtiva. `created_at` usa tempo simulado em segundos apenas neste exemplo; a unidade definitiva será acordada na Etapa 1.
+Aqui `confidence_score` é a pontuação atribuída pela fonte ao sinal e **não** uma probabilidade calibrada de caça furtiva; a sua relação final com intensidade ainda requer aprovação. `created_at` usa segundos de tempo simulado, iniciado em zero.
+
+Exemplo inválido (não pode ser aceite pelo contrato):
+
+```json
+{"schema_version": 1, "message_id": "msg-err", "message_type": "ALERT", "created_at": -1.0, "payload": {"value": NaN}}
+```
+
+Além do instante negativo, `NaN` não pertence ao JSON estrito. A implementação
+rejeita ambos, bem como `Infinity`, objetos Python não serializáveis e JSON
+malformado.
 
 ### Exemplo — pedido de propostas
 
@@ -118,7 +134,9 @@ Aqui `confidence_score` é a pontuação atribuída pela fonte ao sinal e **não
 }
 ```
 
-A prioridade é um valor de domínio a definir; não significa que exista atualmente uma escala de severidade aprovada.
+A prioridade é um inteiro não negativo no modelo atual, mas a unidade/escala e
+os campos obrigatórios específicos de `CFP` continuam por aprovar; não significa
+que exista atualmente uma escala de severidade aprovada.
 
 ## 3. Tipos de mensagens e intenção
 

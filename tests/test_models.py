@@ -88,6 +88,23 @@ class TestObservation(unittest.TestCase):
                 confidence_score=0.8
             )
 
+    def test_identificadores_com_tipo_invalido(self):
+        argumentos = {
+            "event_id": "obs-003",
+            "source_id": "sensor_01",
+            "event_type": "gunshot_like_sound",
+            "position": Position(2, 3),
+            "observed_at": 15.0,
+            "confidence_score": 0.8,
+        }
+
+        for campo in ("event_id", "source_id", "event_type"):
+            with self.subTest(campo=campo):
+                dados = dict(argumentos)
+                dados[campo] = 42
+                with self.assertRaises(ValueError):
+                    Observation(**dados)
+
 
 class TestIncident(unittest.TestCase):
 

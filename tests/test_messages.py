@@ -56,6 +56,37 @@ class TestMessages(unittest.TestCase):
             Message("msg-001", MessageType.ALERT, 1.0, [])
         with self.assertRaises(ValueError):
             Message("msg-001", MessageType.ALERT, 1.0, {}, schema_version=2)
+        with self.assertRaises(ValueError):
+            Message("msg-001", MessageType.ALERT, -1.0, {})
+        with self.assertRaises(ValueError):
+            Message("msg-001", MessageType.ALERT, 1.0, {"value": float("nan")})
+        with self.assertRaises(ValueError):
+            Message("msg-001", MessageType.ALERT, 1.0, {"value": float("inf")})
+        with self.assertRaises(TypeError):
+            Message("msg-001", MessageType.ALERT, 1.0, {"value": object()})
+        with self.assertRaises(TypeError):
+            Message("msg-001", MessageType.ALERT, 1.0, {1: "not-a-string-key"})
+
+    def test_json_estrito_rejeita_constantes_invalidas(self):
+        with self.assertRaises(ValueError):
+            Message.from_json(
+                '{"schema_version":1,"message_id":"msg-001",'
+                '"message_type":"ALERT","created_at":NaN,"payload":{}}'
+            )
+        with self.assertRaises(ValueError):
+            Message.from_json(
+                '{"schema_version":1,"message_id":"msg-001",'
+                '"message_type":"ALERT","created_at":1,"payload":{"x":Infinity}}'
+            )
+        with self.assertRaises(ValueError):
+            deserialize_model('{"x": NaN}', Position)
+
+    def test_json_nao_serializavel_rejeitado(self):
+        message = self.make_message()
+        message.payload["invalid"] = object()
+
+        with self.assertRaises(TypeError):
+            message.to_json()
 
     def test_tipo_de_mensagem_invalido(self):
         with self.assertRaises(ValueError):
@@ -99,6 +130,37 @@ class TestMessages(unittest.TestCase):
             with self.subTest(model_type=model_type):
                 restored = deserialize_model(serialize_model(model), model_type)
                 self.assertEqual(restored, model)
+
+    def test_mission_status_ausente_usa_valor_por_omissao(self):
+        data = {
+            "mission_id": "mission-001",
+            "incident_id": "incident-001",
+            "task": "verify",
+            "target": {"x": 2, "y": 3},
+            "required_capability": "mobile",
+            "priority": 1,
+        }
+
+        mission = model_from_dict(data, Mission)
+
+        self.assertIs(mission.status, MissionStatus.PROPOSED)
+
+    def test_mission_status_valido_e_invalido(self):
+        data = {
+            "mission_id": "mission-001",
+            "incident_id": "incident-001",
+            "task": "verify",
+            "target": {"x": 2, "y": 3},
+            "required_capability": "mobile",
+            "priority": 1,
+            "status": "reserved",
+        }
+        mission = model_from_dict(data, Mission)
+        self.assertIs(mission.status, MissionStatus.RESERVED)
+
+        data["status"] = "invalid"
+        with self.assertRaises(ValueError):
+            model_from_dict(data, Mission)
 
     def test_modelo_desconhecido_e_dados_invalidos(self):
         with self.assertRaises(TypeError):

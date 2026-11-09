@@ -77,13 +77,23 @@ Alguma documentação e infraestrutura de testes da Etapa 10 podem começar ante
 
 **Tarefas concretas:**
 
-- [ ] Definir `Position` (coordenadas válidas), `Observation` (fonte, tipo, instante, posição, intensidade), `Incident`, `ResourceState`, `Mission` e `Bid`.
+- [x] Definir `Position` (coordenadas válidas), `Observation` (fonte, tipo, instante, posição), `Incident`, `ResourceState`, `Mission` e `Bid`.
+- [ ] Decidir a relação entre intensidade da observação e `confidence_score`.
 - [ ] Escolher unidades: coordenadas, distância, tempo da simulação, energia, prioridade e ETA.
-- [ ] Definir `event_id`, `incident_id`, `mission_id`, `message_id` e `conversation-id` sem sobreposição semântica.
-- [ ] Criar enumerações de estados para incidentes e recursos; especificar transições permitidas.
-- [ ] Definir esquema JSON com `schema_version` e validação de campos obrigatórios.
+- [x] Definir `event_id`, `incident_id`, `mission_id`, `message_id` e `conversation-id` sem sobreposição semântica.
+- [x] Criar enumerações de estados para incidentes e recursos; especificar transições permitidas.
+- [x] Definir esquema JSON com `schema_version` e validação de campos obrigatórios.
 - [ ] Especificar invariantes: nenhuma dupla missão ativa incompatível; eventos duplicados não contam duas vezes.
-- [ ] Escrever exemplos válidos e inválidos; pedir revisão cruzada a quem implementará agentes e simulação.
+- [x] Escrever exemplos válidos e inválidos.
+- [ ] Pedir revisão cruzada dos exemplos a quem implementará agentes e simulação.
+
+**Implementação verificada nesta branch:** `IncidentState`, contratos JSON
+independentes de SPADE, serialização/desserialização dos modelos e
+deduplicação por `message_id` estão implementados e testados. Permanecem
+pendentes a escolha de todas as unidades (distância, ETA, energia, carga e
+prioridade), os campos específicos de cada tipo de mensagem e a aprovação
+formal dos contratos pelos três elementos. A invariável de reserva atómica e
+de missões incompatíveis pertence às etapas posteriores.
 
 **Dependências:** Etapa 0. Bloqueia a integração das Etapas 2, 3, 4 e 5 até os contratos serem acordados.
 

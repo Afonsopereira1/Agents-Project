@@ -28,13 +28,13 @@ class Observation:
     confidence_score: float
 
     def __post_init__(self):
-        if not self.event_id.strip():
+        if not isinstance(self.event_id, str) or not self.event_id.strip():
             raise ValueError("O identificador não pode estar vazio.")
 
-        if not self.source_id.strip():
+        if not isinstance(self.source_id, str) or not self.source_id.strip():
             raise ValueError("A fonte não pode estar vazia.")
 
-        if not self.event_type.strip():
+        if not isinstance(self.event_type, str) or not self.event_type.strip():
             raise ValueError("O tipo de evento não pode estar vazio.")
 
         if not isinstance(self.position, Position):
