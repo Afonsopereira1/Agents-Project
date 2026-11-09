@@ -1,6 +1,6 @@
 
 import unittest
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 
 from isia.domain.models import Position, Observation, Incident, Mission, MissionStatus, Bid
 
@@ -340,6 +340,41 @@ class TestMission(unittest.TestCase):
                 True
             )
 
+    def test_todas_as_transicoes(self):
+        base = Mission(
+            mission_id="mission-001",
+            incident_id="inc-001",
+            task="verify_incident",
+            target=Position(2, 3),
+            required_capability="mobile_verification",
+            priority=2
+        )
+
+        permitidas = {
+            (MissionStatus.PROPOSED, MissionStatus.RESERVED),
+            (MissionStatus.RESERVED, MissionStatus.RUNNING),
+            (MissionStatus.RUNNING, MissionStatus.DONE),
+            (MissionStatus.RUNNING, MissionStatus.FAILED),
+        }
+
+        for origem in MissionStatus:
+            for destino in MissionStatus:
+                with self.subTest(origem=origem, destino=destino):
+                    mission = replace(base, status=origem)
+
+                    if (origem, destino) in permitidas:
+                        resultado = mission.change_status(destino)
+
+                        self.assertEqual(
+                            resultado,
+                            replace(mission, status=destino)
+                        )
+                    else:
+                        with self.assertRaises(ValueError):
+                            mission.change_status(destino)
+
+                    self.assertEqual(mission.status, origem)
+
 
 class TestBid(unittest.TestCase):
 
@@ -447,6 +482,51 @@ class TestBid(unittest.TestCase):
                 20.0,
                 0.2
             )
+
+    def test_valores_numericos_invalidos(self):
+        invalidos = (
+            -1,
+            -0.5,
+            True,
+            False,
+            "cinco",
+            None,
+            float("nan"),
+            float("inf"),
+            float("-inf"),
+        )
+
+        for campo in ("eta", "energy_cost", "load"):
+            for valor in invalidos:
+                with self.subTest(campo=campo, valor=valor):
+                    dados = {
+                        "mission_id": "mission-001",
+                        "resource_id": "drone-001",
+                        "eta": 5.0,
+                        "energy_cost": 20.0,
+                        "load": 0.2,
+                    }
+                    dados[campo] = valor
+
+                    with self.assertRaises(ValueError):
+                        Bid(**dados)
+
+    def test_valores_numericos_validos(self):
+        for campo in ("eta", "energy_cost", "load"):
+            for valor in (0, 0.0, 1, 0.5):
+                with self.subTest(campo=campo, valor=valor):
+                    dados = {
+                        "mission_id": "mission-001",
+                        "resource_id": "drone-001",
+                        "eta": 5.0,
+                        "energy_cost": 20.0,
+                        "load": 0.2,
+                    }
+                    dados[campo] = valor
+
+                    bid = Bid(**dados)
+
+                    self.assertEqual(getattr(bid, campo), valor)
 
 if __name__ == "__main__":
     unittest.main()
