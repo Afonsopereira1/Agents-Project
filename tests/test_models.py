@@ -2,7 +2,7 @@
 import unittest
 from dataclasses import FrozenInstanceError
 
-from isia.domain.models import Position, Observation, Incident
+from isia.domain.models import Position, Observation, Incident, ResourceState
 
 
 
@@ -121,7 +121,73 @@ class TestIncident(unittest.TestCase):
         with self.assertRaises(ValueError):
             Incident("inc-001", ())
 
+class TestResourceState(unittest.TestCase):
 
+    def test_recurso_valido(self):
+        recurso = ResourceState(
+            resource_id="drone_01",
+            resource_type="drone",
+            position=Position(5, 7),
+            available=True,
+            autonomy_percent=80.0
+        )
+
+        self.assertEqual(recurso.resource_id, "drone_01")
+        self.assertEqual(recurso.position, Position(5, 7))
+        self.assertTrue(recurso.available)
+        self.assertEqual(recurso.autonomy_percent, 80.0)
+
+    def test_autonomia_invalida(self):
+        with self.assertRaises(ValueError):
+            ResourceState(
+                resource_id="drone_01",
+                resource_type="drone",
+                position=Position(5, 7),
+                available=True,
+                autonomy_percent=150.0
+            )
+    
+    def test_recurso_sem_identificador(self):
+        with self.assertRaises(ValueError):
+            ResourceState(
+                resource_id="",
+                resource_type="drone",
+                position=Position(5, 7),
+                available=True,
+                autonomy_percent=80.0
+            )
+
+    def test_disponibilidade_invalida(self):
+        with self.assertRaises(TypeError):
+            ResourceState(
+                resource_id="drone_01",
+                resource_type="drone",
+                position=Position(5, 7),
+                available="sim",
+                autonomy_percent=80.0
+            )
+            
+    
+    def test_posicao_invalida(self):
+        with self.assertRaises(TypeError):
+            ResourceState(
+                resource_id="drone_01",
+                resource_type="drone",
+                position=(5, 7),
+                available=True,
+                autonomy_percent=80.0
+            )
+
+    def test_autonomia_nao_definida(self):
+        recurso = ResourceState(
+            resource_id="ranger_01",
+            resource_type="ranger",
+            position=Position(3, 2),
+            available=True,
+            autonomy_percent=None
+        )
+
+        self.assertIsNone(recurso.autonomy_percent)
 
 
 

@@ -71,3 +71,34 @@ class Incident:
 
         if len(ids) != len(set(ids)):
             raise ValueError("Não podem existir observações repetidas.")
+
+
+@dataclass(frozen=True)
+class ResourceState:
+    resource_id: str
+    resource_type: str
+    position: Position
+    available: bool
+    autonomy_percent: float | None = None
+
+    def __post_init__(self):
+        if not isinstance(self.resource_id, str) or not self.resource_id.strip():
+            raise ValueError("O identificador do recurso não pode estar vazio.")
+
+        if not isinstance(self.resource_type, str) or not self.resource_type.strip():
+            raise ValueError("O tipo de recurso não pode estar vazio.")
+
+        if not isinstance(self.position, Position):
+            raise TypeError("A posição deve ser do tipo Position.")
+
+        if not isinstance(self.available, bool):
+            raise TypeError("A disponibilidade deve ser True ou False.")
+
+        
+        if self.autonomy_percent is not None and (
+            isinstance(self.autonomy_percent, bool)
+            or not isinstance(self.autonomy_percent, (int, float))
+            or not 0 <= self.autonomy_percent <= 100
+        ):
+            raise ValueError("A autonomia deve estar entre 0 e 100.")
+
