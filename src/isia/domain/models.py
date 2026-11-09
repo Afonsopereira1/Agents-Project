@@ -26,6 +26,7 @@ class Observation:
     position: Position
     observed_at: float
     confidence_score: float
+    intensity_score: float | None = None
 
     def __post_init__(self):
         if not isinstance(self.event_id, str) or not self.event_id.strip():
@@ -49,6 +50,14 @@ class Observation:
             self.confidence_score, (int, float)
         ) or not 0 <= self.confidence_score <= 1:
             raise ValueError("A confiança deve estar entre 0 e 1.")
+
+        if self.intensity_score is not None and (
+            isinstance(self.intensity_score, bool)
+            or not isinstance(self.intensity_score, (int, float))
+            or not isfinite(self.intensity_score)
+            or not 0 <= self.intensity_score <= 1
+        ):
+            raise ValueError("A intensidade deve estar entre 0 e 1.")
 
 
 
@@ -299,5 +308,10 @@ class Bid:
         if isinstance(self.energy_cost, bool) or not isinstance(self.energy_cost,(int, float)) or not 0 <= self.energy_cost < float("inf"):
             raise ValueError("O custo energético deve ser finito e não negativo.")
 
-        if isinstance(self.load, bool) or not isinstance(self.load, (int, float)) or not 0 <= self.load < float("inf"):
-            raise ValueError("A carga de trabalho deve ser finita e não negativa.")
+        if (
+            isinstance(self.load, bool)
+            or not isinstance(self.load, (int, float))
+            or not isfinite(self.load)
+            or not 0 <= self.load <= 1
+        ):
+            raise ValueError("A carga de trabalho deve estar entre 0 e 1.")

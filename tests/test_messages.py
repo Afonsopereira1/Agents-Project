@@ -4,6 +4,7 @@ from isia.communication.messages import (
     Message,
     MessageDeduplicator,
     MessageType,
+    DEFAULT_DEDUPLICATION_RETENTION_SECONDS,
     deserialize_model,
     model_from_dict,
     model_to_dict,
@@ -99,6 +100,45 @@ class TestMessages(unittest.TestCase):
                     "payload": {},
                 }
             )
+
+    def test_cfp_exige_contrato_minimo(self):
+        payload = {
+            "task": "verify_incident",
+            "target": {"x": 6, "y": 9},
+            "required_capability": "mobile_verification",
+            "priority": 2,
+            "deadline": 138.0,
+        }
+        message = Message(
+            "msg-cfp",
+            MessageType.CFP,
+            128.0,
+            payload,
+            incident_id="incident-07",
+            mission_id="mission-03",
+            conversation_id="conversation-03",
+        )
+        self.assertEqual(message.payload, payload)
+
+        for missing in payload:
+            invalid_payload = dict(payload)
+            del invalid_payload[missing]
+            with self.subTest(missing=missing), self.assertRaises(ValueError):
+                Message(
+                    "msg-cfp",
+                    MessageType.CFP,
+                    128.0,
+                    invalid_payload,
+                    incident_id="incident-07",
+                    mission_id="mission-03",
+                    conversation_id="conversation-03",
+                )
+
+        with self.assertRaises(ValueError):
+            Message("msg-cfp", MessageType.CFP, 128.0, payload, incident_id="i", mission_id="m")
+
+    def test_politica_de_retencao_e_documentada_sem_expiracao_operacional(self):
+        self.assertEqual(DEFAULT_DEDUPLICATION_RETENTION_SECONDS, 600.0)
 
     def test_deduplicacao_por_message_id(self):
         message = self.make_message()

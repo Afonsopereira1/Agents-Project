@@ -29,6 +29,9 @@ class MessageType(Enum):
     INCIDENT_CLOSED = "INCIDENT_CLOSED"
 
 
+DEFAULT_DEDUPLICATION_RETENTION_SECONDS = 600.0
+
+
 def _require_identifier(value: Any, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} deve ser uma string não vazia.")
@@ -58,6 +61,30 @@ def _validate_json_value(value: Any, path: str = "payload") -> None:
 
 def _reject_json_constant(value: str):
     raise ValueError(f"Constante JSON inválida: {value}.")
+
+
+def _validate_cfp(message_ids: dict[str, str | None], payload: dict[str, Any]) -> None:
+    for name in ("mission_id", "incident_id", "conversation_id"):
+        _require_identifier(message_ids[name], name)
+
+    required = {"task", "target", "required_capability", "priority", "deadline"}
+    missing = required - payload.keys()
+    if missing:
+        raise ValueError(f"Campos obrigatórios em CFP em falta: {', '.join(sorted(missing))}.")
+    if not isinstance(payload["task"], str) or not payload["task"].strip():
+        raise ValueError("task deve ser uma string não vazia.")
+    if not isinstance(payload["required_capability"], str) or not payload["required_capability"].strip():
+        raise ValueError("required_capability deve ser uma string não vazia.")
+    if type(payload["priority"]) is not int or payload["priority"] < 0:
+        raise ValueError("priority deve ser um inteiro não negativo.")
+    deadline = payload["deadline"]
+    if type(deadline) not in (int, float) or not isfinite(deadline) or deadline < 0:
+        raise ValueError("deadline deve ser finito e não negativo.")
+    target = payload["target"]
+    if not isinstance(target, dict) or type(target.get("x")) is not int or type(target.get("y")) is not int:
+        raise ValueError("target deve conter coordenadas inteiras.")
+    if target["x"] < 0 or target["y"] < 0:
+        raise ValueError("target não pode conter coordenadas negativas.")
 
 
 def model_to_dict(model: Any) -> dict[str, Any]:
@@ -148,7 +175,7 @@ class Message:
         self,
         message_id: str,
         message_type: MessageType,
-        created_at: int | float,
+        created_at: float,
         payload: dict[str, Any],
         *,
         event_id: str | None = None,
@@ -181,6 +208,15 @@ class Message:
         ):
             if value is not None:
                 _require_identifier(value, name)
+        if message_type is MessageType.CFP:
+            _validate_cfp(
+                {
+                    "mission_id": mission_id,
+                    "incident_id": incident_id,
+                    "conversation_id": conversation_id,
+                },
+                payload,
+            )
         self.message_type = message_type
         self.created_at = created_at
         self.payload = payload

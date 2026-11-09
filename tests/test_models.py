@@ -1,18 +1,16 @@
-
 import unittest
 from dataclasses import FrozenInstanceError, replace
 
 from isia.domain.models import (
-    Position,
-    Observation,
+    Bid,
     Incident,
-    ResourceState,
-    ResourceStatus,
     Mission,
     MissionStatus,
-    Bid,
+    Observation,
+    Position,
+    ResourceState,
+    ResourceStatus,
 )
-
 
 
 class TestPosition(unittest.TestCase):
@@ -104,6 +102,31 @@ class TestObservation(unittest.TestCase):
                 dados[campo] = 42
                 with self.assertRaises(ValueError):
                     Observation(**dados)
+
+    def test_intensidade_opcional_e_validada(self):
+        observacao = Observation(
+            "obs-004",
+            "sensor_01",
+            "sound",
+            Position(2, 3),
+            15.0,
+            0.8,
+            0.6,
+        )
+        self.assertEqual(observacao.intensity_score, 0.6)
+
+        for intensidade in (-0.1, 1.1, float("nan"), float("inf"), True, "0.5"):
+            with self.subTest(intensidade=intensidade):  # noqa: SIM117
+                with self.assertRaises(ValueError):
+                    Observation(
+                        "obs-004",
+                        "sensor_01",
+                        "sound",
+                        Position(2, 3),
+                        15.0,
+                        0.8,
+                        intensidade,
+                    )
 
 
 class TestIncident(unittest.TestCase):
@@ -344,9 +367,8 @@ class TestResourceState(unittest.TestCase):
 
     def test_autonomia_rejeita_valores_invalidos(self):
         for autonomia in (-1, 101, float("nan"), float("inf"), float("-inf"), True, "80"):
-            with self.subTest(autonomia=autonomia):
-                with self.assertRaises(ValueError):
-                    ResourceState("r1", "drone", Position(1, 1), True, autonomia)
+            with self.subTest(autonomia=autonomia), self.assertRaises(ValueError):
+                ResourceState("r1", "drone", Position(1, 1), True, autonomia)
 
 
 class TestMission(unittest.TestCase):
@@ -754,6 +776,10 @@ class TestBid(unittest.TestCase):
                     bid = Bid(**dados)
 
                     self.assertEqual(getattr(bid, campo), valor)
+
+    def test_load_acima_de_um_e_invalido(self):
+        with self.assertRaises(ValueError):
+            Bid("mission-001", "drone-001", 5.0, 20.0, 1.01)
 
 if __name__ == "__main__":
     unittest.main()

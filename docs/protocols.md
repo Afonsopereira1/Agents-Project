@@ -44,6 +44,8 @@ SPADE ou XMPP. A versão atual usa:
 - `message_type`: um dos tipos `ALERT`, `VERIFY_REQUEST`, `VERIFY_RESPONSE`,
   `CFP`, `PROPOSAL`, `ACCEPT`, `REJECT`, `MISSION_RESULT`, `STATUS` ou
   `INCIDENT_CLOSED`.
+- `conversation_id`: identificador da conversa; é obrigatório em `CFP` e
+  correlaciona mensagens relacionadas sem substituir `message_id`.
 - `created_at`: número finito e não negativo em segundos de tempo simulado. O
   relógio começa em `0.0`; este campo não é um timestamp de parede nem uma data
   ISO-8601. Valores negativos, `NaN` e infinitos são inválidos.
@@ -57,28 +59,39 @@ As mensagens podem ser convertidas com `Message.to_json()` e
 com `serialize_model()`/`deserialize_model()`, usando enums pelos seus valores
 JSON e tuplos como listas JSON. `MessageDeduplicator` considera repetida uma
 mensagem cujo `message_id` já foi aceite; não deduplica por conteúdo nem por
-`event_id`.
+`event_id`. A política proposta para a futura retenção do registo local é de
+`600.0` segundos simulados, mas a expiração operacional pertence a uma etapa
+posterior.
 
-As unidades partilhadas dos modelos são: coordenadas inteiras não negativas em
-`Position`; instantes, ETA e custos numéricos não negativos e finitos; autonomia
-como percentagem entre `0` e `100`; prioridade como inteiro não negativo. A
-unidade concreta de distância, velocidade e energia ainda não é necessária para
-estes contratos e será definida antes da simulação e da negociação.
+As unidades partilhadas dos modelos são: posições inteiras não negativas numa
+grelha 2D; distância euclidiana em unidades da grelha; tempo simulado e ETA em
+segundos, iniciados em `0.0` e separados dos timeouts reais do SPADE; autonomia
+como percentagem entre `0` e `100`; `Bid.energy_cost` em pontos percentuais de
+autonomia, podendo exceder `100` quando a missão é estimada como inviável;
+`Mission.priority` como inteiro não negativo, em que valores maiores são mais
+urgentes; e `Bid.load` entre `0` e `1`.
+
+`Observation.confidence_score` é uma pontuação entre `0` e `1` sobre a
+confiança da fonte no sinal. `intensity_score`, quando representado, é um
+campo opcional separado entre `0` e `1`; a relação semântica entre ambos deve
+ser mantida distinta. Os IDs devem ser únicos dentro da sua entidade e podem
+usar UUID quando forem gerados novos; os IDs históricos legíveis continuam
+compatíveis.
 
 Os estados de incidente implementados em `domain.incident_state` são
 `DETECTED`, `VERIFYING`, `ASSESSING`, `WATCHING`, `ALLOCATING`, `RESPONDING`,
 `CLOSED`, `EXPIRED` e `UNRESOLVED`. As transições seguem o diagrama da
 arquitetura e são imutáveis: cada mudança devolve um novo `IncidentState`.
 
-**Decisões ainda sujeitas a aprovação dos três elementos:** confirmar a
-convenção do relógio simulado em segundos iniciado em zero, a distinção entre
-`confidence_score` e intensidade da observação, a política de
-retenção/expiração do registo de mensagens duplicadas e o conjunto final de
-campos obrigatórios específicos de cada `message_type` (em particular `CFP`).
-Também permanecem por aprovar as unidades de distância, ETA, energia, carga e
-prioridade e a aprovação formal dos contratos pelo grupo. Esta implementação
-fornece o contrato mínimo da Etapa 1; não implementa transporte, agentes SPADE,
-corroboração ou Contract Net.
+`CFP` exige `mission_id`, `incident_id` e `conversation_id`, além de um
+`payload` com `task`, `target` (`x`/`y`), `required_capability`, `priority` e
+`deadline` em segundos simulados. Esta validação é estrutural; a negociação e
+a reserva pertencem a etapas posteriores.
+
+**Aprovação formal ainda pendente dos três elementos:** confirmar estes
+contratos e a política proposta de retenção de `600.0` segundos. Esta
+implementação não impõe UUID aos IDs existentes, não implementa expiração
+operacional, transporte, agentes SPADE, corroboração ou Contract Net.
 
 Metadados SPADE recomendados: `performative`, `ontology`, `protocol`, `conversation-id` (ou correlação por `thread`, a validar no SPADE escolhido), `reply-with` e `in-reply-to` quando aplicáveis. O endereço do remetente/destinatário deverá ser obtido e validado pela infraestrutura SPADE, evitando confiar cegamente num `source_id` declarado no corpo.
 
@@ -97,6 +110,7 @@ Metadados SPADE recomendados: `performative`, `ontology`, `protocol`, `conversat
     "event_type": "gunshot_like_sound",
     "position": {"x": 6, "y": 9},
     "confidence_score": 0.82,
+    "intensity_score": 0.65,
     "sensor_modality": "acoustic"
   }
 }
@@ -122,6 +136,7 @@ malformado.
   "message_id": "msg-014",
   "message_type": "CFP",
   "created_at": 128.0,
+  "conversation_id": "conversation-03",
   "incident_id": "incident-07",
   "mission_id": "mission-03",
   "payload": {
