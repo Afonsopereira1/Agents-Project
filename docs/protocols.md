@@ -1,6 +1,6 @@
 # Comunicação, mensagens e protocolos — proposta
 
-> **Estado:** contrato inicial para discussão. **Não existe implementação confirmada**; os nomes de mensagens e os exemplos JSON não são exigências literais do docente.
+> **Estado:** modelos e contratos da Etapa 1 implementados e testados localmente, mantendo-se sujeitos à revisão do grupo; os nomes de mensagens e os exemplos JSON não são exigências literais do docente.
 
 [README](../README.md) · [Arquitetura](architecture.md) · [Plano](development-plan.md) · [Decisões](architecture.md#decisões-pendentes)
 
@@ -25,7 +25,7 @@ Proposta de contrato para o **corpo JSON** (campos obrigatórios mínimos marcad
 | `schema_version`* | inteiro | Versão do contrato: começa em 1 |
 | `message_id`* | string | Identificador global da mensagem, para deduplicar |
 | `message_type`* | string | Tipo do conteúdo: `ALERT`, `CFP`, `PROPOSAL`, ... |
-| `created_at`* | número/string documentado | Instante da emissão (definir unidade e relógio) |
+| `created_at`* | número finito não negativo | Instante da emissão em segundos simulados |
 | `event_id` | string | Identificador de uma observação, **não** do incidente |
 | `incident_id` | string | Identificador de ocorrência agrupando evidência relacionada |
 | `mission_id` | string | Identificador da missão negociada/executada |
