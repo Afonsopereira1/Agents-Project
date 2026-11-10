@@ -3,7 +3,7 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado:** a Etapa 1 tem modelos de domínio, estados de incidentes e contratos JSON Python implementados e testados. A Etapa 2 já tem mapa 2D, posições iniciais e relógio simulado. A arquitetura B1 e os contratos continuam sujeitos a revisão do grupo; geração de observações, comunicação entre agentes e negociação estão pendentes.
+> **Estado:** as Etapas 1 e 2 têm modelos, contratos JSON e ambiente 2D com observações imperfeitas implementados e testados. A arquitetura B1 e os contratos continuam sujeitos a revisão do grupo; comunicação entre agentes, corroboração distribuída e negociação estão pendentes.
 
 ## O projeto
 
@@ -95,12 +95,17 @@ Na raiz do repositório, sem precisar de SPADE nem de servidor XMPP:
 PYTHONPATH=src python3 -m isia.simulation config/environment.json --steps 3 --step-seconds 0.5
 ```
 
-O comando mostra a grelha, as posições dos participantes e os instantes
-`0.5`, `1` e `1.5` segundos. Sem `--steps`, mostra apenas o estado inicial.
+O comando mostra a grelha, os instantes e as observações de cada fonte.
+Guarda cada execução num novo `results/simulation/run-*/run.json`, com semente,
+parâmetros, avanços, observações e verdade de referência para avaliação.
+`--output /tmp/execucao.json` permite escolher um ficheiro que ainda não exista.
+Sem `--steps`, amostra apenas o instante inicial e guarda esse registo.
 
 Editar [config/environment.json](config/environment.json) para mudar as
-dimensões e posições. O exemplo tem 12 × 10 células, dois sensores, um drone
-e um veículo. As coordenadas são inteiras: `0 <= x < width` e
+dimensões, posições e cenário. O exemplo tem 12 × 10 células, duas fontes
+próximas (acústica e visual), um drone e um veículo. Uma ameaça começa em
+`t=1`, dura cinco segundos e desloca-se de `(5, 6)` para `(8, 6)`.
+As coordenadas são inteiras: `0 <= x < width` e
 `0 <= y < height`. A origem `(0, 0)` fica no canto inferior esquerdo;
 `x` cresce para a direita e `y` para cima. Não há escala física definida.
 Coordenadas inválidas e identificadores repetidos são rejeitados.
@@ -109,13 +114,57 @@ Vários participantes podem partilhar uma célula, assinalada com `*`.
 O [World](src/isia/simulation/world.py) usa os modelos `Position` e
 `ResourceState` existentes. Cada execução tem um
 [SimulationClock](src/isia/simulation/clock.py) próprio, iniciado em zero.
-`world.clock.advance(segundos)` avança explicitamente por uma duração positiva;
-`world.clock.now` fornece o instante para observações, mensagens e prazos.
-Não há espera real nem avanço automático. Os timeouts do transporte XMPP
-continuam a usar tempo real, separado deste relógio.
+Usar `scenario.advance(segundos)` para avançar o relógio e gerar leituras.
+Não há espera real nem avanço automático; `world.clock.now` fornece o instante
+simulado. Avançar diretamente `world.clock` num cenário é rejeitado no próximo
+avanço ou gravação. Os timeouts XMPP continuam a usar tempo real.
 
-Esta parte da Etapa 2 mantém posições fixas. Eventos, perceção, movimento e
-integração com agentes ficam para as tarefas seguintes.
+```python
+from isia.simulation.scenario import Scenario
+
+scenario = Scenario.from_config("config/environment.json")
+source = scenario.source("sensor_01")  # Entregar apenas esta API ao agente.
+scenario.advance(1)
+observations = source.recent()
+```
+
+`recent()` devolve apenas as observações dessa fonte na janela inclusiva
+`[agora - corroboration_window, agora]`. Consultas repetidas não sorteiam novas
+leituras. A geração ocorre em `t=0` e após cada avanço; eventos que comecem e
+terminem entre duas amostras podem passar despercebidos. Mesma configuração,
+semente e sequência de avanços reproduzem o resultado.
+
+Cada perfil em `scenario.sources` corresponde a uma posição em `sensors`:
+
+| Parâmetro | Efeito |
+|---|---|
+| `kind` | `acoustic`, `visual` ou `human`; cada tipo emite um sinal distinto |
+| `detection_range` | Distância euclidiana máxima, inclusiva, em células |
+| `sensitivity` | Probabilidade base de captar o sinal, entre 0 e 1 |
+| `false_negative_rate` | Falha adicional perante uma ameaça |
+| `false_positive_rate` | Confusão de um evento benigno com um sinal suspeito |
+| `position_error` | Desvio inteiro máximo por eixo, limitado às bordas do mapa |
+| `confidence` | Pontuação fixa da fonte; não representa a verdade do evento |
+
+A probabilidade de emitir uma leitura de ameaça é
+`sensitivity * (1 - false_negative_rate)`; num evento benigno é
+`sensitivity * false_positive_rate`. São sorteios independentes por evento,
+fonte e amostra, sempre sujeitos ao alcance e capacidade da fonte.
+`threat` produz sinais nos três canais; `thunder` apenas no acústico;
+`tourist` nos canais visual e humano. Sem evento não há falso alerta.
+Estes parâmetros são um modelo simplificado, sem calibração empírica.
+
+Eventos estão ativos em `[starts_at, starts_at + duration)`. O movimento base
+percorre primeiro x e depois y, em células completas, à velocidade `speed`
+(células/segundo), sem ultrapassar `destination`. Frações acumulam-se pelo tempo
+decorrido desde o início. Fontes e patrulhas mantêm as posições iniciais;
+obstáculos e execução de missões pertencem às etapas seguintes.
+
+O avaliador consulta `scenario.ground_truth`: tipo real, posição, estado temporal
+e ligação entre cada observação e o evento que a originou. Os agentes recebem
+apenas `ObservationFeed`, sem acesso aos eventos através da API pública.
+`Observation.event_id` identifica a leitura, não o evento real. A janela de
+consulta está pronta; a decisão de corroboração distribuída pertence à Etapa 4.
 
 Para verificar os modelos, contratos e simulação:
 

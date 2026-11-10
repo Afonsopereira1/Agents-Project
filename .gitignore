@@ -22,3 +22,6 @@ server.db-wal
 # Ficheiros locais do editor
 .vscode/
 temp/
+
+# Execuções locais da simulação
+results/simulation/
