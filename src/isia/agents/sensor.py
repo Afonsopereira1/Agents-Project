@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Any
 
 from spade.agent import Agent
 from spade.behaviour import OneShotBehaviour
@@ -20,6 +21,25 @@ from isia.communication.transport import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def response_matches_request(
+    incoming: Any,
+    response: Message,
+    request: Message,
+    expected_sender: str,
+) -> bool:
+    """Valida a correlação e a origem de uma resposta de verificação."""
+    sender = str(getattr(incoming, "sender", "")).split("/", 1)[0].lower()
+    expected = expected_sender.split("/", 1)[0].lower()
+    return (
+        response.message_type is MessageType.VERIFY_RESPONSE
+        and response.conversation_id == request.conversation_id
+        and incoming.get_metadata("conversation-id") == request.conversation_id
+        and incoming.get_metadata("in-reply-to") == request.message_id
+        and response.payload.get("request_message_id") == request.message_id
+        and sender == expected
+    )
 
 
 class SensorAgent(Agent):
@@ -69,9 +89,13 @@ class SensorAgent(Agent):
             except (TypeError, ValueError) as error:
                 logger.warning("Resposta rejeitada: %s", error)
                 return
-            if response.message_type is MessageType.VERIFY_RESPONSE:
+            if response_matches_request(
+                incoming, response, request, agent.informant_jid
+            ):
                 agent.response = response
                 logger.info("VERIFY_RESPONSE recebida de %s", incoming.sender)
+            else:
+                logger.warning("VERIFY_RESPONSE rejeitada: correlação ou remetente inválido")
 
     async def setup(self):
         template = Template(
