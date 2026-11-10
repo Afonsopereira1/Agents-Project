@@ -90,5 +90,34 @@ no terminal em que foi iniciado.
 ### Estado do desenvolvimento
 
 Etapa 1: modelos, estados de incidentes e contratos JSON testados localmente.
-O transporte SPADE e a comunicação entre agentes serão implementados nas
-etapas seguintes.
+Etapa 3 (primeiro incremento): `SensorAgent` e `InformantAgent` trocam
+`VERIFY_REQUEST`/`VERIFY_RESPONSE` através de SPADE, com dados de exemplo e
+correlação por `conversation-id`.
+
+### Demonstração da comunicação entre agentes
+
+Depois de instalar `requirements.txt` e iniciar um servidor XMPP compatível
+com SPADE (por exemplo, `spade run`), crie duas contas locais ou use contas
+disponibilizadas pelo servidor. As palavras-passe são sempre fornecidas por
+variáveis de ambiente:
+
+```bash
+export SENSOR_JID=sensor@localhost
+export SENSOR_PASSWORD='password-da-conta-do-servidor'
+export INFORMANT_JID=informant@localhost
+export INFORMANT_PASSWORD='password-da-conta-do-servidor'
+PYTHONPATH=src python3 main.py
+```
+
+O programa inicia os dois agentes, envia um pedido de verificação com um
+evento de exemplo, aguarda a resposta até ao timeout e encerra ambos os
+agentes no bloco `finally`. Não coloque palavras-passe no código ou no Git.
+
+Os testes locais podem ser executados com:
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+```
+
+Os testes de construção/parsing SPADE são ignorados quando SPADE não está
+instalado; para os executar, instale a versão fixada `spade==4.1.4`.
