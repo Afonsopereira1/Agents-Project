@@ -21,6 +21,7 @@ from isia.communication.transport import (
 )
 
 logger = logging.getLogger(__name__)
+RESPONSE_TIMEOUT_SECONDS = 10.0
 
 
 def response_matches_request(
@@ -80,7 +81,7 @@ class SensorAgent(Agent):
             await self.send(outgoing)
             logger.info("VERIFY_REQUEST enviada para %s", agent.informant_jid)
 
-            incoming = await self.receive(timeout=10)
+            incoming = await self.receive(timeout=RESPONSE_TIMEOUT_SECONDS)
             if incoming is None:
                 logger.warning("Timeout à espera de VERIFY_RESPONSE")
                 return
