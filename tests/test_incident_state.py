@@ -1,65 +1,105 @@
-"""Contrato do ciclo de incidentes, sem servidor ou modelos dos colegas."""
-
 import unittest
-from itertools import pairwise, product
+from dataclasses import FrozenInstanceError
 
-from isia.domain.incident_state import IncidentState, validate_transition
+from isia.domain.incident_state import IncidentState, IncidentStatus, allowed_transitions
 
 
-class IncidentStateTests(unittest.TestCase):
-    def test_known_states(self):
+class TestIncidentState(unittest.TestCase):
+    def test_estado_inicial(self):
+        state = IncidentState("incident-001")
+
+        self.assertIs(state.status, IncidentStatus.DETECTED)
+
+    def test_todos_os_estados_estao_representados(self):
         self.assertEqual(
-            {state.value for state in IncidentState},
+            {status.value for status in IncidentStatus},
             {
-                "DETECTED", "VERIFYING", "ASSESSING", "WATCHING", "ALLOCATING",
-                "RESPONDING", "CLOSED", "EXPIRED", "UNRESOLVED",
+                "detected",
+                "verifying",
+                "assessing",
+                "watching",
+                "allocating",
+                "responding",
+                "closed",
+                "expired",
+                "unresolved",
             },
         )
 
-    def test_documented_paths(self):
-        paths = (
-            "DETECTED VERIFYING ASSESSING ALLOCATING RESPONDING CLOSED",
-            "DETECTED VERIFYING ASSESSING WATCHING EXPIRED",
-            "WATCHING VERIFYING ASSESSING ALLOCATING UNRESOLVED",
-            "RESPONDING ALLOCATING RESPONDING CLOSED",
-            "RESPONDING ALLOCATING UNRESOLVED",
-        )
-        for path in paths:
-            with self.subTest(path=path):
-                for current, target in pairwise(path.split()):
-                    self.assertIsNone(validate_transition(current, target))
-
-    def test_all_state_pairs(self):
-        # Expectativa independente da tabela privada da implementação.
-        allowed = {
-            ("DETECTED", "VERIFYING"), ("VERIFYING", "ASSESSING"),
-            ("ASSESSING", "WATCHING"), ("ASSESSING", "ALLOCATING"),
-            ("WATCHING", "VERIFYING"), ("WATCHING", "EXPIRED"),
-            ("ALLOCATING", "RESPONDING"), ("ALLOCATING", "UNRESOLVED"),
-            ("RESPONDING", "CLOSED"), ("RESPONDING", "ALLOCATING"),
+    def test_transicoes_validas(self):
+        transitions = {
+            IncidentStatus.DETECTED: IncidentStatus.VERIFYING,
+            IncidentStatus.VERIFYING: IncidentStatus.ASSESSING,
+            IncidentStatus.ASSESSING: IncidentStatus.ALLOCATING,
+            IncidentStatus.WATCHING: IncidentStatus.VERIFYING,
+            IncidentStatus.ALLOCATING: IncidentStatus.RESPONDING,
+            IncidentStatus.RESPONDING: IncidentStatus.CLOSED,
         }
-        for current, target in product(IncidentState, repeat=2):
-            for origin, destination in product(
-                (current, current.value), (target, target.value)
-            ):
-                with self.subTest(origin=repr(origin), target=repr(destination)):
-                    if (current.value, target.value) in allowed:
-                        self.assertIsNone(validate_transition(origin, destination))
-                    else:
-                        # Inclui saltos, autorrepetição e todas as saídas terminais.
-                        with self.assertRaises(ValueError):
-                            validate_transition(origin, destination)
 
-    def test_unknown_states_in_both_arguments(self):
-        invalid = ("UNKNOWN", "", "detected", " DETECTED", "VERIFYING ",
-                   None, True, 1, 1.0, [], {}, b"DETECTED")
-        for value in invalid:
-            for current, target in (
-                (value, "VERIFYING"), ("DETECTED", value)
-            ):
-                with self.subTest(current=current, target=target):
+        for origin, destination in transitions.items():
+            with self.subTest(origin=origin, destination=destination):
+                state = IncidentState("incident-001", origin)
+                result = state.change_status(destination)
+
+                self.assertIs(result.status, destination)
+                self.assertIs(state.status, origin)
+
+    def test_ramos_alternativos_validos(self):
+        self.assertIn(IncidentStatus.WATCHING, allowed_transitions(IncidentStatus.ASSESSING))
+        self.assertIn(IncidentStatus.EXPIRED, allowed_transitions(IncidentStatus.WATCHING))
+        self.assertIn(IncidentStatus.UNRESOLVED, allowed_transitions(IncidentStatus.ALLOCATING))
+        self.assertIn(IncidentStatus.ALLOCATING, allowed_transitions(IncidentStatus.RESPONDING))
+
+    def test_transicao_invalida_e_estado_terminal(self):
+        for terminal in (
+            IncidentStatus.CLOSED,
+            IncidentStatus.EXPIRED,
+            IncidentStatus.UNRESOLVED,
+        ):
+            with self.subTest(terminal=terminal):
+                state = IncidentState("incident-001", terminal)
+                for destination in IncidentStatus:
                     with self.assertRaises(ValueError):
-                        validate_transition(current, target)
+                        state.change_status(destination)
+
+    def test_todas_as_combinacoes_de_transicao(self):
+        allowed = {
+            (IncidentStatus.DETECTED, IncidentStatus.VERIFYING),
+            (IncidentStatus.VERIFYING, IncidentStatus.ASSESSING),
+            (IncidentStatus.ASSESSING, IncidentStatus.WATCHING),
+            (IncidentStatus.ASSESSING, IncidentStatus.ALLOCATING),
+            (IncidentStatus.WATCHING, IncidentStatus.VERIFYING),
+            (IncidentStatus.WATCHING, IncidentStatus.EXPIRED),
+            (IncidentStatus.ALLOCATING, IncidentStatus.RESPONDING),
+            (IncidentStatus.ALLOCATING, IncidentStatus.UNRESOLVED),
+            (IncidentStatus.RESPONDING, IncidentStatus.CLOSED),
+            (IncidentStatus.RESPONDING, IncidentStatus.ALLOCATING),
+        }
+
+        for origin in IncidentStatus:
+            for destination in IncidentStatus:
+                with self.subTest(origin=origin, destination=destination):
+                    state = IncidentState("incident-001", origin)
+                    if (origin, destination) in allowed:
+                        result = state.change_status(destination)
+                        self.assertIs(result.status, destination)
+                    else:
+                        with self.assertRaises(ValueError):
+                            state.change_status(destination)
+
+    def test_validacao(self):
+        with self.assertRaises(ValueError):
+            IncidentState("", IncidentStatus.DETECTED)
+        with self.assertRaises(TypeError):
+            IncidentState("incident-001", "detected")
+        with self.assertRaises(TypeError):
+            IncidentState("incident-001").change_status("verifying")
+
+    def test_immutabilidade(self):
+        state = IncidentState("incident-001")
+
+        with self.assertRaises(FrozenInstanceError):
+            state.status = IncidentStatus.VERIFYING
 
 
 if __name__ == "__main__":

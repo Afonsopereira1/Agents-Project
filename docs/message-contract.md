@@ -1,4 +1,9 @@
-# Referência do contrato de mensagens v1
+# Contrato de mensagens anterior — referência histórica
+
+> **Histórico de `gui-batista` (`deca29f`).** Esta proposta descreve a implementação
+> anterior à integração de `origin/main` (`c07b946`). Os validadores, formatos e
+> comandos abaixo não correspondem à base ativa. Para trabalhar no projeto, seguir
+> [o contrato atual](protocols.md) e o código em `src/isia/`.
 
 Esta referência preserva os formatos e exemplos dos validadores existentes. Consultar apenas os tipos necessários à entrega em curso. Para começar, seguir o [guia de comunicação](protocols.md). Ter um validador não significa que o respetivo fluxo entre agentes esteja implementado.
 

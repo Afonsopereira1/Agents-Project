@@ -1,45 +1,64 @@
-"""Estados de incidente e transições permitidas, independentes de SPADE."""
-
-from enum import StrEnum
-
-
-class IncidentState(StrEnum):
-    """Fase operacional do incidente; não representa o resultado da missão."""
-
-    DETECTED = "DETECTED"
-    VERIFYING = "VERIFYING"
-    ASSESSING = "ASSESSING"
-    WATCHING = "WATCHING"
-    ALLOCATING = "ALLOCATING"
-    RESPONDING = "RESPONDING"
-    CLOSED = "CLOSED"
-    EXPIRED = "EXPIRED"
-    UNRESOLVED = "UNRESOLVED"
+from dataclasses import dataclass, replace
+from enum import Enum
 
 
-_TRANSITIONS = {
-    IncidentState.DETECTED: (IncidentState.VERIFYING,),
-    IncidentState.VERIFYING: (IncidentState.ASSESSING,),
-    IncidentState.ASSESSING: (IncidentState.WATCHING, IncidentState.ALLOCATING),
-    IncidentState.WATCHING: (IncidentState.VERIFYING, IncidentState.EXPIRED),
-    IncidentState.ALLOCATING: (IncidentState.RESPONDING, IncidentState.UNRESOLVED),
-    IncidentState.RESPONDING: (IncidentState.CLOSED, IncidentState.ALLOCATING),
-    IncidentState.CLOSED: (),
-    IncidentState.EXPIRED: (),
-    IncidentState.UNRESOLVED: (),
+class IncidentStatus(Enum):
+    DETECTED = "detected"
+    VERIFYING = "verifying"
+    ASSESSING = "assessing"
+    WATCHING = "watching"
+    ALLOCATING = "allocating"
+    RESPONDING = "responding"
+    CLOSED = "closed"
+    EXPIRED = "expired"
+    UNRESOLVED = "unresolved"
+
+
+_ALLOWED_TRANSITIONS = {
+    IncidentStatus.DETECTED: {IncidentStatus.VERIFYING},
+    IncidentStatus.VERIFYING: {IncidentStatus.ASSESSING},
+    IncidentStatus.ASSESSING: {
+        IncidentStatus.WATCHING,
+        IncidentStatus.ALLOCATING,
+    },
+    IncidentStatus.WATCHING: {
+        IncidentStatus.VERIFYING,
+        IncidentStatus.EXPIRED,
+    },
+    IncidentStatus.ALLOCATING: {
+        IncidentStatus.RESPONDING,
+        IncidentStatus.UNRESOLVED,
+    },
+    IncidentStatus.RESPONDING: {
+        IncidentStatus.CLOSED,
+        IncidentStatus.ALLOCATING,
+    },
+    IncidentStatus.CLOSED: set(),
+    IncidentStatus.EXPIRED: set(),
+    IncidentStatus.UNRESOLVED: set(),
 }
 
 
-def validate_transition(
-    current: IncidentState | str, target: IncidentState | str
-) -> None:
-    """Aceita enum ou texto exato; lança ValueError para estados ou pares inválidos.
+@dataclass(frozen=True)
+class IncidentState:
+    incident_id: str
+    status: IncidentStatus = IncidentStatus.DETECTED
 
-    Não altera o incidente. O consumidor verifica evidência, prazos, tentativas,
-    correlação, reserva e resultado antes de aplicar a transição (docs/message-contract.md, § 6).
-    Estados terminais não têm saída; repetir o estado também é inválido.
-    """
-    current = IncidentState(current)
-    target = IncidentState(target)
-    if target not in _TRANSITIONS[current]:
-        raise ValueError(f"Transição de incidente inválida: {current} -> {target}")
+    def __post_init__(self):
+        if not isinstance(self.incident_id, str) or not self.incident_id.strip():
+            raise ValueError("O identificador do incidente não pode estar vazio.")
+        if not isinstance(self.status, IncidentStatus):
+            raise TypeError("O estado do incidente deve ser IncidentStatus.")
+
+    def change_status(self, new_status: IncidentStatus):
+        if not isinstance(new_status, IncidentStatus):
+            raise TypeError("O novo estado deve ser IncidentStatus.")
+        if new_status not in _ALLOWED_TRANSITIONS[self.status]:
+            raise ValueError("Transição de estado do incidente não permitida.")
+        return replace(self, status=new_status)
+
+
+def allowed_transitions(status: IncidentStatus) -> frozenset[IncidentStatus]:
+    if not isinstance(status, IncidentStatus):
+        raise TypeError("O estado do incidente deve ser IncidentStatus.")
+    return frozenset(_ALLOWED_TRANSITIONS[status])
