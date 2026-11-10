@@ -20,5 +20,40 @@
       "available": true,
       "autonomy_percent": 100.0
     }
-  ]
+  ],
+  "scenario": {
+    "seed": 42,
+    "corroboration_window": 5.0,
+    "sources": {
+      "sensor_01": {
+        "kind": "acoustic",
+        "detection_range": 6.0,
+        "sensitivity": 0.95,
+        "false_positive_rate": 0.2,
+        "false_negative_rate": 0.05,
+        "position_error": 1,
+        "confidence": 0.75
+      },
+      "sensor_02": {
+        "kind": "visual",
+        "detection_range": 4.0,
+        "sensitivity": 0.9,
+        "false_positive_rate": 0.1,
+        "false_negative_rate": 0.1,
+        "position_error": 0,
+        "confidence": 0.85
+      }
+    },
+    "events": [
+      {
+        "event_id": "occurrence_01",
+        "kind": "threat",
+        "position": {"x": 5, "y": 6},
+        "starts_at": 1.0,
+        "duration": 5.0,
+        "destination": {"x": 8, "y": 6},
+        "speed": 1.0
+      }
+    ]
+  }
 }

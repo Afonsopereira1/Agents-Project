@@ -24,7 +24,7 @@ def _unique_keys(pairs):
 class World:
     """Mapa inicial: 0 <= x < width e 0 <= y < height, em células inteiras.
 
-    As posições são imutáveis nesta etapa. Vários participantes podem ocupar
+    As posições dos participantes são fixas. Vários participantes podem ocupar
     a mesma célula. O relógio pertence a esta execução e avança explicitamente.
     """
 
@@ -76,8 +76,16 @@ class World:
         """Lê dimensões e participantes de um JSON usando os modelos do domínio."""
         with open(path, encoding="utf-8") as source:
             data = json.load(source, object_pairs_hook=_unique_keys)
-        if not isinstance(data, dict) or set(data) != {"width", "height", "sensors", "patrols"}:
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "World":
+        required = {"width", "height", "sensors", "patrols"}
+        if (not isinstance(data, dict) or not required <= data.keys()
+                or data.keys() - required - {"scenario"}):
             raise ValueError("A configuração deve conter width, height, sensors e patrols.")
+        if "scenario" in data and not isinstance(data["scenario"], dict):
+            raise ValueError("scenario deve ser um objeto.")
         if not isinstance(data["sensors"], dict) or not isinstance(data["patrols"], list):
             raise ValueError("sensors deve ser um objeto e patrols uma lista.")
         return cls(
