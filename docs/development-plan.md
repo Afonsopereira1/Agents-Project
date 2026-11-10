@@ -119,14 +119,22 @@ posteriores.
 
 **Tarefas concretas:**
 
-- [ ] Implementar reserva 2D configurável, limites espaciais e posições iniciais.
+- [x] Implementar reserva 2D configurável, limites espaciais e posições iniciais.
 - [ ] Separar `ground_truth` (eventos reais, resultados, posição real) da API de observações dos agentes.
 - [ ] Definir tipos de evento: ameaça simulada e eventos benignos potencialmente confundíveis.
 - [ ] Gerar observações com alcance, sensibilidade, falsos positivos e falsos negativos parametrizáveis.
 - [ ] Representar fontes heterogéneas (acústicas, visuais, humanas) com capacidades distintas.
-- [ ] Criar relógio de simulação coerente para eventos, janelas de corroboração e movimento.
+- [x] Criar relógio de simulação em segundos, com avanço explícito e validação.
+- [ ] Integrar o relógio com eventos, janelas de corroboração e movimento.
 - [ ] Guardar a semente aleatória e parâmetros por execução.
 - [ ] Criar o cenário mínimo com uma ocorrência e duas fontes próximas.
+
+**Implementação nesta branch:** `src/isia/simulation/world.py` valida a grelha
+e as posições de sensores e patrulhas; `clock.py` fornece o tempo simulado.
+`config/environment.json` define dois sensores e duas patrulhas.
+A demonstração no terminal e os testes estão descritos no
+[README](../README.md#mapa-2d-e-relógio-da-simulação).
+A geração de eventos e observações permanece por implementar.
 
 **Dependências:** Etapa 1. Pode decorrer **em paralelo com a Etapa 3**, após os contratos estarem estáveis. Alimenta as Etapas 4 e 6.
 

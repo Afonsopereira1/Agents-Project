@@ -3,7 +3,7 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado:** a Etapa 1 tem modelos de domínio, estados de incidentes e contratos JSON Python implementados e testados. A arquitetura B1 e os contratos continuam sujeitos a revisão do grupo; SPADE, simulação e negociação pertencem a etapas posteriores.
+> **Estado:** a Etapa 1 tem modelos de domínio, estados de incidentes e contratos JSON Python implementados e testados. A Etapa 2 já tem mapa 2D, posições iniciais e relógio simulado. A arquitetura B1 e os contratos continuam sujeitos a revisão do grupo; geração de observações, comunicação entre agentes e negociação estão pendentes.
 
 ## O projeto
 
@@ -87,8 +87,38 @@ Agente terminou corretamente.
 Para parar o servidor XMPP, utilizar Ctrl+C
 no terminal em que foi iniciado.
 
-### Estado do desenvolvimento
+### Mapa 2D e relógio da simulação
 
-Etapa 1: modelos, estados de incidentes e contratos JSON testados localmente.
-O transporte SPADE e a comunicação entre agentes serão implementados nas
-etapas seguintes.
+Na raiz do repositório, sem precisar de SPADE nem de servidor XMPP:
+
+```bash
+PYTHONPATH=src python3 -m isia.simulation config/environment.json --steps 3 --step-seconds 0.5
+```
+
+O comando mostra a grelha, as posições dos participantes e os instantes
+`0.5`, `1` e `1.5` segundos. Sem `--steps`, mostra apenas o estado inicial.
+
+Editar [config/environment.json](config/environment.json) para mudar as
+dimensões e posições. O exemplo tem 12 × 10 células, dois sensores, um drone
+e um veículo. As coordenadas são inteiras: `0 <= x < width` e
+`0 <= y < height`. A origem `(0, 0)` fica no canto inferior esquerdo;
+`x` cresce para a direita e `y` para cima. Não há escala física definida.
+Coordenadas inválidas e identificadores repetidos são rejeitados.
+Vários participantes podem partilhar uma célula, assinalada com `*`.
+
+O [World](src/isia/simulation/world.py) usa os modelos `Position` e
+`ResourceState` existentes. Cada execução tem um
+[SimulationClock](src/isia/simulation/clock.py) próprio, iniciado em zero.
+`world.clock.advance(segundos)` avança explicitamente por uma duração positiva;
+`world.clock.now` fornece o instante para observações, mensagens e prazos.
+Não há espera real nem avanço automático. Os timeouts do transporte XMPP
+continuam a usar tempo real, separado deste relógio.
+
+Esta parte da Etapa 2 mantém posições fixas. Eventos, perceção, movimento e
+integração com agentes ficam para as tarefas seguintes.
+
+Para verificar os modelos, contratos e simulação:
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests
+```
