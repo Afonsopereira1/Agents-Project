@@ -3,6 +3,7 @@
 .venv/
 venv/
 spade_venv/
+agents
 
 # Python
 __pycache__/
@@ -20,3 +21,4 @@ server.db-wal
 
 # Ficheiros locais do editor
 .vscode/
+temp/

@@ -1,0 +1,24 @@
+{
+  "width": 12,
+  "height": 10,
+  "sensors": {
+    "sensor_01": {"x": 4, "y": 6},
+    "sensor_02": {"x": 7, "y": 6}
+  },
+  "patrols": [
+    {
+      "resource_id": "drone_01",
+      "resource_type": "drone",
+      "position": {"x": 1, "y": 1},
+      "available": true,
+      "autonomy_percent": 100.0
+    },
+    {
+      "resource_id": "vehicle_01",
+      "resource_type": "vehicle",
+      "position": {"x": 10, "y": 1},
+      "available": true,
+      "autonomy_percent": 100.0
+    }
+  ]
+}
