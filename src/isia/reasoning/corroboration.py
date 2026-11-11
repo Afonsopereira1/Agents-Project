@@ -251,6 +251,7 @@ def aggregate_verification_responses(
     return {
         "classification": classification,
         "observation_ids": tuple(sorted(unique_observations)),
+        "compatible_observation_ids": tuple(sorted(compatible_ids)),
         "source_ids": tuple(sorted(source_ids)),
         "compatible_source_ids": tuple(sorted(compatible_source_ids)),
         "compatible_source_count": len(compatible_source_ids),
@@ -295,6 +296,9 @@ def evaluate_preliminary_corroboration(
 
     return {
         "classification": aggregate_summary.get("classification"),
+        "compatible_observation_ids": _summary_identifiers(
+            aggregate_summary, "compatible_observation_ids"
+        ),
         "eligible_source_count": eligible_count,
         "compatible_source_ids": tuple(sorted(compatible_source_ids)),
         "compatible_source_count": len(compatible_source_ids),
@@ -362,6 +366,13 @@ def decide_preliminary_verification(
     return {
         "decision": decision,
         "reason": reason,
+        "compatible_observation_ids": tuple(
+            sorted(
+                _summary_identifiers(
+                    evaluation_summary, "compatible_observation_ids"
+                )
+            )
+        ),
         "compatible_source_ids": tuple(sorted(compatible_source_ids)),
         "compatible_source_count": compatible_count,
         "eligible_source_count": eligible_count,

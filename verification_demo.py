@@ -10,6 +10,7 @@ import spade
 
 from isia.agents.informant import InformantAgent
 from isia.agents.sensor import SensorAgent
+from isia.reasoning.corroboration import select_eligible_sources
 from isia.simulation.scenario import Scenario
 
 
@@ -21,6 +22,32 @@ def required_env(name: str) -> str:
     if not value:
         raise SystemExit(f"Defina a variável de ambiente {name}.")
     return value
+
+
+def configurable_float(name: str, default: float) -> float:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError as error:
+        raise SystemExit(f"A variável {name} deve ser numérica.") from error
+    if parsed < 0:
+        raise SystemExit(f"A variável {name} deve ser não negativa.")
+    return parsed
+
+
+def configurable_positive_int(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except ValueError as error:
+        raise SystemExit(f"A variável {name} deve ser um inteiro positivo.") from error
+    if parsed <= 0:
+        raise SystemExit(f"A variável {name} deve ser um inteiro positivo.")
+    return parsed
 
 
 def load_observable_scenario() -> tuple[Scenario, str, str]:
@@ -50,6 +77,25 @@ async def main():
     informant = InformantAgent(informant_jid, required_env("INFORMANT_PASSWORD"))
     simulation_time = scenario.world.clock.now
     sensor.set_local_observation_feed(scenario.source(sensor_id), simulation_time)
+    initial_observation = scenario.source(sensor_id).recent()[0]
+    eligible_source_ids = select_eligible_sources(
+        initial_observation,
+        scenario.world.sensors,
+        scenario._sources,
+    )
+    sensor.set_corroboration_context(
+        eligible_source_ids,
+        max_distance=configurable_float("CORROBORATION_MAX_DISTANCE", 3.0),
+        max_time_difference=configurable_float("CORROBORATION_MAX_TIME_DIFFERENCE", 2.0),
+        minimum_compatible_sources=configurable_positive_int(
+            "MINIMUM_COMPATIBLE_SOURCES", 1
+        ),
+    )
+    logging.info(
+        "Fontes elegíveis=%s; mínimo=%s (regra operacional da demonstração)",
+        eligible_source_ids,
+        sensor.minimum_compatible_sources,
+    )
     informant.set_local_observation_feed(
         scenario.source(informant_id), informant_id, simulation_time
     )

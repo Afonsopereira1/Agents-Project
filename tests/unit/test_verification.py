@@ -8,7 +8,7 @@ try:
 
     from isia.agents.informant import InformantAgent
     from isia.agents.sensor import SensorAgent
-    from isia.communication.messages import Message, MessageType
+    from isia.communication.messages import Message, MessageType, model_to_dict
     from isia.communication.transport import parse_spade_message
 except ImportError:
     SpadeMessage = None
@@ -30,6 +30,58 @@ def observation(event_id, source_id, position=(5, 6), observed_at=1.0):
 
 @unittest.skipUnless(SpadeMessage is not None, "SPADE não está instalado")
 class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
+    def _agent(self, local, **context):
+        from unittest.mock import Mock
+
+        values = {
+            "observation_feed": LocalFeed((local,)),
+            "created_at": local.observed_at,
+            "informant_jid": "informant@localhost",
+            "conversation_id": None,
+            "response": None,
+            "eligible_source_ids": (),
+            "max_distance": None,
+            "max_time_difference": None,
+            "minimum_compatible_sources": None,
+        }
+        values.update(context)
+        agent = Mock(**values)
+        agent.loop = __import__("asyncio").get_running_loop()
+        return agent
+
+    async def _run_with_response(self, agent, response_factory):
+        from unittest.mock import AsyncMock
+
+        behaviour = SensorAgent.VerificationBehaviour()
+        behaviour.set_agent(agent)
+        sent = []
+
+        async def send(message):
+            sent.append(message)
+
+        async def receive(timeout):
+            request = parse_spade_message(sent[0])
+            response = response_factory(request)
+            incoming = SpadeMessage(
+                to="sensor@localhost",
+                sender="informant@localhost",
+                body=response.to_json(),
+            )
+            for key, value in {
+                "performative": "inform",
+                "ontology": "isia",
+                "protocol": "verification",
+                "conversation-id": request.conversation_id,
+                "in-reply-to": request.message_id,
+            }.items():
+                incoming.set_metadata(key, value)
+            return incoming
+
+        behaviour.send = AsyncMock(side_effect=send)
+        behaviour.receive = AsyncMock(side_effect=receive)
+        await behaviour.run()
+        return agent
+
     async def test_sensor_request_transporta_observacao_do_feed_local(self):
         from unittest.mock import AsyncMock, Mock
 
@@ -54,6 +106,139 @@ class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(request.created_at, 1.0)
         self.assertEqual(request.payload["observation"]["event_id"], "obs-001")
         self.assertEqual(request.payload["observation"]["source_id"], "sensor_01")
+
+    async def test_sensor_avalia_resposta_compatível_e_decide_verificacao_movel(self):
+        local = observation("obs-001", "sensor_01", observed_at=1.0)
+        corroborating = observation("obs-002", "sensor_02", position=(6, 6), observed_at=1.5)
+        agent = self._agent(
+            local,
+            eligible_source_ids=("sensor_02",),
+            max_distance=2.0,
+            max_time_difference=1.0,
+            minimum_compatible_sources=1,
+        )
+
+        def response_for(request):
+            return Message(
+                "response-001",
+                MessageType.VERIFY_RESPONSE,
+                1.5,
+                {
+                    "request_message_id": request.message_id,
+                    "status": "observations_available",
+                    "observations": [model_to_dict(corroborating)],
+                },
+                incident_id=request.incident_id,
+                source_id="sensor_02",
+                conversation_id=request.conversation_id,
+            )
+
+        await self._run_with_response(agent, response_for)
+
+        self.assertEqual(agent.decision["decision"], "request_mobile_verification")
+        self.assertEqual(agent.decision["compatible_observation_ids"], ("obs-002",))
+        self.assertEqual(agent.evaluation_summary["information_coverage"], 1.0)
+
+    async def test_sensor_mantem_observe_quando_informante_nao_tem_dados(self):
+        local = observation("obs-001", "sensor_01")
+        agent = self._agent(
+            local,
+            eligible_source_ids=("sensor_02",),
+            max_distance=2.0,
+            max_time_difference=1.0,
+            minimum_compatible_sources=1,
+        )
+
+        def response_for(request):
+            return Message(
+                "response-no-data",
+                MessageType.VERIFY_RESPONSE,
+                1.0,
+                {
+                    "request_message_id": request.message_id,
+                    "status": "no_data",
+                    "observations": [],
+                },
+                incident_id=request.incident_id,
+                source_id="sensor_02",
+                conversation_id=request.conversation_id,
+            )
+
+        await self._run_with_response(agent, response_for)
+
+        self.assertEqual(agent.decision["decision"], "observe")
+        self.assertEqual(agent.decision["reason"], "no_information")
+
+    async def test_sensor_regista_observe_em_timeout(self):
+        from unittest.mock import AsyncMock
+
+        local = observation("obs-timeout", "sensor_01")
+        agent = self._agent(local)
+        behaviour = SensorAgent.VerificationBehaviour()
+        behaviour.set_agent(agent)
+        behaviour.send = AsyncMock()
+        behaviour.receive = AsyncMock(return_value=None)
+
+        await behaviour.run()
+
+        self.assertEqual(agent.decision["decision"], "observe")
+        self.assertEqual(agent.decision["reason"], "timeout")
+
+    async def test_sensor_rejeita_resposta_de_outra_conversa(self):
+        local = observation("obs-invalid", "sensor_01")
+        agent = self._agent(local)
+
+        def response_for(request):
+            return Message(
+                "response-invalid-conversation",
+                MessageType.VERIFY_RESPONSE,
+                1.0,
+                {
+                    "request_message_id": request.message_id,
+                    "status": "observations_available",
+                    "observations": [],
+                },
+                incident_id=request.incident_id,
+                source_id="sensor_02",
+                conversation_id="another-conversation",
+            )
+
+        await self._run_with_response(agent, response_for)
+
+        self.assertEqual(agent.decision["decision"], "observe")
+        self.assertEqual(agent.decision["reason"], "invalid_correlation")
+
+    async def test_sensor_classifica_corpo_malformado_como_invalid_response(self):
+        from unittest.mock import AsyncMock
+
+        local = observation("obs-malformed", "sensor_01")
+        agent = self._agent(local)
+        behaviour = SensorAgent.VerificationBehaviour()
+        behaviour.set_agent(agent)
+        sent = []
+
+        async def send(message):
+            sent.append(message)
+
+        async def receive(timeout):
+            request = parse_spade_message(sent[0])
+            incoming = SpadeMessage(
+                to="sensor@localhost",
+                sender="informant@localhost",
+                body="{malformed-json",
+            )
+            incoming.set_metadata("ontology", "isia")
+            incoming.set_metadata("protocol", "verification")
+            incoming.set_metadata("conversation-id", request.conversation_id)
+            incoming.set_metadata("in-reply-to", request.message_id)
+            return incoming
+
+        behaviour.send = AsyncMock(side_effect=send)
+        behaviour.receive = AsyncMock(side_effect=receive)
+        await behaviour.run()
+
+        self.assertEqual(agent.decision["decision"], "observe")
+        self.assertEqual(agent.decision["reason"], "invalid_response")
 
     async def test_informant_responde_com_observacoes_do_seu_feed(self):
         from unittest.mock import AsyncMock, Mock
