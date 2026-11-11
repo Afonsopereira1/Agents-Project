@@ -6,17 +6,41 @@ Contract Net.
 """
 
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from math import isfinite
 from uuid import uuid4
 
-from isia.communication.messages import Message, MessageType, model_to_dict
-from isia.domain.models import Bid, Incident, Mission, Position, ResourceState, ResourceStatus
+from isia.communication.messages import (
+    Message,
+    MessageType,
+    model_from_dict,
+    model_to_dict,
+)
+from isia.domain.models import (
+    Bid,
+    Incident,
+    Mission,
+    Position,
+    ResourceState,
+    ResourceStatus,
+)
 
 
 MOBILE_VERIFICATION_DECISION = "request_mobile_verification"
 MOBILE_VERIFICATION_TASK = "verify_incident"
 MOBILE_VERIFICATION_CAPABILITY = "mobile_verification"
 CONTRACT_NET_REJECT_REASON = "cfp_rejected"
+
+
+@dataclass(frozen=True)
+class ProposalSelection:
+    """Resultado determinístico da avaliação de uma ronda de propostas."""
+
+    winner: Message | None
+    winner_bid: Bid | None
+    winner_cost: float | None
+    valid_proposals: tuple[Message, ...]
+    reason: str
 
 
 def _validate_simulated_time(value: object, name: str) -> float:
@@ -186,6 +210,165 @@ def evaluate_cfp(
         now,
         resource.resource_id,
         {"cfp_message_id": cfp.message_id, "bid": model_to_dict(bid)},
+    )
+
+
+def _validate_cost_parameter(value: object, name: str, *, positive: bool) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not isfinite(value)
+        or (value <= 0 if positive else value < 0)
+    ):
+        qualifier = "positivo" if positive else "não negativo"
+        raise ValueError(f"{name} deve ser um número finito {qualifier}.")
+    return float(value)
+
+
+def _proposal_cost(
+    bid: Bid,
+    *,
+    eta_weight: float,
+    energy_weight: float,
+    load_weight: float,
+    eta_scale_seconds: float,
+    energy_scale_percent: float,
+    load_scale: float,
+) -> float:
+    """Normalizar as três dimensões antes de aplicar os pesos."""
+    return (
+        eta_weight * (bid.eta / eta_scale_seconds)
+        + energy_weight * (bid.energy_cost / energy_scale_percent)
+        + load_weight * (bid.load / load_scale)
+    )
+
+
+def select_best_proposal(
+    cfp: Message,
+    responses: Iterable[Message],
+    *,
+    eta_weight: float = 1.0,
+    energy_weight: float = 1.0,
+    load_weight: float = 1.0,
+    eta_scale_seconds: float = 60.0,
+    energy_scale_percent: float = 100.0,
+    load_scale: float = 1.0,
+) -> ProposalSelection:
+    """Selecionar a melhor proposta válida de uma ronda Contract Net.
+
+    O custo é determinístico e adimensional:
+
+    ``w_eta * ETA/eta_scale + w_energy * energia/energy_scale +
+    w_load * carga/load_scale``.
+
+    ETA usa segundos simulados, energia usa pontos percentuais de autonomia e
+    carga é uma fração entre 0 e 1. As escalas e pesos são parâmetros de
+    engenharia; não representam uma calibração física. Empates são resolvidos
+    por ``resource_id`` e depois por ``message_id``.
+
+    Respostas inválidas, ``REJECT``, duplicados e propostas emitidas depois do
+    ``deadline`` simulado do CFP são ignorados. Quando nenhuma proposta passa
+    os filtros, ``winner`` e ``winner_bid`` são ``None`` e ``reason`` é
+    ``"no_valid_proposals"``.
+    """
+    if not isinstance(cfp, Message):
+        raise TypeError("cfp deve ser Message.")
+    if cfp.message_type is not MessageType.CFP:
+        raise ValueError("A mensagem deve ser um CFP.")
+
+    weights = tuple(
+        _validate_cost_parameter(value, name, positive=False)
+        for name, value in (
+            ("eta_weight", eta_weight),
+            ("energy_weight", energy_weight),
+            ("load_weight", load_weight),
+        )
+    )
+    if not any(weight > 0 for weight in weights):
+        raise ValueError("Pelo menos um peso deve ser positivo.")
+    eta_scale = _validate_cost_parameter(
+        eta_scale_seconds, "eta_scale_seconds", positive=True
+    )
+    energy_scale = _validate_cost_parameter(
+        energy_scale_percent, "energy_scale_percent", positive=True
+    )
+    load_scale_value = _validate_cost_parameter(load_scale, "load_scale", positive=True)
+
+    deadline = cfp.payload["deadline"]
+    valid_by_resource: dict[str, tuple[float, str, Message, Bid]] = {}
+    seen_message_ids: set[str] = set()
+    for response in responses:
+        if not isinstance(response, Message):
+            continue
+        if response.message_id in seen_message_ids:
+            continue
+        seen_message_ids.add(response.message_id)
+        if response.message_type is not MessageType.PROPOSAL:
+            continue
+        if (
+            response.mission_id != cfp.mission_id
+            or response.incident_id != cfp.incident_id
+            or response.conversation_id != cfp.conversation_id
+            or response.created_at < cfp.created_at
+            or response.created_at > deadline
+            or response.payload.get("cfp_message_id") != cfp.message_id
+            or not isinstance(response.source_id, str)
+        ):
+            continue
+        raw_bid = response.payload.get("bid")
+        if not isinstance(raw_bid, dict):
+            continue
+        try:
+            bid = model_from_dict(raw_bid, Bid)
+        except (TypeError, ValueError):
+            continue
+        if bid.mission_id != cfp.mission_id or bid.resource_id != response.source_id:
+            continue
+
+        cost = _proposal_cost(
+            bid,
+            eta_weight=weights[0],
+            energy_weight=weights[1],
+            load_weight=weights[2],
+            eta_scale_seconds=eta_scale,
+            energy_scale_percent=energy_scale,
+            load_scale=load_scale_value,
+        )
+        candidate = (cost, bid.resource_id, response, bid)
+        current = valid_by_resource.get(bid.resource_id)
+        if current is None or (cost, response.message_id) < (
+            current[0],
+            current[2].message_id,
+        ):
+            valid_by_resource[bid.resource_id] = candidate
+
+    ordered = tuple(
+        candidate[2]
+        for candidate in sorted(
+            valid_by_resource.values(),
+            key=lambda candidate: (candidate[0], candidate[1], candidate[2].message_id),
+        )
+    )
+    if not ordered:
+        return ProposalSelection(None, None, None, (), "no_valid_proposals")
+
+    winner = ordered[0]
+    winner_bid = model_from_dict(winner.payload["bid"], Bid)
+    winner_cost = _proposal_cost(
+        winner_bid,
+        eta_weight=weights[0],
+        energy_weight=weights[1],
+        load_weight=weights[2],
+        eta_scale_seconds=eta_scale,
+        energy_scale_percent=energy_scale,
+        load_scale=load_scale_value,
+    )
+    return ProposalSelection(
+        winner,
+        winner_bid,
+        winner_cost,
+        ordered,
+        "proposal_selected",
     )
 
 

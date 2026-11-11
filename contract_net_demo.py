@@ -6,7 +6,6 @@ segundos reais e só limita quanto tempo a demonstração espera pelo XMPP.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import time
@@ -29,7 +28,7 @@ from isia.communication.transport import (
     parse_spade_message,
 )
 from isia.domain.models import Mission, Position, ResourceState
-from isia.reasoning.allocation import build_cfp_message
+from isia.reasoning.allocation import build_cfp_message, select_best_proposal
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +270,18 @@ async def main():
             started.append(agent)
         await initiator.behaviour.join()
         logger.info("Ronda terminada: %d resposta(s) válida(s).", len(initiator.responses))
+        selection = select_best_proposal(
+            initiator.cfp,
+            initiator.responses.values(),
+        )
+        if selection.winner is None:
+            logger.info("Nenhuma proposta válida: %s", selection.reason)
+        else:
+            logger.info(
+                "Melhor proposta: recurso=%s custo_normalizado=%.6f",
+                selection.winner_bid.resource_id,
+                selection.winner_cost,
+            )
     finally:
         for agent in reversed(started):
             try:

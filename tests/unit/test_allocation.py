@@ -1,7 +1,8 @@
 import unittest
 
-from isia.communication.messages import Message, MessageType
+from isia.communication.messages import Message, MessageType, model_to_dict
 from isia.domain.models import (
+    Bid,
     Incident,
     MissionStatus,
     Observation,
@@ -9,7 +10,12 @@ from isia.domain.models import (
     ResourceState,
     ResourceStatus,
 )
-from isia.reasoning.allocation import MissionRegistry, build_cfp_message, evaluate_cfp
+from isia.reasoning.allocation import (
+    MissionRegistry,
+    build_cfp_message,
+    evaluate_cfp,
+    select_best_proposal,
+)
 
 
 def observation(event_id="event-1", position=(4, 7)):
@@ -254,6 +260,97 @@ class TestMissionRegistry(unittest.TestCase):
                 energy_cost_percent=10.0,
                 load=0.25,
             )
+
+    def _proposal(
+        self,
+        cfp,
+        resource_id,
+        *,
+        eta=10.0,
+        energy_cost=20.0,
+        load=0.2,
+        message_id=None,
+        created_at=21.0,
+        **overrides,
+    ):
+        bid = Bid(cfp.mission_id, resource_id, eta, energy_cost, load)
+        values = {
+            "message_id": message_id or f"proposal-{resource_id}",
+            "message_type": MessageType.PROPOSAL,
+            "created_at": created_at,
+            "payload": {
+                "cfp_message_id": cfp.message_id,
+                "bid": model_to_dict(bid),
+            },
+            "incident_id": cfp.incident_id,
+            "mission_id": cfp.mission_id,
+            "source_id": resource_id,
+            "conversation_id": cfp.conversation_id,
+        }
+        values.update(overrides)
+        return Message(**values)
+
+    def test_selects_lowest_normalized_cost_not_first_response(self):
+        cfp = self._cfp()
+        slower = self._proposal(
+            cfp, "resource-slow", eta=30.0, energy_cost=40.0, load=0.5
+        )
+        faster = self._proposal(
+            cfp, "resource-fast", eta=10.0, energy_cost=20.0, load=0.2
+        )
+
+        selection = select_best_proposal(cfp, (slower, faster))
+
+        self.assertEqual(selection.reason, "proposal_selected")
+        self.assertEqual(selection.winner_bid.resource_id, "resource-fast")
+        self.assertEqual(selection.winner.message_id, "proposal-resource-fast")
+        self.assertAlmostEqual(selection.winner_cost, 17 / 30)
+        self.assertEqual(len(selection.valid_proposals), 2)
+
+    def test_equal_cost_uses_resource_id_as_tiebreaker(self):
+        cfp = self._cfp()
+        resource_b = self._proposal(cfp, "resource-b")
+        resource_a = self._proposal(cfp, "resource-a")
+
+        selection = select_best_proposal(cfp, (resource_b, resource_a))
+
+        self.assertEqual(selection.winner_bid.resource_id, "resource-a")
+
+    def test_no_valid_proposals_is_explicit(self):
+        cfp = self._cfp()
+        rejected = Message(
+            "reject-1",
+            MessageType.REJECT,
+            21.0,
+            {"cfp_message_id": cfp.message_id, "reason": "resource_unavailable"},
+            incident_id=cfp.incident_id,
+            mission_id=cfp.mission_id,
+            source_id="resource-1",
+            conversation_id=cfp.conversation_id,
+        )
+
+        selection = select_best_proposal(cfp, (rejected,))
+
+        self.assertIsNone(selection.winner)
+        self.assertIsNone(selection.winner_bid)
+        self.assertIsNone(selection.winner_cost)
+        self.assertEqual(selection.valid_proposals, ())
+        self.assertEqual(selection.reason, "no_valid_proposals")
+
+    def test_ignores_invalid_duplicate_and_late_proposals(self):
+        cfp = self._cfp()
+        valid = self._proposal(cfp, "resource-valid")
+        invalid = self._proposal(cfp, "resource-invalid")
+        invalid.payload["bid"]["energy_cost"] = -1.0
+        late = self._proposal(cfp, "resource-late", created_at=36.0)
+
+        selection = select_best_proposal(cfp, (valid, valid, invalid, late))
+
+        self.assertEqual(selection.winner_bid.resource_id, "resource-valid")
+        self.assertEqual(
+            tuple(proposal.message_id for proposal in selection.valid_proposals),
+            (valid.message_id,),
+        )
 
 
 if __name__ == "__main__":

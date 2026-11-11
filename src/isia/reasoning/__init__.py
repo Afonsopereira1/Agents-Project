@@ -8,7 +8,12 @@ from .corroboration import (
     evaluate_preliminary_corroboration,
     select_eligible_sources,
 )
-from .allocation import MissionRegistry, build_cfp_message, evaluate_cfp
+from .allocation import (
+    MissionRegistry,
+    build_cfp_message,
+    evaluate_cfp,
+    select_best_proposal,
+)
 
 __all__ = [
     "aggregate_verification_responses",
@@ -20,4 +25,5 @@ __all__ = [
     "MissionRegistry",
     "build_cfp_message",
     "evaluate_cfp",
+    "select_best_proposal",
 ]
