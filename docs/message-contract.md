@@ -9,6 +9,8 @@ Esta referência preserva os formatos e exemplos dos validadores existentes. Con
 
 **Proposta v1, ainda a validar pelo grupo.** Já existem validadores de mensagens e estados, testados sem SPADE. A troca de mensagens entre agentes, as reservas e a integração com os modelos ainda estão por implementar.
 
+> **Nota de atualização (Etapa 5):** na implementação atual, o prazo do CFP é inclusivo: `created_at == deadline` é válido; apenas uma proposta posterior ao `deadline` é tardia. Esta nota preserva o caráter histórico da proposta abaixo.
+
 [README](../README.md) · [Arquitetura](architecture.md) · [Plano](development-plan.md) · [Decisões](architecture.md#decisões-pendentes)
 
 ## 1. Como funciona
@@ -112,7 +114,7 @@ Cada resposta tem um `message_id` próprio. A conversa, os IDs de domínio e o r
 
 Uma nova ronda usa outra `conversation-id`. Passar de verificação a negociação também inicia outra conversa. Uma nova missão recebe outro `mission_id`, mantendo o incidente. Cada anúncio (`ALERT`, `STATUS`, `INCIDENT_CLOSED`) tem conversa própria; retransmiti-lo preserva corpo e metadados. A verificação motivada por um alerta não é uma resposta ACL ao alerta.
 
-**Prazos:** respostas diretas a `VERIFY_REQUEST` e `CFP`, incluindo recusas, têm de ser emitidas e recebidas antes de `payload.deadline`. No instante limite já são tardias. Esse prazo não se aplica à aceitação, reserva ou execução da missão; esses passos precisam de prazos próprios.
+**Prazos da proposta histórica:** respostas diretas a `VERIFY_REQUEST` e `CFP`, incluindo recusas, têm de ser emitidas e recebidas antes de `payload.deadline`. A regra atual dos CFP é a indicada na nota acima: o limite é inclusivo. Esse prazo não se aplica à aceitação, reserva ou execução da missão; esses passos precisam de prazos próprios.
 
 Metadados do CFP `msg-014`:
 
@@ -216,7 +218,7 @@ Uma **observação completa** contém `event_id`, `source_id`, `event_type`, `po
 | `ALERT` | `event_type` (texto), `position`, `observed_at <= created_at`, `confidence_score` em `[0, 1]`. Os IDs da observação estão fora do payload. |
 | `VERIFY_REQUEST` | `event_type`, `position`, `window_start`, `window_end`, `deadline`. Janela inclusiva: `window_start <= window_end <= created_at`; `deadline > created_at`. |
 | `VERIFY_RESPONSE` | `evidence`, `observations`, `reason`. `compatible` e `contradictory` exigem observações; `informative_absence` e `no_data` exigem lista vazia. |
-| `CFP` | `task` e `required_capability` (textos), `target` (posição), `priority` (inteiro não negativo), `deadline > created_at`. Proposta: maior valor indica maior prioridade, sem máximo fixado. |
+| `CFP` | `task` e `required_capability` (textos), `target` (posição), `priority` (inteiro não negativo), `deadline >= created_at` na regra atual. Proposta: maior valor indica maior prioridade, sem máximo fixado. |
 | `PROPOSAL` | `resource_id`, `eta_seconds`, `energy_cost_fraction`, `cost`. ETA conta desde a emissão. Energia em `[0, 1]`: fração da capacidade total estimada para executar e regressar. Custo é uma pontuação não negativa, sem unidade; a fórmula ainda precisa de acordo. |
 | `ACCEPT` | `resource_id` da proposta escolhida. Ainda não confirma reserva. |
 | `REJECT` | `resource_id`, `reason`. |

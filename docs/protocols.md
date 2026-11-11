@@ -1,6 +1,6 @@
 # Comunicação, mensagens e protocolos — proposta
 
-> **Estado revisto (11-11-2026):** as Etapas 1–5 estão integradas na `main` (PRs #7 e #8). A verificação e o Contract Net foram demonstrados separadamente por SPADE/XMPP, incluindo a reserva confirmada no fluxo normal. Falhas, timeouts, mensagens tardias e rondas limitadas têm testes unitários/mocks, não validação XMPP real em todos os cenários. As novas correções semânticas de ausência informativa e evidência mista carecem de reteste. A integração de missões, a execução e a recuperação avançada continuam posteriores.
+> **Estado revisto (11-11-2026):** as Etapas 1–5 estão integradas na `main` (PRs #7, #8 e #9). A última execução local no Ubuntu teve **249 testes, OK**; a verificação e o Contract Net foram demonstrados separadamente por SPADE/XMPP real, incluindo a reserva confirmada no fluxo normal. As correções recentes de ausência informativa e deduplicação foram validadas localmente nesta branch, aguardando integração final no PR. Falhas, timeouts, mensagens tardias e rondas limitadas têm testes unitários/mocks, não validação XMPP real em todos os cenários. A integração automática de missões e a execução pertencem à Etapa 6; as aprovações formais do grupo continuam pendentes.
 
 [README](../README.md) · [Arquitetura](architecture.md) · [Plano](development-plan.md) · [Decisões](architecture.md#decisões-pendentes)
 
@@ -268,6 +268,7 @@ sequenceDiagram
 4. O iniciador ignora propostas tardias, duplicadas e de missões diferentes.
 5. A aceitação só se torna **missão confirmada** após o recurso garantir uma reserva válida.
 6. `STATUS(reserved)` confirma a reserva; `STATUS(reservation_failed)` é uma recusa explícita. Um timeout depois de `ACCEPT` produz `confirmation_unknown` e não autoriza outro `ACCEPT` automático.
+7. O `deadline` do CFP é inclusivo em segundos simulados: uma resposta com `created_at == deadline` é válida; apenas uma resposta posterior é tardia. O timeout real de receção XMPP é independente.
 7. A nova ronda só é permitida após recusa explícita, usa novos IDs e está limitada a duas rondas (`CONTRACT_MAX_ROUNDS`); ausência de propostas produz `no_eligible_proposals`.
 8. O encerramento deve ser idempotente: mensagens repetidas não criam novas missões nem reservas incompatíveis. A perda do iniciador continua sem política de recuperação distribuída.
 

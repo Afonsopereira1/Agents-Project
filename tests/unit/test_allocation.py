@@ -268,6 +268,21 @@ class TestMissionRegistry(unittest.TestCase):
                 load=0.25,
             )
 
+    def test_evaluate_cfp_accepts_at_inclusive_deadline(self):
+        response = evaluate_cfp(
+            self._cfp(deadline=25.0),
+            self._resource(),
+            ("mobile_verification",),
+            current_time=25.0,
+            minimum_autonomy_percent=20.0,
+            eta_seconds=4.0,
+            energy_cost_percent=10.0,
+            load=0.25,
+        )
+
+        self.assertIs(response.message_type, MessageType.PROPOSAL)
+
+
     def _proposal(
         self,
         cfp,
@@ -357,6 +372,25 @@ class TestMissionRegistry(unittest.TestCase):
         self.assertEqual(
             tuple(proposal.message_id for proposal in selection.valid_proposals),
             (valid.message_id,),
+        )
+
+    def test_selection_accepts_at_deadline_and_rejects_after_deadline(self):
+        cfp = self._cfp(deadline=35.0)
+        at_deadline = self._proposal(
+            cfp, "resource-at-deadline", created_at=35.0
+        )
+        after_deadline = self._proposal(
+            cfp, "resource-after-deadline", created_at=35.0001
+        )
+
+        selection = select_best_proposal(cfp, (after_deadline, at_deadline))
+
+        self.assertEqual(
+            selection.winner_bid.resource_id, "resource-at-deadline"
+        )
+        self.assertEqual(
+            tuple(proposal.message_id for proposal in selection.valid_proposals),
+            (at_deadline.message_id,),
         )
 
     def test_reserves_available_resource_and_associates_mission(self):
