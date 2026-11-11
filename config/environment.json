@@ -35,7 +35,7 @@
         "confidence": 0.75
       },
       "sensor_02": {
-        "kind": "visual",
+        "kind": "acoustic",
         "detection_range": 4.0,
         "sensitivity": 0.9,
         "false_positive_rate": 0.1,

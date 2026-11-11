@@ -43,6 +43,8 @@ class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
             "max_distance": None,
             "max_time_difference": None,
             "minimum_compatible_sources": None,
+            "incompatibility_rules": None,
+            "compatibility_rules": None,
         }
         values.update(context)
         agent = Mock(**values)

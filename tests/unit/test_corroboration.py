@@ -40,19 +40,63 @@ def make_verification_response(
     conversation_id="conversation-001",
     request_message_id="request-001",
     response_source_id="sensor-02",
+    hypothesis=None,
+    absence=None,
+    evidence_relation=None,
 ):
+    payload = {
+        "request_message_id": request_message_id,
+        "observations": [model_to_dict(observation) for observation in observations],
+        "status": status,
+    }
+    if hypothesis is not None:
+        payload["hypothesis"] = hypothesis
+    if absence is not None:
+        payload["absence"] = absence
+    if evidence_relation is not None:
+        payload["evidence_relation"] = evidence_relation
     return Message(
         message_id,
         MessageType.VERIFY_RESPONSE,
         12.0,
-        {
-            "request_message_id": request_message_id,
-            "observations": [model_to_dict(observation) for observation in observations],
-            "status": status,
-        },
+        payload,
         incident_id="incident-001",
         source_id=response_source_id,
         conversation_id=conversation_id,
+    )
+
+
+def make_hypothesis(observation):
+    return {
+        "hypothesis_id": f"hypothesis-{observation.event_id}",
+        "event_type": observation.event_type,
+        "position": model_to_dict(observation.position),
+        "valid_from": observation.observed_at,
+        "valid_until": observation.observed_at,
+    }
+
+
+def make_informative_absence(initial, **overrides):
+    hypothesis = make_hypothesis(initial)
+    absence = {
+        "hypothesis_id": hypothesis["hypothesis_id"],
+        "declared_non_detection": True,
+        "observed_from": initial.observed_at,
+        "observed_until": initial.observed_at,
+        "coverage": {
+            "position": model_to_dict(initial.position),
+            "radius": 2.0,
+            "capability": "visual",
+            "capability_validated": True,
+            "opportunity_confirmed": True,
+        },
+    }
+    absence.update(overrides)
+    return make_verification_response(
+        [],
+        status="informative_absence",
+        hypothesis=hypothesis,
+        absence=absence,
     )
 
 
@@ -164,6 +208,36 @@ class TestVerificationResponseClassification(unittest.TestCase):
             "observation_ids": ("obs-002",),
         })
 
+    def test_tipos_diferentes_sem_regra_sao_inconclusivos(self):
+        evidence = Observation(
+            "obs-002", "sensor-02", "suspicious_movement",
+            Position(8, 5), 12.0, 0.8
+        )
+        response = make_verification_response([evidence])
+
+        result = classify_verification_response(self.initial, response, 3.0, 2.0)
+
+        self.assertEqual(result["classification"], "inconclusive")
+        self.assertEqual(result["observation_ids"], ("obs-002",))
+
+    def test_tipos_diferentes_podem_ser_compatveis_com_regra_explicita(self):
+        evidence = Observation(
+            "obs-002", "sensor-02", "suspicious_movement",
+            Position(8, 5), 12.0, 0.8
+        )
+        response = make_verification_response([evidence])
+
+        result = classify_verification_response(
+            self.initial,
+            response,
+            3.0,
+            2.0,
+            compatibility_rules={"possible_incident": {"suspicious_movement"}},
+        )
+
+        self.assertEqual(result["classification"], "compatible")
+        self.assertEqual(result["observation_ids"], ("obs-002",))
+
     def test_observacoes_incompativeis_sao_inconclusivas(self):
         response = make_verification_response(
             [make_observation("obs-002", (20, 20), 12.0, "sensor-02")]
@@ -185,6 +259,84 @@ class TestVerificationResponseClassification(unittest.TestCase):
             "classification": "no_data",
             "observation_ids": (),
         })
+
+    def test_classifica_contradicao_apenas_com_regra_e_hipotese_correlacionada(self):
+        contradictory = make_observation(
+            "obs-contradictory", (5, 5), 10.0, "sensor-02"
+        )
+        contradictory = Observation(
+            contradictory.event_id,
+            contradictory.source_id,
+            "contradictory_event",
+            contradictory.position,
+            contradictory.observed_at,
+            contradictory.confidence_score,
+        )
+        response = make_verification_response(
+            [contradictory],
+            hypothesis=make_hypothesis(self.initial),
+            evidence_relation="contradictory",
+        )
+
+        without_rule = classify_verification_response(
+            self.initial, response, 1.0, 1.0
+        )
+        self.assertEqual(without_rule["classification"], "inconclusive")
+
+        result = classify_verification_response(
+            self.initial,
+            response,
+            1.0,
+            1.0,
+            incompatibility_rules={"possible_incident": {"contradictory_event"}},
+        )
+        self.assertEqual(result["classification"], "contradictory")
+        self.assertEqual(result["observation_ids"], ("obs-contradictory",))
+
+    def test_observacao_contraditoria_sem_hipotese_e_inconclusiva(self):
+        contradictory = make_observation(
+            "obs-contradictory", (5, 5), 10.0, "sensor-02"
+        )
+        response = make_verification_response([contradictory])
+        response.payload["evidence_relation"] = "contradictory"
+
+        result = classify_verification_response(
+            self.initial,
+            response,
+            1.0,
+            1.0,
+            incompatibility_rules={"possible_incident": {"contradictory_event"}},
+        )
+        self.assertEqual(result["classification"], "inconclusive")
+
+    def test_classifica_ausencia_informativa_com_cobertura_valida(self):
+        response = make_informative_absence(self.initial)
+
+        result = classify_verification_response(self.initial, response, 1.0, 1.0)
+
+        self.assertEqual(result, {
+            "classification": "informative_absence",
+            "observation_ids": (),
+        })
+
+    def test_ausencia_sem_cobertura_valida_nao_e_informativa(self):
+        cases = ("capability_validated", "opportunity_confirmed")
+        for field in cases:
+            with self.subTest(field=field):
+                response = make_informative_absence(self.initial)
+                response.payload["absence"]["coverage"].pop(field)
+                result = classify_verification_response(
+                    self.initial, response, 1.0, 1.0
+                )
+                self.assertEqual(result["classification"], "inconclusive")
+
+    def test_ausencia_com_periodo_inadequado_nao_e_informativa(self):
+        response = make_informative_absence(self.initial)
+        response.payload["absence"]["observed_from"] = 11.0
+
+        result = classify_verification_response(self.initial, response, 1.0, 1.0)
+
+        self.assertEqual(result["classification"], "inconclusive")
 
     def test_repeticoes_nao_contam_como_evidencias_independentes(self):
         repeated = make_observation("obs-002", (5, 5), 10.0, "sensor-02")
@@ -300,6 +452,57 @@ class TestVerificationResponseAggregation(unittest.TestCase):
         self.assertEqual(result["classification"], "no_data")
         self.assertEqual(result["observation_ids"], ())
         self.assertEqual(result["compatible_source_count"], 0)
+
+    def test_ausencia_informativa_contribui_para_cobertura_mas_nao_para_compatibilidade(self):
+        result = self.aggregate([make_informative_absence(self.initial)])
+
+        self.assertEqual(result["classification"], "informative_absence")
+        self.assertEqual(result["informative_absence_source_ids"], ("sensor-02",))
+        self.assertEqual(result["compatible_source_count"], 0)
+        self.assertEqual(result["coverage_source_ids"], ("sensor-02",))
+
+        evaluation = evaluate_preliminary_corroboration(
+            result, ("sensor-02", "sensor-03")
+        )
+        self.assertEqual(evaluation["observed_source_ids"], ("sensor-02",))
+        self.assertEqual(evaluation["compatible_source_count"], 0)
+        self.assertEqual(evaluation["information_coverage"], 0.5)
+
+    def test_conflito_entre_evidencias_fica_inconclusivo(self):
+        compatible = make_observation("obs-compatible", (6, 5), 10.0, "sensor-02")
+        contradictory = Observation(
+            "obs-contradictory",
+            "sensor-03",
+            "contradictory_event",
+            Position(5, 5),
+            10.0,
+            0.8,
+        )
+        hypothesis = make_hypothesis(self.initial)
+        response_compatible = make_verification_response([compatible])
+        response_contradictory = make_verification_response(
+            [contradictory],
+            message_id="response-002",
+            response_source_id="sensor-03",
+            hypothesis=hypothesis,
+            evidence_relation="contradictory",
+        )
+
+        result = aggregate_verification_responses(
+            self.initial,
+            [response_compatible, response_contradictory],
+            "conversation-001",
+            "request-001",
+            3.0,
+            2.0,
+            incompatibility_rules={"possible_incident": {"contradictory_event"}},
+        )
+
+        self.assertEqual(result["classification"], "inconclusive")
+        self.assertEqual(result["compatible_observation_ids"], ("obs-compatible",))
+        self.assertEqual(
+            result["contradictory_observation_ids"], ("obs-contradictory",)
+        )
 
     def test_resposta_de_outra_conversa_e_rejeitada(self):
         response = make_verification_response(
