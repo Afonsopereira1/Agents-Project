@@ -9,7 +9,10 @@ from .corroboration import (
     select_eligible_sources,
 )
 from .allocation import (
+    LocalResourceReservation,
     MissionRegistry,
+    ReservationResult,
+    ReservationStatus,
     build_cfp_message,
     evaluate_cfp,
     select_best_proposal,
@@ -23,6 +26,9 @@ __all__ = [
     "evaluate_preliminary_corroboration",
     "select_eligible_sources",
     "MissionRegistry",
+    "LocalResourceReservation",
+    "ReservationResult",
+    "ReservationStatus",
     "build_cfp_message",
     "evaluate_cfp",
     "select_best_proposal",

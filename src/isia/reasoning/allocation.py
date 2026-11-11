@@ -1,13 +1,9 @@
-"""Ponte local entre a decisão de corroboração e uma missão de verificação.
-
-Este módulo ainda não negocia nem reserva recursos. Apenas materializa, de
-forma idempotente, a missão que poderá ser usada por uma futura ronda de
-Contract Net.
-"""
+"""Raciocínio local para criação, negociação e reserva de missões."""
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from math import isfinite
+from threading import Lock
 from uuid import uuid4
 
 from isia.communication.messages import (
@@ -30,6 +26,145 @@ MOBILE_VERIFICATION_DECISION = "request_mobile_verification"
 MOBILE_VERIFICATION_TASK = "verify_incident"
 MOBILE_VERIFICATION_CAPABILITY = "mobile_verification"
 CONTRACT_NET_REJECT_REASON = "cfp_rejected"
+
+
+class ReservationStatus:
+    """Resultados públicos da tentativa de reserva local."""
+
+    RESERVED = "reserved"
+    ALREADY_RESERVED = "already_reserved"
+    RESOURCE_OCCUPIED = "resource_occupied"
+    INVALID_REQUEST = "invalid_request"
+
+
+@dataclass(frozen=True)
+class ReservationResult:
+    """Resultado explícito de uma tentativa de reserva."""
+
+    status: str
+    resource_state: ResourceState
+    mission_id: str | None
+    reason: str
+
+    @property
+    def confirmed(self) -> bool:
+        return self.status in (
+            ReservationStatus.RESERVED,
+            ReservationStatus.ALREADY_RESERVED,
+        )
+
+
+class LocalResourceReservation:
+    """Reserva atómica e local de um único recurso móvel.
+
+    O ``ResourceState`` continua a ser imutável; cada transição substitui a
+    instância por outra devolvida por ``change_status``. O lock cobre também a
+    associação do ``mission_id``, impedindo que duas threads observem
+    simultaneamente o mesmo recurso como disponível.
+    """
+
+    def __init__(self, resource_state: ResourceState):
+        if not isinstance(resource_state, ResourceState):
+            raise TypeError("resource_state deve ser ResourceState.")
+        self._resource_state = resource_state
+        self._reserved_mission_id: str | None = None
+        self._lock = Lock()
+
+    @property
+    def resource_state(self) -> ResourceState:
+        with self._lock:
+            return self._resource_state
+
+    @property
+    def reserved_mission_id(self) -> str | None:
+        with self._lock:
+            return self._reserved_mission_id
+
+    def reserve(
+        self,
+        mission_id: object,
+        *,
+        resource_id: object | None = None,
+    ) -> ReservationResult:
+        """Tentar reservar este recurso para ``mission_id``.
+
+        Pedidos inválidos devolvem ``INVALID_REQUEST`` em vez de alterar o
+        estado. Uma repetição para a missão já associada é idempotente e
+        devolve ``ALREADY_RESERVED``. Nenhuma destas respostas implementa
+        ainda ACCEPT por XMPP ou uma reserva distribuída.
+        """
+        if not isinstance(mission_id, str) or not mission_id.strip():
+            return self._result(
+                ReservationStatus.INVALID_REQUEST,
+                None,
+                "mission_id_invalid",
+            )
+        if resource_id is not None and (
+            not isinstance(resource_id, str)
+            or not resource_id.strip()
+            or resource_id != self._resource_state.resource_id
+        ):
+            return self._result(
+                ReservationStatus.INVALID_REQUEST,
+                mission_id,
+                "resource_id_invalid",
+            )
+
+        with self._lock:
+            if self._resource_state.status is ResourceStatus.RESERVED:
+                if self._reserved_mission_id == mission_id:
+                    return self._result_locked(
+                        ReservationStatus.ALREADY_RESERVED,
+                        mission_id,
+                        "reservation_is_idempotent",
+                    )
+                return self._result_locked(
+                    ReservationStatus.RESOURCE_OCCUPIED,
+                    mission_id,
+                    "resource_reserved_for_another_mission",
+                )
+
+            if (
+                self._resource_state.status is not ResourceStatus.AVAILABLE
+                or not self._resource_state.available
+            ):
+                return self._result_locked(
+                    ReservationStatus.RESOURCE_OCCUPIED,
+                    mission_id,
+                    "resource_not_available",
+                )
+
+            self._resource_state = self._resource_state.change_status(
+                ResourceStatus.RESERVED
+            )
+            self._reserved_mission_id = mission_id
+            return self._result_locked(
+                ReservationStatus.RESERVED,
+                mission_id,
+                "reservation_confirmed",
+            )
+
+    def _result(
+        self,
+        status: str,
+        mission_id: str | None,
+        reason: str,
+    ) -> ReservationResult:
+        with self._lock:
+            return self._result_locked(status, mission_id, reason)
+
+    def _result_locked(
+        self,
+        status: str,
+        mission_id: str | None,
+        reason: str,
+    ) -> ReservationResult:
+        return ReservationResult(
+            status,
+            self._resource_state,
+            self._reserved_mission_id if status != ReservationStatus.INVALID_REQUEST else mission_id,
+            reason,
+        )
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,5 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 from isia.communication.messages import Message, MessageType, model_to_dict
 from isia.domain.models import (
@@ -11,7 +12,9 @@ from isia.domain.models import (
     ResourceStatus,
 )
 from isia.reasoning.allocation import (
+    LocalResourceReservation,
     MissionRegistry,
+    ReservationStatus,
     build_cfp_message,
     evaluate_cfp,
     select_best_proposal,
@@ -351,6 +354,80 @@ class TestMissionRegistry(unittest.TestCase):
             tuple(proposal.message_id for proposal in selection.valid_proposals),
             (valid.message_id,),
         )
+
+    def test_reserves_available_resource_and_associates_mission(self):
+        reservation = LocalResourceReservation(self._resource())
+
+        result = reservation.reserve("mission-1", resource_id="drone-1")
+
+        self.assertEqual(result.status, ReservationStatus.RESERVED)
+        self.assertTrue(result.confirmed)
+        self.assertEqual(result.mission_id, "mission-1")
+        self.assertEqual(result.resource_state.status, ResourceStatus.RESERVED)
+        self.assertFalse(result.resource_state.available)
+        self.assertEqual(reservation.reserved_mission_id, "mission-1")
+
+    def test_repeated_reservation_for_same_mission_is_idempotent(self):
+        reservation = LocalResourceReservation(self._resource())
+        first = reservation.reserve("mission-1")
+
+        second = reservation.reserve("mission-1")
+
+        self.assertEqual(first.status, ReservationStatus.RESERVED)
+        self.assertEqual(second.status, ReservationStatus.ALREADY_RESERVED)
+        self.assertTrue(second.confirmed)
+        self.assertEqual(second.mission_id, "mission-1")
+
+    def test_different_mission_cannot_use_reserved_resource(self):
+        reservation = LocalResourceReservation(self._resource())
+        reservation.reserve("mission-1")
+
+        result = reservation.reserve("mission-2")
+
+        self.assertEqual(result.status, ReservationStatus.RESOURCE_OCCUPIED)
+        self.assertFalse(result.confirmed)
+        self.assertEqual(result.mission_id, "mission-1")
+        self.assertEqual(reservation.reserved_mission_id, "mission-1")
+
+    def test_concurrent_missions_only_one_can_reserve(self):
+        reservation = LocalResourceReservation(self._resource())
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(
+                executor.map(reservation.reserve, ("mission-a", "mission-b"))
+            )
+
+        statuses = {result.status for result in results}
+        self.assertEqual(statuses, {
+            ReservationStatus.RESERVED,
+            ReservationStatus.RESOURCE_OCCUPIED,
+        })
+        self.assertIn(reservation.reserved_mission_id, {"mission-a", "mission-b"})
+        self.assertEqual(reservation.resource_state.status, ResourceStatus.RESERVED)
+
+    def test_unavailable_resource_returns_explicit_occupied_result(self):
+        reservation = LocalResourceReservation(
+            self._resource(available=False, status=ResourceStatus.UNAVAILABLE)
+        )
+
+        result = reservation.reserve("mission-1")
+
+        self.assertEqual(result.status, ReservationStatus.RESOURCE_OCCUPIED)
+        self.assertEqual(result.reason, "resource_not_available")
+        self.assertIsNone(reservation.reserved_mission_id)
+
+    def test_invalid_identifiers_do_not_change_resource(self):
+        reservation = LocalResourceReservation(self._resource())
+
+        empty_mission = reservation.reserve("")
+        wrong_resource = reservation.reserve("mission-1", resource_id="other")
+
+        self.assertEqual(empty_mission.status, ReservationStatus.INVALID_REQUEST)
+        self.assertEqual(empty_mission.reason, "mission_id_invalid")
+        self.assertEqual(wrong_resource.status, ReservationStatus.INVALID_REQUEST)
+        self.assertEqual(wrong_resource.reason, "resource_id_invalid")
+        self.assertEqual(reservation.resource_state.status, ResourceStatus.AVAILABLE)
+        self.assertIsNone(reservation.reserved_mission_id)
 
 
 if __name__ == "__main__":
