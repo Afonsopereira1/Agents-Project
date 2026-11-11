@@ -34,7 +34,7 @@ class TestPosition(unittest.TestCase):
 
         with self.assertRaises(FrozenInstanceError):
             posicao.x = 5
-            
+
 
 class TestObservation(unittest.TestCase):
 
@@ -62,8 +62,8 @@ class TestObservation(unittest.TestCase):
                 observed_at=15.0,
                 confidence_score=1.5
             )
-            
-    
+
+
     def test_identificador_vazio(self):
         with self.assertRaises(ValueError):
             Observation(
@@ -155,8 +155,8 @@ class TestIncident(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             Incident("inc-001", (obs1, obs1))
-            
-    
+
+
     def test_incidente_sem_identificador(self):
         obs = Observation(
             "obs-001", "sensor_01", "gunshot_like_sound",

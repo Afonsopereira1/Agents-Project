@@ -181,6 +181,11 @@ Este é um **cenário ilustrativo**, não uma execução realizada nem resultado
 - [ ] Graus mínimos de autonomia e critérios de reserva para patrulhas/rangers.
 - [ ] Fronteiras entre camada SPADE e funções Python testáveis.
 
+Na implementação inicial da Etapa 2, a grelha é configurável e o relógio
+avança por chamadas explícitas em segundos simulados. O exemplo usa 12 × 10
+células, sem escala física ou movimento. Ver [execução e limites](../README.md#mapa-2d-e-relógio-da-simulação).
+Estes valores de exemplo não representam uma decisão aprovada pelo grupo.
+
 Ver também [protocols.md](protocols.md) e [decisões pendentes](#decisões-pendentes).
 
 
