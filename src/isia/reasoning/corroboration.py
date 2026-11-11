@@ -163,6 +163,98 @@ def classify_verification_response(
     }
 
 
+def aggregate_verification_responses(
+    initial_observation: Observation,
+    responses,
+    conversation_id: str,
+    request_message_id: str,
+    max_distance: float,
+    max_time_difference: float,
+) -> dict[str, object]:
+    """Aggregate several responses for one verification request.
+
+    Responses are accepted only when they are ``VERIFY_RESPONSE`` messages in
+    the expected conversation and refer to the expected request. A message is
+    processed once by ``message_id`` and an observation is counted once by
+    ``event_id``. Source diversity is derived from the observations themselves,
+    never from the transport sender or the response ``source_id``.
+
+    The result contains ``classification``, unique independent
+    ``observation_ids``, distinct observation ``source_ids`` and
+    ``compatible_source_count``. Multiple observations from one source count
+    as one compatible source.
+    """
+    _validate_observation(initial_observation, "initial_observation")
+    _validate_reference(conversation_id, "conversation_id")
+    _validate_reference(request_message_id, "request_message_id")
+    _validate_limit(max_distance, "max_distance")
+    _validate_limit(max_time_difference, "max_time_difference")
+
+    seen_message_ids = set()
+    unique_observations = {}
+    compatible_ids = set()
+    saw_observation_response = False
+    saw_no_data = False
+
+    for response in responses:
+        if not isinstance(response, Message):
+            raise TypeError("Each response must be a Message.")
+        observations, status = _observations_from_response(response)
+        if response.conversation_id != conversation_id:
+            raise ValueError("VERIFY_RESPONSE belongs to another conversation.")
+        if response.payload["request_message_id"] != request_message_id:
+            raise ValueError("VERIFY_RESPONSE refers to another request.")
+        if response.message_id in seen_message_ids:
+            continue
+        seen_message_ids.add(response.message_id)
+
+        result = classify_verification_response(
+            initial_observation,
+            response,
+            max_distance,
+            max_time_difference,
+        )
+        if status == "no_data":
+            saw_no_data = True
+            continue
+        saw_observation_response = True
+
+        for observation in observations:
+            if (
+                observation.event_id == initial_observation.event_id
+                or observation.source_id == initial_observation.source_id
+                or observation.event_id in unique_observations
+            ):
+                continue
+            unique_observations[observation.event_id] = observation
+
+        compatible_ids.update(result["observation_ids"])
+
+    compatible_ids.intersection_update(unique_observations)
+    source_ids = {
+        observation.source_id for observation in unique_observations.values()
+    }
+    compatible_source_ids = {
+        unique_observations[event_id].source_id for event_id in compatible_ids
+    }
+
+    if compatible_ids:
+        classification = "compatible"
+    elif saw_observation_response:
+        classification = "inconclusive"
+    elif saw_no_data or not seen_message_ids:
+        classification = "no_data"
+    else:  # Defensive fallback for future response statuses.
+        classification = "inconclusive"
+
+    return {
+        "classification": classification,
+        "observation_ids": tuple(sorted(unique_observations)),
+        "source_ids": tuple(sorted(source_ids)),
+        "compatible_source_count": len(compatible_source_ids),
+    }
+
+
 def _observations_from_response(response: Message) -> tuple[tuple[Observation, ...], str]:
     if not isinstance(response, Message):
         raise TypeError("response must be a Message.")
@@ -184,6 +276,8 @@ def _observations_from_response(response: Message) -> tuple[tuple[Observation, .
         raise ValueError("VERIFY_RESPONSE observations must be a list.")
     if status == "no_data" and raw_observations:
         raise ValueError("A no_data response cannot contain observations.")
+    if status == "observations_available" and not raw_observations:
+        raise ValueError("An observations_available response must contain observations.")
 
     observations = []
     for raw_observation in raw_observations:
@@ -192,6 +286,11 @@ def _observations_from_response(response: Message) -> tuple[tuple[Observation, .
         except (TypeError, ValueError, KeyError) as error:
             raise ValueError("VERIFY_RESPONSE contains an invalid observation.") from error
     return tuple(observations), status
+
+
+def _validate_reference(value: str, name: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{name} must be a non-empty string.")
 
 
 def _validate_observation(observation: Observation, name: str) -> None:

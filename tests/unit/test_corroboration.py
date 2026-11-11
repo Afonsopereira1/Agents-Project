@@ -2,6 +2,7 @@ import unittest
 
 from isia.domain.models import Observation, Position
 from isia.reasoning.corroboration import (
+    aggregate_verification_responses,
     are_observations_compatible,
     classify_verification_response,
     select_eligible_sources,
@@ -30,19 +31,26 @@ def make_sources():
     }
 
 
-def make_verification_response(observations, status="observations_available"):
+def make_verification_response(
+    observations,
+    status="observations_available",
+    message_id="response-001",
+    conversation_id="conversation-001",
+    request_message_id="request-001",
+    response_source_id="sensor-02",
+):
     return Message(
-        "response-001",
+        message_id,
         MessageType.VERIFY_RESPONSE,
         12.0,
         {
-            "request_message_id": "request-001",
+            "request_message_id": request_message_id,
             "observations": [model_to_dict(observation) for observation in observations],
             "status": status,
         },
         incident_id="incident-001",
-        source_id="sensor-02",
-        conversation_id="conversation-001",
+        source_id=response_source_id,
+        conversation_id=conversation_id,
     )
 
 
@@ -196,6 +204,118 @@ class TestVerificationResponseClassification(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             classify_verification_response(self.initial, malformed, 3.0, 2.0)
+
+
+class TestVerificationResponseAggregation(unittest.TestCase):
+
+    def setUp(self):
+        self.initial = make_observation("obs-001", (5, 5), 10.0, "sensor-01")
+
+    def aggregate(self, responses):
+        return aggregate_verification_responses(
+            self.initial,
+            responses,
+            "conversation-001",
+            "request-001",
+            3.0,
+            2.0,
+        )
+
+    def test_mensagem_repetida_e_processada_apenas_uma_vez(self):
+        evidence = make_observation("obs-002", (8, 5), 12.0, "sensor-02")
+        response = make_verification_response([evidence])
+
+        result = self.aggregate([response, response])
+
+        self.assertEqual(result["classification"], "compatible")
+        self.assertEqual(result["observation_ids"], ("obs-002",))
+        self.assertEqual(result["compatible_source_count"], 1)
+
+    def test_observacao_repetida_em_mensagens_diferentes_nao_duplica(self):
+        evidence = make_observation("obs-002", (8, 5), 12.0, "sensor-02")
+        responses = [
+            make_verification_response([evidence], message_id="response-001"),
+            make_verification_response([evidence], message_id="response-002"),
+        ]
+
+        result = self.aggregate(responses)
+
+        self.assertEqual(result["observation_ids"], ("obs-002",))
+        self.assertEqual(result["source_ids"], ("sensor-02",))
+
+    def test_encaminhamento_nao_cria_uma_nova_fonte(self):
+        evidence = make_observation("obs-002", (8, 5), 12.0, "sensor-02")
+        forwarded = make_verification_response(
+            [evidence],
+            message_id="response-002",
+            response_source_id="sensor-03",
+        )
+
+        result = self.aggregate([
+            make_verification_response([evidence]),
+            forwarded,
+        ])
+
+        self.assertEqual(result["source_ids"], ("sensor-02",))
+        self.assertEqual(result["compatible_source_count"], 1)
+
+    def test_varias_observacoes_da_mesma_fonte_contam_uma_fonte(self):
+        responses = [
+            make_verification_response([
+                make_observation("obs-002", (8, 5), 12.0, "sensor-02"),
+            ]),
+            make_verification_response([
+                make_observation("obs-003", (5, 8), 11.0, "sensor-02"),
+            ], message_id="response-002"),
+        ]
+
+        result = self.aggregate(responses)
+
+        self.assertEqual(result["observation_ids"], ("obs-002", "obs-003"))
+        self.assertEqual(result["source_ids"], ("sensor-02",))
+        self.assertEqual(result["compatible_source_count"], 1)
+
+    def test_fontes_independentes_contam_separadamente(self):
+        responses = [
+            make_verification_response([
+                make_observation("obs-002", (8, 5), 12.0, "sensor-02"),
+            ]),
+            make_verification_response([
+                make_observation("obs-003", (5, 8), 11.0, "sensor-03"),
+            ], message_id="response-002"),
+        ]
+
+        result = self.aggregate(responses)
+
+        self.assertEqual(result["source_ids"], ("sensor-02", "sensor-03"))
+        self.assertEqual(result["compatible_source_count"], 2)
+
+    def test_respostas_sem_dados_mantem_ausencia_de_dados(self):
+        result = self.aggregate([
+            make_verification_response([], status="no_data"),
+        ])
+
+        self.assertEqual(result["classification"], "no_data")
+        self.assertEqual(result["observation_ids"], ())
+        self.assertEqual(result["compatible_source_count"], 0)
+
+    def test_resposta_de_outra_conversa_e_rejeitada(self):
+        response = make_verification_response(
+            [make_observation("obs-002", (8, 5), 12.0, "sensor-02")],
+            conversation_id="other-conversation",
+        )
+
+        with self.assertRaises(ValueError):
+            self.aggregate([response])
+
+    def test_resposta_de_outro_pedido_e_rejeitada(self):
+        response = make_verification_response(
+            [make_observation("obs-002", (8, 5), 12.0, "sensor-02")],
+            request_message_id="other-request",
+        )
+
+        with self.assertRaises(ValueError):
+            self.aggregate([response])
 
 
 if __name__ == "__main__":
