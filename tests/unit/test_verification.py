@@ -340,3 +340,129 @@ class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
         response = parse_spade_message(behaviour.send.await_args.args[0])
         self.assertEqual(response.payload["status"], "no_data")
         self.assertEqual(response.payload["observations"], [])
+
+    async def test_informant_declara_ausencia_informativa_com_cobertura_valida(self):
+        from unittest.mock import AsyncMock, Mock
+
+        request = Message(
+            "request-absence",
+            MessageType.VERIFY_REQUEST,
+            1.0,
+            {
+                "observation": {"event_id": "obs-001"},
+                "hypothesis": {
+                    "hypothesis_id": "hypothesis-obs-001",
+                    "event_type": "gunshot_like_sound",
+                    "position": {"x": 5, "y": 6},
+                    "valid_from": 1.0,
+                    "valid_until": 1.0,
+                },
+            },
+            incident_id="incident-obs-001",
+            conversation_id="conversation-absence",
+        )
+        incoming = SpadeMessage(
+            to="informant@localhost",
+            sender="sensor@localhost",
+            body=request.to_json(),
+        )
+        for key, value in {
+            "performative": "request",
+            "ontology": "isia",
+            "protocol": "verification",
+            "conversation-id": "conversation-absence",
+        }.items():
+            incoming.set_metadata(key, value)
+
+        agent = Mock(
+            observation_feed=LocalFeed(()),
+            source_id="sensor_02",
+            created_at=1.0,
+            coverage_position=Position(5, 6),
+            coverage_radius=2.0,
+            coverage_capability="acoustic",
+            coverage_observed_from=0.0,
+            coverage_observed_until=2.0,
+            coverage_opportunity_confirmed=True,
+            loop=__import__("asyncio").get_running_loop(),
+        )
+        behaviour = InformantAgent.VerificationBehaviour()
+        behaviour.set_agent(agent)
+        behaviour.receive = AsyncMock(return_value=incoming)
+        behaviour.send = AsyncMock()
+
+        await behaviour.run()
+
+        response = parse_spade_message(behaviour.send.await_args.args[0])
+        self.assertEqual(response.payload["status"], "informative_absence")
+        self.assertEqual(response.payload["observations"], [])
+        self.assertEqual(response.payload["absence"]["declared_non_detection"], True)
+        self.assertEqual(
+            response.payload["absence"]["hypothesis_id"], "hypothesis-obs-001"
+        )
+        self.assertTrue(response.payload["absence"]["coverage"]["capability_validated"])
+
+    async def test_informant_usa_no_data_sem_cobertura_ou_capacidade_validas(self):
+        from unittest.mock import AsyncMock, Mock
+
+        for capability, opportunity_confirmed in (
+            ("visual", True),
+            ("acoustic", False),
+        ):
+            with self.subTest(
+                capability=capability,
+                opportunity_confirmed=opportunity_confirmed,
+            ):
+                request = Message(
+                    "request-invalid-absence",
+                    MessageType.VERIFY_REQUEST,
+                    1.0,
+                    {
+                        "observation": {"event_id": "obs-001"},
+                        "hypothesis": {
+                            "hypothesis_id": "hypothesis-obs-001",
+                            "event_type": "gunshot_like_sound",
+                            "position": {"x": 5, "y": 6},
+                            "valid_from": 1.0,
+                            "valid_until": 1.0,
+                        },
+                    },
+                    incident_id="incident-obs-001",
+                    conversation_id="conversation-invalid-absence",
+                )
+                incoming = SpadeMessage(
+                    to="informant@localhost",
+                    sender="sensor@localhost",
+                    body=request.to_json(),
+                )
+                for key, value in {
+                    "performative": "request",
+                    "ontology": "isia",
+                    "protocol": "verification",
+                    "conversation-id": "conversation-invalid-absence",
+                }.items():
+                    incoming.set_metadata(key, value)
+
+                agent = Mock(
+                    observation_feed=LocalFeed(()),
+                    source_id="sensor_02",
+                    created_at=1.0,
+                    coverage_position=Position(5, 6),
+                    coverage_radius=2.0,
+                    coverage_capability=capability,
+                    coverage_observed_from=0.0,
+                    coverage_observed_until=2.0,
+                    coverage_opportunity_confirmed=opportunity_confirmed,
+                    loop=__import__("asyncio").get_running_loop(),
+                )
+                behaviour = InformantAgent.VerificationBehaviour()
+                behaviour.set_agent(agent)
+                behaviour.receive = AsyncMock(return_value=incoming)
+                behaviour.send = AsyncMock()
+
+                await behaviour.run()
+
+                response = parse_spade_message(behaviour.send.await_args.args[0])
+                self.assertEqual(response.payload["status"], "no_data")
+                self.assertEqual(response.payload["observations"], [])
+                self.assertNotIn("absence", response.payload)

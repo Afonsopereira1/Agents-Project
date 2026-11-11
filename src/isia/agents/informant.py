@@ -92,7 +92,7 @@ class InformantAgent(Agent):
             }
             if isinstance(request.payload.get("hypothesis"), dict):
                 payload["hypothesis"] = request.payload["hypothesis"]
-            absence = _informative_absence_payload(self, request)
+            absence = _informative_absence_payload(self.agent, request)
             if not observations and absence is not None:
                 payload["status"] = "informative_absence"
                 payload["absence"] = absence

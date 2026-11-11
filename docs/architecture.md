@@ -1,6 +1,6 @@
 # Arquitetura do sistema multiagente — proposta
 
-> **Estado revisto (11-11-2026):** arquitetura ainda sujeita a revisão formal pelos três elementos. As Etapas 1–5 estão integradas na `main`, incluindo a corroboração (PR #8) e o Contract Net simplificado com reserva confirmada (PR #7). Os dois fluxos foram demonstrados separadamente por SPADE/XMPP; a integração automática deteção → missão → negociação e a execução/movimento pertencem à Etapa 6. Reputação, robustez avançada e avaliação final permanecem trabalho posterior. As correções semânticas de ausência informativa e evidência mista exigem nova validação local.
+> **Estado revisto (11-11-2026):** arquitetura ainda sujeita a revisão formal pelos três elementos. As Etapas 1–5 estão integradas na `main`, incluindo a corroboração (PR #8), as correções de validação (PR #9) e o Contract Net simplificado com reserva confirmada (PR #7). A última execução local no Ubuntu teve **249 testes, OK** e os dois fluxos foram demonstrados separadamente por SPADE/XMPP real no cenário normal. As correções recentes de ausência informativa e deduplicação foram validadas localmente nesta branch, aguardando integração final no PR. A integração automática deteção → missão → negociação e a execução/movimento pertencem à Etapa 6. Reputação, robustez avançada, avaliação final e as aprovações formais do grupo permanecem pendentes.
 
 [README](../README.md) · [Plano](development-plan.md) · [Protocolos](protocols.md) · [Decisões pendentes](#decisões-pendentes)
 

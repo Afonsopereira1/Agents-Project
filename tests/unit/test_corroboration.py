@@ -403,6 +403,72 @@ class TestVerificationResponseAggregation(unittest.TestCase):
         self.assertEqual(result["observation_ids"], ("obs-002",))
         self.assertEqual(result["source_ids"], ("sensor-02",))
 
+    def test_observacoes_identicas_em_duas_mensagens_nao_criam_conflito(self):
+        evidence = make_observation("obs-002", (8, 5), 12.0, "sensor-02")
+        responses = [
+            make_verification_response([evidence], message_id="response-001"),
+            make_verification_response([evidence], message_id="response-002"),
+        ]
+
+        result = self.aggregate(responses)
+
+        self.assertEqual(result["classification"], "compatible")
+        self.assertEqual(result["compatible_observation_ids"], ("obs-002",))
+        self.assertEqual(result["conflicted_observation_ids"], ())
+        self.assertEqual(result["compatible_source_count"], 1)
+
+    def test_observacao_conflituosa_e_inconclusiva_em_qualquer_ordem(self):
+        compatible = make_observation("obs-002", (8, 5), 12.0, "sensor-02")
+        contradictory = Observation(
+            "obs-002",
+            "sensor-03",
+            "contradictory_event",
+            Position(8, 5),
+            12.0,
+            0.8,
+        )
+        responses = [
+            make_verification_response([compatible], message_id="response-001"),
+            make_verification_response(
+                [contradictory],
+                message_id="response-002",
+                response_source_id="sensor-03",
+                hypothesis=make_hypothesis(self.initial),
+                evidence_relation="contradictory",
+            ),
+        ]
+        summaries = []
+        for ordered_responses in (responses, list(reversed(responses))):
+            summaries.append(
+                aggregate_verification_responses(
+                    self.initial,
+                    ordered_responses,
+                    "conversation-001",
+                    "request-001",
+                    3.0,
+                    2.0,
+                    incompatibility_rules={
+                        "possible_incident": {"contradictory_event"}
+                    },
+                )
+            )
+
+        for result in summaries:
+            self.assertEqual(result["classification"], "inconclusive")
+            self.assertEqual(result["observation_ids"], ("obs-002",))
+            self.assertEqual(result["compatible_observation_ids"], ())
+            self.assertEqual(result["contradictory_observation_ids"], ())
+            self.assertEqual(result["conflicted_observation_ids"], ("obs-002",))
+            self.assertEqual(result["compatible_source_count"], 0)
+            evaluation = evaluate_preliminary_corroboration(
+                result, ("sensor-02", "sensor-03")
+            )
+            decision = decide_preliminary_verification(evaluation, 1)
+            self.assertEqual(decision["decision"], "observe")
+            self.assertEqual(decision["reason"], "no_compatible_evidence")
+
+        self.assertEqual(summaries[0], summaries[1])
+
     def test_encaminhamento_nao_cria_uma_nova_fonte(self):
         evidence = make_observation("obs-002", (8, 5), 12.0, "sensor-02")
         forwarded = make_verification_response(

@@ -3,7 +3,7 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado (11-11-2026):** Etapas 1–5 integradas na `main` (PR #7, Contract Net; PR #8, classificação de evidências). Antes desta correção, foram comunicados 230 testes aprovados no Ubuntu e demonstrado por SPADE/XMPP o fluxo normal CFP → PROPOSAL/REJECT → seleção → ACCEPT → confirmação → `RESERVED`. Os cenários de falha da Etapa 5 são cobertos por testes unitários/mocks, não todos por XMPP real. As correções semânticas de ausência informativa e evidência mista exigem nova execução da suite antes de serem declaradas validadas. A execução de missões na Etapa 6 e as Etapas 7–10 permanecem pendentes; a revisão formal dos contratos pelo grupo não está comprovada.
+> **Estado (11-11-2026):** Etapas 1–5 estão integradas na `main` (PR #7, Contract Net; PR #8, classificação de evidências; PR #9, correções de validação). A última execução local no Ubuntu comunicada foi de **249 testes, OK**; `verification_demo.py` e `contract_net_demo.py` também foram aprovados com SPADE/XMPP real no fluxo normal. As correções recentes de ausência informativa e deduplicação foram validadas localmente nesta branch, aguardando a integração final no PR. Os cenários de falha da Etapa 5 continuam cobertos por testes unitários/mocks, não todos por XMPP real. A integração automática de missões pertence à Etapa 6; as Etapas 7–10 e as aprovações formais do grupo permanecem pendentes.
 
 ## O projeto
 
@@ -110,7 +110,7 @@ Para repetir os testes locais:
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-Última execução local comunicada (11-11-2026): **230 testes, OK**. Isto é distinto da demonstração real XMPP acima.
+Última execução local comunicada (11-11-2026): **249 testes, OK**. Isto é distinto das demonstrações reais XMPP acima; os cenários de falha continuam validados por testes/mocks.
 
 ### Demonstração da comunicação entre agentes
 
@@ -149,7 +149,9 @@ seleciona deterministicamente a melhor proposta, envia `ACCEPT`, aguarda o
 `STATUS/inform` de reserva e só então altera a missão para `RESERVED`.
 
 Os prazos em `CFP` são instantes absolutos em **segundos simulados**. O tempo
-de espera por mensagens XMPP é um timeout de parede independente.
+de espera por mensagens XMPP é um timeout de parede independente. O limite do
+CFP é inclusivo: `created_at == deadline` é válido; apenas propostas posteriores
+são tardias.
 
 As palavras-passe devem ser fornecidas apenas por variáveis de ambiente:
 

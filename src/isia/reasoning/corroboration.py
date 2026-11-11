@@ -276,7 +276,8 @@ def aggregate_verification_responses(
     _validate_limit(max_time_difference, "max_time_difference")
 
     seen_message_ids = set()
-    unique_observations = {}
+    observation_variants = {}
+    observation_interpretations = {}
     compatible_ids = set()
     contradictory_ids = set()
     informative_absence_source_ids = set()
@@ -319,10 +320,11 @@ def aggregate_verification_responses(
             if (
                 observation.event_id == initial_observation.event_id
                 or observation.source_id == initial_observation.source_id
-                or observation.event_id in unique_observations
             ):
                 continue
-            unique_observations[observation.event_id] = observation
+            variants = observation_variants.setdefault(observation.event_id, [])
+            if observation not in variants:
+                variants.append(observation)
 
         # Os IDs de evidência mista são preservados mesmo quando a
         # classificação individual é inconclusive.
@@ -333,15 +335,49 @@ def aggregate_verification_responses(
         elif result["classification"] == "contradictory":
             contradictory_ids.update(result["observation_ids"])
 
+        for observation_id in result.get("compatible_observation_ids", ()):
+            observation_interpretations.setdefault(observation_id, set()).add(
+                "compatible"
+            )
+        for observation_id in result.get("contradictory_observation_ids", ()):
+            observation_interpretations.setdefault(observation_id, set()).add(
+                "contradictory"
+            )
+        if result["classification"] == "compatible":
+            for observation_id in result["observation_ids"]:
+                observation_interpretations.setdefault(observation_id, set()).add(
+                    "compatible"
+                )
+        elif result["classification"] == "contradictory":
+            for observation_id in result["observation_ids"]:
+                observation_interpretations.setdefault(observation_id, set()).add(
+                    "contradictory"
+                )
+
+    unique_observations = {
+        event_id: min(variants, key=_observation_sort_key)
+        for event_id, variants in observation_variants.items()
+    }
+    conflicted_ids = {
+        event_id
+        for event_id, variants in observation_variants.items()
+        if len(variants) > 1
+        or len(observation_interpretations.get(event_id, set())) > 1
+    }
+    compatible_ids.difference_update(conflicted_ids)
+    contradictory_ids.difference_update(conflicted_ids)
     compatible_ids.intersection_update(unique_observations)
+    contradictory_ids.intersection_update(unique_observations)
     source_ids = {
-        observation.source_id for observation in unique_observations.values()
+        observation.source_id
+        for variants in observation_variants.values()
+        for observation in variants
     }
     compatible_source_ids = {
         unique_observations[event_id].source_id for event_id in compatible_ids
     }
 
-    if compatible_ids and contradictory_ids:
+    if conflicted_ids or (compatible_ids and contradictory_ids):
         classification = "inconclusive"
     elif compatible_ids:
         classification = "compatible"
@@ -361,6 +397,7 @@ def aggregate_verification_responses(
         "observation_ids": tuple(sorted(unique_observations)),
         "compatible_observation_ids": tuple(sorted(compatible_ids)),
         "contradictory_observation_ids": tuple(sorted(contradictory_ids)),
+        "conflicted_observation_ids": tuple(sorted(conflicted_ids)),
         "source_ids": tuple(sorted(source_ids)),
         "compatible_source_ids": tuple(sorted(compatible_source_ids)),
         "compatible_source_count": len(compatible_source_ids),
@@ -371,6 +408,20 @@ def aggregate_verification_responses(
             sorted(source_ids | informative_absence_source_ids)
         ),
     }
+
+
+def _observation_sort_key(observation: Observation) -> tuple:
+    """Return a deterministic key for equivalent-event audit retention."""
+    return (
+        observation.source_id,
+        observation.event_type,
+        observation.position.x,
+        observation.position.y,
+        observation.observed_at,
+        observation.confidence_score,
+        observation.intensity_score is not None,
+        observation.intensity_score or 0.0,
+    )
 
 
 def evaluate_preliminary_corroboration(
