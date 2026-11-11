@@ -3,7 +3,7 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado (11-11-2026):** Etapas 1–4 implementadas e validadas tecnicamente, incluindo a classificação de evidências. A Etapa 5 está implementada na branch `feature/etapa5-contract-net`, com 230 testes aprovados no Ubuntu e demonstração SPADE/XMPP real do fluxo normal CFP → PROPOSAL/REJECT → seleção → ACCEPT → confirmação → `RESERVED`. Os cenários de falha da Etapa 5 são cobertos por testes unitários/mocks; não se afirma que todos foram executados contra XMPP real. A execução/movimento de missões da Etapa 6 e as Etapas 7–10 permanecem pendentes.
+> **Estado (11-11-2026):** Etapas 1–5 integradas na `main` (PR #7, Contract Net; PR #8, classificação de evidências). Antes desta correção, foram comunicados 230 testes aprovados no Ubuntu e demonstrado por SPADE/XMPP o fluxo normal CFP → PROPOSAL/REJECT → seleção → ACCEPT → confirmação → `RESERVED`. Os cenários de falha da Etapa 5 são cobertos por testes unitários/mocks, não todos por XMPP real. As correções semânticas de ausência informativa e evidência mista exigem nova execução da suite antes de serem declaradas validadas. A execução de missões na Etapa 6 e as Etapas 7–10 permanecem pendentes; a revisão formal dos contratos pelo grupo não está comprovada.
 
 ## O projeto
 
@@ -90,11 +90,11 @@ no terminal em que foi iniciado.
 
 ### Mapa 2D e relógio da simulação
 
-**Estado atual:** as Etapas 1–4 estão integradas na `main`: modelos e contratos JSON, simulação 2D, troca real de mensagens SPADE/XMPP entre `SensorAgent` e `InformantAgent` e classificação de evidências. Na branch de correção da Etapa 4, o demonstrador `verification_demo.py` utiliza observações do simulador e mostra classificação, fontes distintas, pontuação descritiva, cobertura e decisão preliminar. A integração com missões/negociação ainda não faz parte desta etapa.
+**Estado atual:** as Etapas 1–5 estão integradas na `main`. O demonstrador `verification_demo.py` utiliza observações do simulador e mostra classificação, fontes distintas, pontuação descritiva, cobertura e decisão preliminar. A demonstração Contract Net funciona separadamente; a ligação automática entre decisão e negociação pertence à Etapa 6.
 
 ### Demonstração da Etapa 4 — observações reais e decisão preliminar
 
-Na branch `fix/etapa4-classificacao`, iniciar o servidor local XMPP num terminal (`spade run`). Noutro, ativar o ambiente Python com SPADE 4.1.4 e definir `SENSOR_JID`, `INFORMANT_JID`, `SENSOR_PASSWORD` e `INFORMANT_PASSWORD` para contas locais válidas; **não colocar credenciais em ficheiros versionados**.
+Na `main` ou numa branch atualizada a partir dela, iniciar o servidor local XMPP num terminal (`spade run`). Noutro, ativar o ambiente Python com SPADE 4.1.4 e definir `SENSOR_JID`, `INFORMANT_JID`, `SENSOR_PASSWORD` e `INFORMANT_PASSWORD` para contas locais válidas; **não colocar credenciais em ficheiros versionados**.
 
 ```bash
 PYTHONPATH=src python verification_demo.py

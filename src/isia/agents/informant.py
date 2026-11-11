@@ -19,6 +19,7 @@ from isia.communication.transport import (
     parse_spade_message,
 )
 from isia.domain.models import Position
+from isia.reasoning.corroboration import capability_supports_signal
 
 logger = logging.getLogger(__name__)
 
@@ -159,6 +160,9 @@ def _informative_absence_payload(agent, request: Message) -> dict[str, object] |
     ):
         return None
     if opportunity_confirmed is not True:
+        return None
+    # Um texto arbitrário não é demonstração de capacidade de deteção.
+    if not capability_supports_signal(coverage_capability, hypothesis.get("event_type")):
         return None
     try:
         hypothesis_position = model_from_dict(hypothesis["position"], Position)

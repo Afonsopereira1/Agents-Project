@@ -86,7 +86,7 @@ def make_informative_absence(initial, **overrides):
         "coverage": {
             "position": model_to_dict(initial.position),
             "radius": 2.0,
-            "capability": "visual",
+            "capability": "acoustic",
             "capability_validated": True,
             "opportunity_confirmed": True,
         },
@@ -195,6 +195,9 @@ class TestVerificationResponseClassification(unittest.TestCase):
 
     def setUp(self):
         self.initial = make_observation("obs-001", (5, 5), 10.0, "sensor-01")
+        self.absence_initial = Observation(
+            "obs-001", "sensor-01", "gunshot_like_sound", Position(5, 5), 10.0, 0.8
+        )
 
     def test_classifica_evidencia_compativel(self):
         response = make_verification_response(
@@ -310,9 +313,9 @@ class TestVerificationResponseClassification(unittest.TestCase):
         self.assertEqual(result["classification"], "inconclusive")
 
     def test_classifica_ausencia_informativa_com_cobertura_valida(self):
-        response = make_informative_absence(self.initial)
+        response = make_informative_absence(self.absence_initial)
 
-        result = classify_verification_response(self.initial, response, 1.0, 1.0)
+        result = classify_verification_response(self.absence_initial, response, 1.0, 1.0)
 
         self.assertEqual(result, {
             "classification": "informative_absence",
@@ -323,18 +326,18 @@ class TestVerificationResponseClassification(unittest.TestCase):
         cases = ("capability_validated", "opportunity_confirmed")
         for field in cases:
             with self.subTest(field=field):
-                response = make_informative_absence(self.initial)
+                response = make_informative_absence(self.absence_initial)
                 response.payload["absence"]["coverage"].pop(field)
                 result = classify_verification_response(
-                    self.initial, response, 1.0, 1.0
+                    self.absence_initial, response, 1.0, 1.0
                 )
                 self.assertEqual(result["classification"], "inconclusive")
 
     def test_ausencia_com_periodo_inadequado_nao_e_informativa(self):
-        response = make_informative_absence(self.initial)
+        response = make_informative_absence(self.absence_initial)
         response.payload["absence"]["observed_from"] = 11.0
 
-        result = classify_verification_response(self.initial, response, 1.0, 1.0)
+        result = classify_verification_response(self.absence_initial, response, 1.0, 1.0)
 
         self.assertEqual(result["classification"], "inconclusive")
 
@@ -364,10 +367,13 @@ class TestVerificationResponseAggregation(unittest.TestCase):
 
     def setUp(self):
         self.initial = make_observation("obs-001", (5, 5), 10.0, "sensor-01")
+        self.absence_initial = Observation(
+            "obs-001", "sensor-01", "gunshot_like_sound", Position(5, 5), 10.0, 0.8
+        )
 
-    def aggregate(self, responses):
+    def aggregate(self, responses, *, initial=None):
         return aggregate_verification_responses(
-            self.initial,
+            self.initial if initial is None else initial,
             responses,
             "conversation-001",
             "request-001",
@@ -454,7 +460,10 @@ class TestVerificationResponseAggregation(unittest.TestCase):
         self.assertEqual(result["compatible_source_count"], 0)
 
     def test_ausencia_informativa_contribui_para_cobertura_mas_nao_para_compatibilidade(self):
-        result = self.aggregate([make_informative_absence(self.initial)])
+        result = self.aggregate(
+            [make_informative_absence(self.absence_initial)],
+            initial=self.absence_initial,
+        )
 
         self.assertEqual(result["classification"], "informative_absence")
         self.assertEqual(result["informative_absence_source_ids"], ("sensor-02",))
