@@ -298,6 +298,152 @@ class TestContractNetInitiatorTimeout(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(agent.result.outcome, "confirmation_unknown")
         self.assertEqual(agent.mission.status.value, "proposed")
 
+    async def test_two_rounds_recover_from_explicit_reservation_rejection(self):
+        from isia.domain.models import Mission, ResourceStatus
+
+        agent = ContractNetInitiatorAgent(
+            "initiator@localhost",
+            "password",
+            Mission(
+                "mission-1",
+                "incident-1",
+                "verify_incident",
+                Position(6, 9),
+                "mobile_verification",
+                2,
+            ),
+            {
+                "drone@localhost": "drone-demo",
+                "vehicle@localhost": "vehicle-demo",
+            },
+            simulated_time=20.0,
+            deadline=35.0,
+            receive_timeout=1.0,
+            max_rounds=2,
+        )
+        behaviour = ContractNetInitiatorAgent.ContractNetBehaviour()
+        behaviour.set_agent(agent)
+        sent = []
+        receive_call = 0
+
+        def sent_body(message_type):
+            for outgoing in sent:
+                body = parse_spade_message(
+                    outgoing, expected_protocol=CONTRACT_NET_PROTOCOL
+                )
+                if body.message_type is message_type:
+                    yield outgoing, body
+
+        def incoming_for(body, sender, performative):
+            incoming = build_spade_message(
+                "initiator@localhost",
+                body,
+                performative=performative,
+                conversation_id=body.conversation_id,
+                in_reply_to=(
+                    body.payload.get("cfp_message_id")
+                    if body.message_type is MessageType.PROPOSAL
+                    else body.payload["accept_message_id"]
+                ),
+                protocol=CONTRACT_NET_PROTOCOL,
+            )
+            incoming.sender = sender
+            return incoming
+
+        def proposal(cfp, message_id, resource_id):
+            return Message(
+                message_id,
+                MessageType.PROPOSAL,
+                21.0,
+                {
+                    "cfp_message_id": cfp.message_id,
+                    "bid": {
+                        "mission_id": cfp.mission_id,
+                        "resource_id": resource_id,
+                        "eta": 4.0,
+                        "energy_cost": 10.0,
+                        "load": 0.25,
+                    },
+                },
+                incident_id=cfp.incident_id,
+                mission_id=cfp.mission_id,
+                source_id=resource_id,
+                conversation_id=cfp.conversation_id,
+            )
+
+        async def receive(timeout):
+            nonlocal receive_call
+            receive_call += 1
+            if receive_call == 1:
+                first_cfp = next(sent_body(MessageType.CFP))[1]
+                return incoming_for(
+                    proposal(first_cfp, "proposal-drone", "drone-demo"),
+                    "drone@localhost",
+                    PERFORMATIVE_PROPOSE,
+                )
+            if receive_call == 2:
+                return None
+            if receive_call == 3:
+                first_accept = list(sent_body(MessageType.ACCEPT))[0][1]
+                failed_result = LocalResourceReservation(
+                    ResourceState(
+                        "drone-demo",
+                        "drone",
+                        Position(1, 2),
+                        False,
+                        80.0,
+                        ResourceStatus.UNAVAILABLE,
+                    )
+                ).reserve("mission-1")
+                status = build_reservation_status_message(
+                    first_accept,
+                    failed_result,
+                    resource_id="drone-demo",
+                    created_at=22.0,
+                )
+                return incoming_for(status, "drone@localhost", PERFORMATIVE_INFORM)
+            if receive_call == 4:
+                cfps = list(sent_body(MessageType.CFP))
+                second_cfp = cfps[-1][1]
+                return incoming_for(
+                    proposal(second_cfp, "proposal-vehicle", "vehicle-demo"),
+                    "vehicle@localhost",
+                    PERFORMATIVE_PROPOSE,
+                )
+            if receive_call == 5:
+                return None
+            second_accept = list(sent_body(MessageType.ACCEPT))[-1][1]
+            confirmed_result = LocalResourceReservation(
+                ResourceState(
+                    "vehicle-demo", "vehicle", Position(1, 2), True, 80.0
+                )
+            ).reserve("mission-1")
+            status = build_reservation_status_message(
+                second_accept,
+                confirmed_result,
+                resource_id="vehicle-demo",
+                created_at=24.0,
+            )
+            return incoming_for(status, "vehicle@localhost", PERFORMATIVE_INFORM)
+
+        async def send(message):
+            sent.append(message)
+
+        behaviour.receive = receive
+        behaviour.send = send
+        await behaviour.run()
+
+        cfps = [body for _, body in sent_body(MessageType.CFP)]
+        accepts = [body for _, body in sent_body(MessageType.ACCEPT)]
+        self.assertEqual(len(cfps), 4)  # dois recursos, duas rondas
+        self.assertEqual(len(accepts), 2)
+        self.assertEqual(len(agent.round_history), 2)
+        self.assertNotEqual(cfps[0].message_id, cfps[2].message_id)
+        self.assertNotEqual(cfps[0].conversation_id, cfps[2].conversation_id)
+        self.assertEqual(agent.mission.status.value, "reserved")
+        self.assertEqual(agent.result.outcome, "reservation_confirmed")
+        self.assertEqual(agent.result.rounds, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

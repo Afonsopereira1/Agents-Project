@@ -453,6 +453,48 @@ class TestMissionRegistry(unittest.TestCase):
         self.assertTrue(reservation_status_matches_accept(restored, accept, "drone-1"))
         self.assertEqual(restored.payload["status"], "reserved")
 
+    def test_reservation_status_rejects_contradictory_confirmation(self):
+        cfp = self._cfp()
+        proposal = self._proposal(cfp, "drone-1")
+        accept = build_accept_message(cfp, proposal, 22.0)
+        reservation = LocalResourceReservation(self._resource())
+        result = reservation.reserve(cfp.mission_id, resource_id="drone-1")
+        status = build_reservation_status_message(
+            accept, result, resource_id="drone-1", created_at=22.0
+        )
+
+        status.payload["reservation_status"] = ReservationStatus.RESOURCE_OCCUPIED
+        self.assertFalse(
+            reservation_status_matches_accept(status, accept, "drone-1")
+        )
+
+        status.payload.pop("reservation_status")
+        self.assertFalse(
+            reservation_status_matches_accept(status, accept, "drone-1")
+        )
+
+    def test_reservation_status_accepts_already_reserved_and_valid_failure(self):
+        cfp = self._cfp()
+        proposal = self._proposal(cfp, "drone-1")
+        accept = build_accept_message(cfp, proposal, 22.0)
+        reservation = LocalResourceReservation(self._resource())
+        reservation.reserve(cfp.mission_id, resource_id="drone-1")
+        already_reserved = reservation.reserve(cfp.mission_id, resource_id="drone-1")
+        confirmed = build_reservation_status_message(
+            accept, already_reserved, resource_id="drone-1", created_at=22.0
+        )
+        self.assertTrue(
+            reservation_status_matches_accept(confirmed, accept, "drone-1")
+        )
+
+        occupied = LocalResourceReservation(
+            self._resource(available=False, status=ResourceStatus.UNAVAILABLE)
+        ).reserve(cfp.mission_id, resource_id="drone-1")
+        failed = build_reservation_status_message(
+            accept, occupied, resource_id="drone-1", created_at=22.0
+        )
+        self.assertTrue(reservation_status_matches_accept(failed, accept, "drone-1"))
+
     def test_accept_rejects_proposal_from_another_conversation(self):
         cfp = self._cfp()
         proposal = self._proposal(cfp, "drone-1", conversation_id="other")

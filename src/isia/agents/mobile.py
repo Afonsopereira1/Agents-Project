@@ -107,13 +107,22 @@ class MobileResourceAgent(Agent):
                     in_reply_to=cfp.message_id,
                     protocol=CONTRACT_NET_PROTOCOL,
                 )
-                await self.send(reply)
                 if response.message_type is MessageType.PROPOSAL:
-                    agent._proposal_context[response.message_id] = (
+                    proposal_context = (
                         cfp,
                         response,
                         str(incoming.sender),
                     )
+                    agent._proposal_context[response.message_id] = proposal_context
+                else:
+                    proposal_context = None
+                try:
+                    await self.send(reply)
+                except Exception as error:
+                    if response.message_type is MessageType.PROPOSAL:
+                        if agent._proposal_context.get(response.message_id) == proposal_context:
+                            agent._proposal_context.pop(response.message_id, None)
+                    logger.warning("Resposta Contract Net não enviada: %s", error)
             except (TypeError, ValueError) as error:
                 logger.warning("CFP rejeitado: %s", error)
 

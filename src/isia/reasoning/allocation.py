@@ -144,6 +144,14 @@ def build_reservation_status_message(
         raise TypeError("result deve ser ReservationResult.")
     if not isinstance(resource_id, str) or not resource_id.strip():
         raise ValueError("resource_id inválido.")
+    valid_statuses = {
+        ReservationStatus.RESERVED,
+        ReservationStatus.ALREADY_RESERVED,
+        ReservationStatus.RESOURCE_OCCUPIED,
+        ReservationStatus.INVALID_REQUEST,
+    }
+    if result.status not in valid_statuses:
+        raise ValueError("reservation_status inválido.")
     status = "reserved" if result.confirmed else "reservation_failed"
     payload = {
         "accept_message_id": accept.message_id,
@@ -177,6 +185,20 @@ def reservation_status_matches_accept(
         _validate_contract_net_message(accept, MessageType.ACCEPT)
     except (TypeError, ValueError):
         return False
+    reservation_status = status.payload.get("reservation_status")
+    state = status.payload.get("status")
+    if state == "reserved":
+        semantically_valid = reservation_status in (
+            ReservationStatus.RESERVED,
+            ReservationStatus.ALREADY_RESERVED,
+        )
+    elif state == "reservation_failed":
+        semantically_valid = reservation_status in (
+            ReservationStatus.RESOURCE_OCCUPIED,
+            ReservationStatus.INVALID_REQUEST,
+        )
+    else:
+        semantically_valid = False
     return (
         status.mission_id == accept.mission_id
         and status.incident_id == accept.incident_id
@@ -184,7 +206,7 @@ def reservation_status_matches_accept(
         and status.source_id == resource_id
         and status.payload.get("accept_message_id") == accept.message_id
         and status.payload.get("resource_id") == resource_id
-        and status.payload.get("status") in ("reserved", "reservation_failed")
+        and semantically_valid
     )
 
 

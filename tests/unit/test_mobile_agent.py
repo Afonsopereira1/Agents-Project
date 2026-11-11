@@ -91,6 +91,39 @@ class TestMobileResourceBehaviour(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.conversation_id, "conversation-1")
         self.assertEqual(sent[0].get_metadata("in-reply-to"), "cfp-1")
 
+    async def test_proposal_context_is_available_during_send(self):
+        agent = self._agent()
+        cfp = self._cfp()
+        behaviour = MobileResourceAgent.ContractNetBehaviour()
+        behaviour.set_agent(agent)
+        incoming = build_spade_message(
+            "drone@localhost",
+            cfp,
+            performative=PERFORMATIVE_CFP,
+            conversation_id=cfp.conversation_id,
+            protocol=CONTRACT_NET_PROTOCOL,
+        )
+        incoming.sender = "initiator@localhost"
+        observed = {}
+
+        async def receive(timeout):
+            return incoming
+
+        async def send(message):
+            response = parse_spade_message(
+                message, expected_protocol=CONTRACT_NET_PROTOCOL
+            )
+            observed["context"] = agent._proposal_context.get(response.message_id)
+
+        behaviour.receive = receive
+        behaviour.send = send
+        await behaviour.run()
+
+        self.assertIsNotNone(observed["context"])
+        self.assertEqual(observed["context"][0].message_id, cfp.message_id)
+        self.assertEqual(observed["context"][1].message_type, MessageType.PROPOSAL)
+        self.assertEqual(observed["context"][2], "initiator@localhost")
+
     async def test_behaviour_sends_reject_for_expired_cfp(self):
         sent = await self._run(self._agent(), self._cfp(deadline=20.0))
 
