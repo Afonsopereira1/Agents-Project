@@ -1,6 +1,6 @@
 # Arquitetura do sistema multiagente — proposta
 
-> **Estado revisto (11-11-2026):** arquitetura ainda sujeita a revisão formal pelos três elementos. Os modelos de domínio, simulador 2D e comunicação entre `SensorAgent`/`InformantAgent` já estão implementados na `main`; a corroboração, a classificação de evidências e a decisão preliminar estão implementadas e testadas na branch `fix/etapa4-classificacao`. Agentes móveis, negociação, missões e políticas avançadas permanecem como arquitetura proposta ou trabalho futuro. As secções com exemplos completos descrevem o desenho-alvo, não uma implementação já demonstrada.
+> **Estado revisto (11-11-2026):** arquitetura ainda sujeita a revisão formal pelos três elementos. As Etapas 1–5 estão integradas na `main`, incluindo a corroboração (PR #8) e o Contract Net simplificado com reserva confirmada (PR #7). Os dois fluxos foram demonstrados separadamente por SPADE/XMPP; a integração automática deteção → missão → negociação e a execução/movimento pertencem à Etapa 6. Reputação, robustez avançada e avaliação final permanecem trabalho posterior. As correções semânticas de ausência informativa e evidência mista exigem nova validação local.
 
 [README](../README.md) · [Plano](development-plan.md) · [Protocolos](protocols.md) · [Decisões pendentes](#decisões-pendentes)
 

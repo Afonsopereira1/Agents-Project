@@ -10,7 +10,21 @@ from math import hypot, isfinite
 from isia.communication.messages import Message, MessageType, model_from_dict
 from isia.domain.models import Observation
 from isia.domain.models import Position
-from isia.simulation.scenario import Source
+from isia.simulation.scenario import SIGNALS, Source
+
+
+def capability_supports_signal(capability: object, event_type: object) -> bool:
+    """Reconhecer apenas correspondências modalidade-sinal definidas no simulador.
+
+    Esta regra verifica a adequação *do tipo* de fonte, não prova que cada
+    deteção individual tenha sensibilidade perfeita nem consulta ground_truth.
+    Sinais desconhecidos não justificam ausência informativa por omissão.
+    """
+    return (
+        isinstance(capability, str)
+        and isinstance(event_type, str)
+        and SIGNALS.get(capability) == event_type
+    )
 
 
 def are_observations_compatible(
@@ -161,31 +175,33 @@ def classify_verification_response(
             initial_observation.event_type, compatibility_rules
         )
     )
-    explicit_contradiction = (
+    # A declaração de contradição refere-se à resposta; cada observação
+    # continua a ser classificada pelo seu próprio tipo e pelas regras locais.
+    contradictory_declaration = (
         response.payload.get("evidence_relation") == "contradictory"
     )
-    compatible = [
+    explicit_contradiction = contradictory_declaration and _hypothesis_is_correlated(
+        initial_observation, response
+    )
+    contradictory = [
         observation
         for observation in unique_observations
-        if not explicit_contradiction
-        and observation.event_type in compatible_types
-    ]
-    compatible = [
-        observation
-        for observation in compatible
-        if are_observations_compatible(
+        if explicit_contradiction
+        and observation.event_type in incompatible_types
+        and are_observations_compatible(
             initial_observation,
             observation,
             max_distance,
             max_time_difference,
         )
     ]
-    contradictory = [
+    contradictory_ids = {observation.event_id for observation in contradictory}
+    compatible = [
         observation
         for observation in unique_observations
-        if explicit_contradiction
-        and observation.event_type in incompatible_types
-        and _hypothesis_is_correlated(initial_observation, response)
+        if observation.event_id not in contradictory_ids
+        and (not contradictory_declaration or explicit_contradiction)
+        and observation.event_type in compatible_types
         and are_observations_compatible(
             initial_observation,
             observation,
@@ -236,6 +252,7 @@ def aggregate_verification_responses(
     *,
     incompatibility_rules: Mapping[str, object] | None = None,
     compatibility_rules: Mapping[str, object] | None = None,
+    expected_incident_id: str | None = None,
 ) -> dict[str, object]:
     """Aggregate several responses for one verification request.
 
@@ -253,6 +270,8 @@ def aggregate_verification_responses(
     _validate_observation(initial_observation, "initial_observation")
     _validate_reference(conversation_id, "conversation_id")
     _validate_reference(request_message_id, "request_message_id")
+    if expected_incident_id is not None:
+        _validate_reference(expected_incident_id, "expected_incident_id")
     _validate_limit(max_distance, "max_distance")
     _validate_limit(max_time_difference, "max_time_difference")
 
@@ -272,6 +291,8 @@ def aggregate_verification_responses(
             raise ValueError("VERIFY_RESPONSE belongs to another conversation.")
         if response.payload["request_message_id"] != request_message_id:
             raise ValueError("VERIFY_RESPONSE refers to another request.")
+        if expected_incident_id is not None and response.incident_id != expected_incident_id:
+            raise ValueError("VERIFY_RESPONSE belongs to another incident.")
         if response.message_id in seen_message_ids:
             continue
         seen_message_ids.add(response.message_id)
@@ -303,6 +324,10 @@ def aggregate_verification_responses(
                 continue
             unique_observations[observation.event_id] = observation
 
+        # Os IDs de evidência mista são preservados mesmo quando a
+        # classificação individual é inconclusive.
+        compatible_ids.update(result.get("compatible_observation_ids", ()))
+        contradictory_ids.update(result.get("contradictory_observation_ids", ()))
         if result["classification"] == "compatible":
             compatible_ids.update(result["observation_ids"])
         elif result["classification"] == "contradictory":
@@ -633,8 +658,7 @@ def _informative_absence_is_valid(
         or declared_non_detection is not True
         or capability_validated is not True
         or opportunity_confirmed is not True
-        or not isinstance(capability, str)
-        or not capability.strip()
+        or not capability_supports_signal(capability, hypothesis.get("event_type"))
         or type(radius) not in (int, float)
         or not isfinite(radius)
         or radius < 0

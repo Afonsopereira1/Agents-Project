@@ -43,6 +43,7 @@ def response_matches_request(
     return (
         response.message_type is MessageType.VERIFY_RESPONSE
         and response.conversation_id == request.conversation_id
+        and response.incident_id == request.incident_id
         and incoming.get_metadata("conversation-id") == request.conversation_id
         and incoming.get_metadata("in-reply-to") == request.message_id
         and response.payload.get("request_message_id") == request.message_id
@@ -187,6 +188,7 @@ class SensorAgent(Agent):
                             agent.max_time_difference,
                             incompatibility_rules=agent.incompatibility_rules,
                             compatibility_rules=agent.compatibility_rules,
+                            expected_incident_id=request.incident_id,
                         )
                         evaluation = evaluate_preliminary_corroboration(
                             aggregate, agent.eligible_source_ids

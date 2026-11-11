@@ -1,6 +1,6 @@
 # Comunicação, mensagens e protocolos — proposta
 
-> **Estado revisto (11-11-2026):** modelos e contratos das Etapas 1–4 implementados e testados; comunicação de verificação real por SPADE/XMPP integrada na `main`; Contract Net e reserva local implementados na branch `feature/etapa5-contract-net`. O fluxo normal CFP → PROPOSAL/REJECT → ACCEPT → confirmação → `RESERVED` foi validado por XMPP no Ubuntu. Falhas, timeouts, mensagens tardias e rondas limitadas são cobertos por testes unitários/mocks; não se afirma validação XMPP real de todos esses cenários. A execução das missões e a recuperação após falha do iniciador continuam posteriores.
+> **Estado revisto (11-11-2026):** as Etapas 1–5 estão integradas na `main` (PRs #7 e #8). A verificação e o Contract Net foram demonstrados separadamente por SPADE/XMPP, incluindo a reserva confirmada no fluxo normal. Falhas, timeouts, mensagens tardias e rondas limitadas têm testes unitários/mocks, não validação XMPP real em todos os cenários. As novas correções semânticas de ausência informativa e evidência mista carecem de reteste. A integração de missões, a execução e a recuperação avançada continuam posteriores.
 
 [README](../README.md) · [Arquitetura](architecture.md) · [Plano](development-plan.md) · [Decisões](architecture.md#decisões-pendentes)
 
@@ -212,8 +212,24 @@ comunicação nunca são ausência informativa. A ausência pode contar para a
 cobertura de informação, mas não é evidência compatível nem prova de
 inexistência do evento; falsos negativos continuam a ser uma limitação.
 
-Quando a mesma avaliação contém evidência compatível e contraditória, o
-resultado é `inconclusive`, preservando os identificadores de ambas. As regras
+Na versão atual do simulador, a capacidade é a modalidade `Source.kind`:
+`acoustic` → `gunshot_like_sound`, `visual` → `suspicious_movement`,
+`human` → `suspicious_activity_report` (constante `SIGNALS`). Para ausência
+informativa, a modalidade declarada deve corresponder ao tipo de sinal
+na hipótese. Tipos desconhecidos ou metadados antigos sem hipótese/capacidade
+resultam conservadoramente em `no_data` no informador. Esta verificação
+estabelece compatibilidade semântica, não sensibilidade perfeita ou uma
+probabilidade calibrada; não utiliza `ground_truth`.
+
+Quando a mesma avaliação contém evidência compatível e contraditória,
+mesmo na mesma resposta, o resultado é `inconclusive`, preservando os
+identificadores de ambas. A classificação é feita por observação: uma
+`evidence_relation: "contradictory"` só habilita a categoria contraditória
+para tipos cobertos por uma regra de incompatibilidade e hipótese correlacionada;
+não elimina observações compatíveis presentes na resposta. A decisão
+`request_mobile_verification` é uma ação para obter mais evidência, não uma
+confirmação do incidente: também pode ser adequada perante conflito,
+sem antecipar a reputação da Etapa 7. As regras
 concretas de incompatibilidade, os limiares de cobertura e a interpretação das
 taxas de falsos negativos continuam dependentes de aprovação do grupo.
 
