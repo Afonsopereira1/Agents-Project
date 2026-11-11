@@ -138,6 +138,12 @@ class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(agent.decision["decision"], "request_mobile_verification")
         self.assertEqual(agent.decision["compatible_observation_ids"], ("obs-002",))
         self.assertEqual(agent.evaluation_summary["information_coverage"], 1.0)
+        history = agent.verification_history
+        record = history[agent.conversation_id][agent.response.payload["request_message_id"]]
+        self.assertEqual(record["initial_observation"]["event_id"], "obs-001")
+        self.assertEqual(record["evidence_observation_ids"], ("obs-002",))
+        self.assertEqual(record["compatible_source_ids"], ("sensor_02",))
+        self.assertEqual(record["decision"], "request_mobile_verification")
 
     async def test_sensor_mantem_observe_quando_informante_nao_tem_dados(self):
         local = observation("obs-001", "sensor_01")
@@ -168,6 +174,14 @@ class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(agent.decision["decision"], "observe")
         self.assertEqual(agent.decision["reason"], "no_information")
+        records = [
+            record
+            for requests in agent.verification_history.values()
+            for record in requests.values()
+        ]
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["classification"], "no_data")
+        self.assertEqual(records[0]["evidence_observation_ids"], ())
 
     async def test_sensor_regista_observe_em_timeout(self):
         from unittest.mock import AsyncMock

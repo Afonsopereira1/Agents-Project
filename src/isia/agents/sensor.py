@@ -24,6 +24,7 @@ from isia.reasoning.corroboration import (
     decide_preliminary_verification,
     evaluate_preliminary_corroboration,
 )
+from isia.domain.models import Observation
 
 logger = logging.getLogger(__name__)
 RESPONSE_TIMEOUT_SECONDS = 10.0
@@ -66,6 +67,9 @@ class SensorAgent(Agent):
         self.max_distance: float | None = None
         self.max_time_difference: float | None = None
         self.minimum_compatible_sources: int | None = None
+        # Histórico local, indexado pela conversa e pelo pedido. Não contém
+        # credenciais, estado do simulador ou ground truth.
+        self.verification_history: dict[str, dict[str, dict[str, object]]] = {}
 
     def set_local_observation_feed(self, observation_feed, created_at: float) -> None:
         """Give the agent only its local feed and simulation emission time."""
@@ -144,7 +148,9 @@ class SensorAgent(Agent):
             incoming = await self.receive(timeout=RESPONSE_TIMEOUT_SECONDS)
             if incoming is None:
                 logger.warning("Timeout à espera de VERIFY_RESPONSE")
-                _record_safe_observe(agent, observation if observations else None, "timeout")
+                _record_safe_observe(
+                    agent, observation if observations else None, "timeout", request
+                )
                 return
             try:
                 response = parse_spade_message(incoming)
@@ -154,6 +160,7 @@ class SensorAgent(Agent):
                     agent,
                     observation if observations else None,
                     _rejected_response_reason(incoming, request),
+                    request,
                 )
                 return
             if response_matches_request(
@@ -180,16 +187,22 @@ class SensorAgent(Agent):
                         agent.aggregate_summary = aggregate
                         agent.evaluation_summary = evaluation
                         agent.decision = decision
+                        _record_verification_history(
+                            agent, request, observation, aggregate, evaluation, decision
+                        )
                         _log_corroboration_result(observation, aggregate, evaluation, decision)
                     except (TypeError, ValueError) as error:
                         logger.warning("Corroboração não avaliada: %s", error)
-                        _record_safe_observe(agent, observation, "invalid_response")
+                        _record_safe_observe(agent, observation, "invalid_response", request)
                 else:
-                    _record_safe_observe(agent, None, "no_initial_observation")
+                    _record_safe_observe(agent, None, "no_initial_observation", request)
             else:
                 logger.warning("VERIFY_RESPONSE rejeitada: correlação ou remetente inválido")
                 _record_safe_observe(
-                    agent, observation if observations else None, "invalid_correlation"
+                    agent,
+                    observation if observations else None,
+                    "invalid_correlation",
+                    request,
                 )
 
     async def setup(self):
@@ -231,7 +244,7 @@ def _rejected_response_reason(incoming: Any, request: Message) -> str:
     return "invalid_response"
 
 
-def _record_safe_observe(agent, observation, reason: str) -> None:
+def _record_safe_observe(agent, observation, reason: str, request: Message) -> None:
     """Record a conservative local result for missing or invalid responses."""
     eligible = getattr(agent, "eligible_source_ids", ())
     if not isinstance(eligible, (tuple, list, set)):
@@ -255,6 +268,15 @@ def _record_safe_observe(agent, observation, reason: str) -> None:
         agent.aggregate_summary = None
         agent.evaluation_summary = evaluation
         agent.decision = decision
+        _record_verification_history(
+            agent,
+            request,
+            observation,
+            {},
+            evaluation,
+            decision,
+            classification=reason,
+        )
         _log_corroboration_result(observation, {}, evaluation, decision)
     except (TypeError, ValueError):
         agent.decision = {
@@ -265,6 +287,58 @@ def _record_safe_observe(agent, observation, reason: str) -> None:
             "preliminary_score": None,
             "information_coverage": None,
         }
+        _record_verification_history(
+            agent,
+            request,
+            observation,
+            {},
+            {},
+            agent.decision,
+            classification=reason,
+        )
+
+
+def _record_verification_history(
+    agent,
+    request: Message,
+    observation,
+    aggregate,
+    evaluation,
+    decision,
+    *,
+    classification: str | None = None,
+) -> None:
+    """Store the minimal explainability record for one completed request."""
+    history = getattr(agent, "verification_history", None)
+    if not isinstance(history, dict):
+        history = {}
+        agent.verification_history = history
+
+    conversation_history = history.setdefault(request.conversation_id, {})
+    if request.message_id in conversation_history:
+        return
+
+    initial_observation = None
+    if isinstance(observation, Observation):
+        initial_observation = model_to_dict(observation)
+
+    conversation_history[request.message_id] = {
+        "conversation_id": request.conversation_id,
+        "request_message_id": request.message_id,
+        "initial_observation": initial_observation,
+        "evidence_observation_ids": tuple(
+            aggregate.get("compatible_observation_ids", ())
+        ),
+        "source_ids": tuple(evaluation.get("observed_source_ids", ())),
+        "compatible_source_ids": tuple(
+            decision.get("compatible_source_ids", ())
+        ),
+        "classification": classification or evaluation.get("classification"),
+        "preliminary_score": decision.get("preliminary_score"),
+        "information_coverage": decision.get("information_coverage"),
+        "decision": decision.get("decision", "observe"),
+        "reason": decision.get("reason"),
+    }
 
 
 def _log_corroboration_result(observation, aggregate, evaluation, decision) -> None:

@@ -53,6 +53,35 @@ class TestSensorTimeout(unittest.IsolatedAsyncioTestCase):
             any("Timeout à espera de VERIFY_RESPONSE" in line for line in captured.output)
         )
 
+    async def test_nova_verificacao_preserva_historico_anterior(self):
+        agent_mock = Mock(
+            conversation_id=None,
+            response=None,
+            informant_jid="informant@localhost",
+        )
+        agent_mock.loop = asyncio.get_running_loop()
+        behaviour = SensorAgent.VerificationBehaviour()
+        behaviour.set_agent(agent_mock)
+        behaviour.send = AsyncMock()
+        behaviour.receive = AsyncMock(return_value=None)
+
+        with patch("isia.agents.sensor.RESPONSE_TIMEOUT_SECONDS", 0.01):
+            await behaviour.run()
+            first_history = {
+                conversation_id: dict(requests)
+                for conversation_id, requests in agent_mock.verification_history.items()
+            }
+            await behaviour.run()
+
+        self.assertEqual(len(first_history), 1)
+        self.assertEqual(len(agent_mock.verification_history), 2)
+        for requests in agent_mock.verification_history.values():
+            self.assertEqual(len(requests), 1)
+            record = next(iter(requests.values()))
+            self.assertEqual(record["classification"], "timeout")
+            self.assertEqual(record["decision"], "observe")
+            self.assertEqual(record["evidence_observation_ids"], ())
+
     async def test_resposta_compativel_que_chega_depois_do_timeout_nao_confirma(self):
         initial = Observation(
             "obs-timeout-initial", "sensor_01", "gunshot_like_sound", Position(5, 6), 1.0, 0.8
@@ -156,3 +185,11 @@ class TestSensorTimeout(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(decision_after_timeout["compatible_observation_ids"], ())
         self.assertEqual(len(late_messages), 1)
         self.assertEqual(agent_mock.decision, decision_after_timeout)
+        records = [
+            record
+            for requests in agent_mock.verification_history.values()
+            for record in requests.values()
+        ]
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["classification"], "timeout")
+        self.assertEqual(records[0]["evidence_observation_ids"], ())
