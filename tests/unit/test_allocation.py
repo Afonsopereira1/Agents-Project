@@ -1,8 +1,15 @@
 import unittest
 
 from isia.communication.messages import Message, MessageType
-from isia.domain.models import Incident, MissionStatus, Observation, Position
-from isia.reasoning.allocation import MissionRegistry, build_cfp_message
+from isia.domain.models import (
+    Incident,
+    MissionStatus,
+    Observation,
+    Position,
+    ResourceState,
+    ResourceStatus,
+)
+from isia.reasoning.allocation import MissionRegistry, build_cfp_message, evaluate_cfp
 
 
 def observation(event_id="event-1", position=(4, 7)):
@@ -147,6 +154,106 @@ class TestMissionRegistry(unittest.TestCase):
             build_cfp_message(mission, 20.0, 35.0, message_id="")
         with self.assertRaises(ValueError):
             build_cfp_message(mission, 20.0, 35.0, conversation_id="")
+
+    def _cfp(self, deadline=35.0):
+        mission = self.registry.create_from_decision(
+            self.incident,
+            {"decision": "request_mobile_verification"},
+        )
+        return build_cfp_message(
+            mission,
+            created_at=20.0,
+            deadline=deadline,
+            message_id="cfp-1",
+            conversation_id="conversation-1",
+        )
+
+    def _resource(self, *, available=True, autonomy=80.0, status=None):
+        return ResourceState(
+            "drone-1",
+            "drone",
+            Position(1, 2),
+            available,
+            autonomy,
+            status,
+        )
+
+    def test_evaluate_cfp_builds_bid_without_reserving_resource(self):
+        resource = self._resource()
+        response = evaluate_cfp(
+            self._cfp(),
+            resource,
+            ("mobile_verification",),
+            current_time=21.0,
+            minimum_autonomy_percent=20.0,
+            eta_seconds=4.0,
+            energy_cost_percent=10.0,
+            load=0.25,
+        )
+
+        self.assertIs(response.message_type, MessageType.PROPOSAL)
+        self.assertEqual(response.mission_id, "mission-incident-7-mobile-verification")
+        self.assertEqual(response.incident_id, "incident-7")
+        self.assertEqual(response.conversation_id, "conversation-1")
+        self.assertEqual(response.source_id, "drone-1")
+        self.assertEqual(response.payload["cfp_message_id"], "cfp-1")
+        self.assertEqual(response.payload["bid"]["resource_id"], "drone-1")
+        self.assertEqual(resource.status, ResourceStatus.AVAILABLE)
+
+    def test_evaluate_cfp_rejects_ineligible_resources(self):
+        cases = (
+            (self._resource(available=False, status=ResourceStatus.UNAVAILABLE), ("mobile_verification",), 20.0, "resource_unavailable"),
+            (self._resource(), ("thermal_scan",), 20.0, "capability_mismatch"),
+            (self._resource(autonomy=25.0), ("mobile_verification",), 20.0, "autonomy_insufficient"),
+        )
+        for resource, capabilities, minimum, reason in cases:
+            with self.subTest(reason=reason):
+                response = evaluate_cfp(
+                    self._cfp(),
+                    resource,
+                    capabilities,
+                    current_time=21.0,
+                    minimum_autonomy_percent=minimum,
+                    eta_seconds=4.0,
+                    energy_cost_percent=10.0,
+                    load=0.25,
+                )
+                self.assertIs(response.message_type, MessageType.REJECT)
+                self.assertEqual(response.payload["reason"], reason)
+                self.assertEqual(response.payload["cfp_message_id"], "cfp-1")
+
+    def test_evaluate_cfp_rejects_expired_and_invalid_messages(self):
+        expired = evaluate_cfp(
+            self._cfp(deadline=25.0),
+            self._resource(),
+            ("mobile_verification",),
+            current_time=26.0,
+            minimum_autonomy_percent=20.0,
+            eta_seconds=4.0,
+            energy_cost_percent=10.0,
+            load=0.25,
+        )
+        self.assertIs(expired.message_type, MessageType.REJECT)
+        self.assertEqual(expired.payload["reason"], "cfp_expired")
+
+        invalid = Message(
+            "alert-1",
+            MessageType.ALERT,
+            20.0,
+            {},
+            conversation_id="conversation-1",
+        )
+        with self.assertRaises(ValueError):
+            evaluate_cfp(
+                invalid,
+                self._resource(),
+                ("mobile_verification",),
+                current_time=21.0,
+                minimum_autonomy_percent=20.0,
+                eta_seconds=4.0,
+                energy_cost_percent=10.0,
+                load=0.25,
+            )
 
 
 if __name__ == "__main__":

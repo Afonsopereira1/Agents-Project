@@ -5,17 +5,18 @@ forma idempotente, a missão que poderá ser usada por uma futura ronda de
 Contract Net.
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from math import isfinite
 from uuid import uuid4
 
 from isia.communication.messages import Message, MessageType, model_to_dict
-from isia.domain.models import Incident, Mission, Position
+from isia.domain.models import Bid, Incident, Mission, Position, ResourceState, ResourceStatus
 
 
 MOBILE_VERIFICATION_DECISION = "request_mobile_verification"
 MOBILE_VERIFICATION_TASK = "verify_incident"
 MOBILE_VERIFICATION_CAPABILITY = "mobile_verification"
+CONTRACT_NET_REJECT_REASON = "cfp_rejected"
 
 
 def _validate_simulated_time(value: object, name: str) -> float:
@@ -74,6 +75,117 @@ def build_cfp_message(
             if conversation_id is not None
             else f"conversation-{uuid4()}"
         ),
+    )
+
+
+def _build_contract_net_response(
+    cfp: Message,
+    message_type: MessageType,
+    created_at: float,
+    resource_id: str,
+    payload: dict[str, object],
+) -> Message:
+    return Message(
+        f"{message_type.value.lower()}-{resource_id}-{cfp.message_id}",
+        message_type,
+        created_at,
+        payload,
+        incident_id=cfp.incident_id,
+        mission_id=cfp.mission_id,
+        source_id=resource_id,
+        conversation_id=cfp.conversation_id,
+    )
+
+
+def evaluate_cfp(
+    cfp: Message,
+    resource: ResourceState,
+    capabilities: Iterable[str],
+    *,
+    current_time: float,
+    minimum_autonomy_percent: float,
+    eta_seconds: float,
+    energy_cost_percent: float,
+    load: float,
+) -> Message:
+    """Avaliar localmente um CFP e devolver ``PROPOSAL`` ou ``REJECT``.
+
+    ``current_time`` e ``eta_seconds`` usam segundos simulados. ``energy_cost``
+    usa pontos percentuais de autonomia e ``load`` é uma fração entre 0 e 1.
+    Estes três valores são parâmetros/configuração do cenário, não uma
+    simulação física inventada por este módulo.
+
+    A avaliação só usa o CFP, o estado local e as capacidades configuradas do
+    recurso. Uma proposta não reserva o recurso nem altera qualquer estado.
+    """
+    if not isinstance(cfp, Message):
+        raise TypeError("cfp deve ser Message.")
+    if cfp.message_type is not MessageType.CFP:
+        raise ValueError("A mensagem deve ser um CFP.")
+    if not isinstance(resource, ResourceState):
+        raise TypeError("resource deve ser ResourceState.")
+
+    now = _validate_simulated_time(current_time, "current_time")
+    minimum = _validate_simulated_time(
+        minimum_autonomy_percent, "minimum_autonomy_percent"
+    )
+    if minimum > 100:
+        raise ValueError("minimum_autonomy_percent não pode exceder 100.")
+
+    try:
+        configured_capabilities = frozenset(capabilities)
+    except TypeError as error:
+        raise TypeError("capabilities deve ser iterável.") from error
+    if any(
+        not isinstance(capability, str) or not capability.strip()
+        for capability in configured_capabilities
+    ):
+        raise ValueError("As capacidades devem ser strings não vazias.")
+
+    deadline = cfp.payload["deadline"]
+    if now > deadline:
+        return _build_contract_net_response(
+            cfp,
+            MessageType.REJECT,
+            now,
+            resource.resource_id,
+            {"cfp_message_id": cfp.message_id, "reason": "cfp_expired"},
+        )
+
+    reason = None
+    if resource.status is not ResourceStatus.AVAILABLE or not resource.available:
+        reason = "resource_unavailable"
+    elif cfp.payload["required_capability"] not in configured_capabilities:
+        reason = "capability_mismatch"
+    elif resource.autonomy_percent is None:
+        reason = "autonomy_unknown"
+    else:
+        energy = _validate_simulated_time(energy_cost_percent, "energy_cost_percent")
+        if resource.autonomy_percent - energy < minimum:
+            reason = "autonomy_insufficient"
+
+    if reason is not None:
+        return _build_contract_net_response(
+            cfp,
+            MessageType.REJECT,
+            now,
+            resource.resource_id,
+            {"cfp_message_id": cfp.message_id, "reason": reason},
+        )
+
+    bid = Bid(
+        mission_id=cfp.mission_id,
+        resource_id=resource.resource_id,
+        eta=eta_seconds,
+        energy_cost=energy,
+        load=load,
+    )
+    return _build_contract_net_response(
+        cfp,
+        MessageType.PROPOSAL,
+        now,
+        resource.resource_id,
+        {"cfp_message_id": cfp.message_id, "bid": model_to_dict(bid)},
     )
 
 
