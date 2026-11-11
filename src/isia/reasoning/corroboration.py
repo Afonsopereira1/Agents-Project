@@ -181,8 +181,8 @@ def aggregate_verification_responses(
 
     The result contains ``classification``, unique independent
     ``observation_ids``, distinct observation ``source_ids`` and
-    ``compatible_source_count``. Multiple observations from one source count
-    as one compatible source.
+    ``compatible_source_ids``/``compatible_source_count``. Multiple
+    observations from one source count as one compatible source.
     """
     _validate_observation(initial_observation, "initial_observation")
     _validate_reference(conversation_id, "conversation_id")
@@ -228,7 +228,8 @@ def aggregate_verification_responses(
                 continue
             unique_observations[observation.event_id] = observation
 
-        compatible_ids.update(result["observation_ids"])
+        if result["classification"] == "compatible":
+            compatible_ids.update(result["observation_ids"])
 
     compatible_ids.intersection_update(unique_observations)
     source_ids = {
@@ -251,7 +252,56 @@ def aggregate_verification_responses(
         "classification": classification,
         "observation_ids": tuple(sorted(unique_observations)),
         "source_ids": tuple(sorted(source_ids)),
+        "compatible_source_ids": tuple(sorted(compatible_source_ids)),
         "compatible_source_count": len(compatible_source_ids),
+    }
+
+
+def evaluate_preliminary_corroboration(
+    aggregate_summary: Mapping[str, object],
+    eligible_source_ids,
+) -> dict[str, object]:
+    """Calculate descriptive coverage indicators from an aggregate summary.
+
+    ``eligible_source_ids`` must come from :func:`select_eligible_sources`.
+    Only deduplicated source identifiers already present in the aggregate
+    summary are considered. The preliminary score is
+    ``compatible eligible sources / eligible sources`` and information
+    coverage is ``eligible sources with observations / eligible sources``.
+
+    These indicators are descriptive, not calibrated probabilities. Different
+    sources may share hardware, location, software or environmental blind
+    spots and therefore are not necessarily statistically independent.
+    """
+    if not isinstance(aggregate_summary, Mapping):
+        raise TypeError("aggregate_summary must be a mapping.")
+    eligible = _unique_identifiers(eligible_source_ids, "eligible_source_ids")
+    eligible_set = set(eligible)
+
+    compatible_source_ids = _summary_identifiers(
+        aggregate_summary, "compatible_source_ids"
+    ) & eligible_set
+    observed_source_ids = _summary_identifiers(aggregate_summary, "source_ids") & eligible_set
+
+    eligible_count = len(eligible_set)
+    if not eligible_count:
+        score = None
+        coverage = None
+        compatible_source_ids = set()
+        observed_source_ids = set()
+    else:
+        score = len(compatible_source_ids) / eligible_count
+        coverage = len(observed_source_ids) / eligible_count
+
+    return {
+        "classification": aggregate_summary.get("classification"),
+        "eligible_source_count": eligible_count,
+        "compatible_source_ids": tuple(sorted(compatible_source_ids)),
+        "compatible_source_count": len(compatible_source_ids),
+        "observed_source_ids": tuple(sorted(observed_source_ids)),
+        "observed_source_count": len(observed_source_ids),
+        "preliminary_score": score,
+        "information_coverage": coverage,
     }
 
 
@@ -291,6 +341,22 @@ def _observations_from_response(response: Message) -> tuple[tuple[Observation, .
 def _validate_reference(value: str, name: str) -> None:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} must be a non-empty string.")
+
+
+def _unique_identifiers(values, name: str) -> tuple[str, ...]:
+    try:
+        identifiers = tuple(values)
+    except TypeError as error:
+        raise TypeError(f"{name} must be iterable.") from error
+    if any(not isinstance(value, str) or not value.strip() for value in identifiers):
+        raise ValueError(f"{name} must contain non-empty strings.")
+    return tuple(sorted(set(identifiers)))
+
+
+def _summary_identifiers(summary: Mapping[str, object], name: str) -> set[str]:
+    values = summary.get(name, ())
+    identifiers = _unique_identifiers(values, name)
+    return set(identifiers)
 
 
 def _validate_observation(observation: Observation, name: str) -> None:

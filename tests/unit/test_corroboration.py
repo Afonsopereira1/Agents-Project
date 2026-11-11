@@ -5,6 +5,7 @@ from isia.reasoning.corroboration import (
     aggregate_verification_responses,
     are_observations_compatible,
     classify_verification_response,
+    evaluate_preliminary_corroboration,
     select_eligible_sources,
 )
 from isia.simulation.scenario import Source
@@ -316,6 +317,118 @@ class TestVerificationResponseAggregation(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             self.aggregate([response])
+
+
+class TestPreliminaryCorroboration(unittest.TestCase):
+
+    def setUp(self):
+        self.initial = make_observation("obs-001", (5, 5), 10.0, "sensor-01")
+
+    def aggregate(self, responses):
+        return aggregate_verification_responses(
+            self.initial,
+            responses,
+            "conversation-001",
+            "request-001",
+            3.0,
+            2.0,
+        )
+
+    def test_calcula_pontuacao_e_cobertura_com_fontes_compativeis(self):
+        summary = self.aggregate([
+            make_verification_response([
+                make_observation("obs-002", (8, 5), 12.0, "sensor-02"),
+            ]),
+            make_verification_response([
+                make_observation("obs-003", (20, 20), 12.0, "sensor-03"),
+            ], message_id="response-002"),
+        ])
+
+        result = evaluate_preliminary_corroboration(
+            summary, ("sensor-02", "sensor-03", "sensor-04")
+        )
+
+        self.assertEqual(result["compatible_source_ids"], ("sensor-02",))
+        self.assertEqual(result["compatible_source_count"], 1)
+        self.assertEqual(result["observed_source_count"], 2)
+        self.assertEqual(result["preliminary_score"], 1 / 3)
+        self.assertEqual(result["information_coverage"], 2 / 3)
+
+    def test_duplicacoes_e_encaminhamento_nao_aumentam_indicadores(self):
+        evidence = make_observation("obs-002", (8, 5), 12.0, "sensor-02")
+        summary = self.aggregate([
+            make_verification_response([evidence]),
+            make_verification_response(
+                [evidence], message_id="response-002", response_source_id="sensor-03"
+            ),
+        ])
+
+        result = evaluate_preliminary_corroboration(summary, ("sensor-02", "sensor-03"))
+
+        self.assertEqual(result["preliminary_score"], 1 / 2)
+        self.assertEqual(result["information_coverage"], 1 / 2)
+        self.assertEqual(result["observed_source_ids"], ("sensor-02",))
+
+    def test_varias_observacoes_da_mesma_fonte_contam_uma_fonte(self):
+        summary = self.aggregate([
+            make_verification_response([
+                make_observation("obs-002", (8, 5), 12.0, "sensor-02"),
+                make_observation("obs-003", (5, 8), 11.0, "sensor-02"),
+            ])
+        ])
+
+        result = evaluate_preliminary_corroboration(summary, ("sensor-02", "sensor-03"))
+
+        self.assertEqual(result["compatible_source_count"], 1)
+        self.assertEqual(result["observed_source_count"], 1)
+        self.assertEqual(result["preliminary_score"], 1 / 2)
+        self.assertEqual(result["information_coverage"], 1 / 2)
+
+    def test_no_data_nao_evidencia_negativa(self):
+        summary = self.aggregate([
+            make_verification_response([], status="no_data"),
+        ])
+
+        result = evaluate_preliminary_corroboration(summary, ("sensor-02", "sensor-03"))
+
+        self.assertEqual(result["classification"], "no_data")
+        self.assertEqual(result["compatible_source_count"], 0)
+        self.assertEqual(result["preliminary_score"], 0.0)
+        self.assertEqual(result["information_coverage"], 0.0)
+
+    def test_sem_fontes_elegiveis_indicadores_ficam_indisponiveis(self):
+        summary = self.aggregate([
+            make_verification_response([
+                make_observation("obs-002", (8, 5), 12.0, "sensor-02"),
+            ])
+        ])
+
+        result = evaluate_preliminary_corroboration(summary, ())
+
+        self.assertIsNone(result["preliminary_score"])
+        self.assertIsNone(result["information_coverage"])
+        self.assertEqual(result["eligible_source_count"], 0)
+        self.assertEqual(result["compatible_source_count"], 0)
+        self.assertEqual(result["observed_source_count"], 0)
+
+    def test_extremos_sem_observacoes_e_com_todas_as_fontes(self):
+        summary = self.aggregate([
+            make_verification_response([
+                make_observation("obs-002", (8, 5), 12.0, "sensor-02"),
+                make_observation("obs-003", (5, 8), 11.0, "sensor-03"),
+            ])
+        ])
+        result = evaluate_preliminary_corroboration(summary, ("sensor-02", "sensor-03"))
+
+        self.assertEqual(result["preliminary_score"], 1.0)
+        self.assertEqual(result["information_coverage"], 1.0)
+
+        no_data = self.aggregate([
+            make_verification_response([], status="no_data"),
+        ])
+        result = evaluate_preliminary_corroboration(no_data, ("sensor-02", "sensor-03"))
+        self.assertEqual(result["preliminary_score"], 0.0)
+        self.assertEqual(result["information_coverage"], 0.0)
 
 
 if __name__ == "__main__":
