@@ -193,6 +193,30 @@ sequenceDiagram
 
 **Critérios de compatibilidade a parametrizar:** raio espacial, janela temporal, modalidades, independência aproximada e validade das fontes. Duas mensagens da **mesma observação** nunca contam como fontes distintas. A falta de deteção só pesa contra a hipótese de ameaça se o sensor tinha capacidade e oportunidade de observar.
 
+O `VERIFY_REQUEST` pode incluir o campo opcional `hypothesis`, sem alterar
+`schema_version`, com `hypothesis_id`, `event_type`, `position`, `valid_from` e
+`valid_until`. Pedidos antigos sem este campo continuam válidos. Uma resposta
+`VERIFY_RESPONSE` pode ecoar a hipótese e declarar
+`evidence_relation: "contradictory"`; essa relação só produz
+`contradictory` quando o iniciador fornece uma regra de incompatibilidade
+explícita. Tipos de evento diferentes não são contraditórios por omissão.
+Para `compatible`, tipos diferentes também exigem uma regra explícita de
+compatibilidade; por omissão, só tipos iguais são compatíveis. Sem essa regra,
+a observação é preservada e classificada como `inconclusive`.
+
+Uma fonte só pode produzir `status: "informative_absence"` quando declara
+explicitamente `declared_non_detection: true` e fornece `absence` com a
+hipótese, intervalo observado e `coverage` validada: posição, raio, capacidade
+validada e oportunidade confirmada. `no_data`, timeout, `refuse` ou falha de
+comunicação nunca são ausência informativa. A ausência pode contar para a
+cobertura de informação, mas não é evidência compatível nem prova de
+inexistência do evento; falsos negativos continuam a ser uma limitação.
+
+Quando a mesma avaliação contém evidência compatível e contraditória, o
+resultado é `inconclusive`, preservando os identificadores de ambas. As regras
+concretas de incompatibilidade, os limiares de cobertura e a interpretação das
+taxas de falsos negativos continuam dependentes de aprovação do grupo.
+
 ## 5. Atribuição distribuída: Contract Net simplificado
 
 ```mermaid

@@ -1,6 +1,6 @@
 # Arquitetura do sistema multiagente — proposta
 
-> **Estado revisto (11-11-2026):** arquitetura ainda sujeita a revisão formal pelos três elementos. Os modelos de domínio, simulador 2D e comunicação entre `SensorAgent`/`InformantAgent` já estão implementados na `main`; a corroboração e decisão preliminar estão implementadas e testadas na branch `feature/etapa4-corroboracao`. Agentes móveis, negociação, missões e políticas avançadas permanecem como arquitetura proposta ou trabalho futuro. As secções com exemplos completos descrevem o desenho-alvo, não uma implementação já demonstrada.
+> **Estado revisto (11-11-2026):** arquitetura ainda sujeita a revisão formal pelos três elementos. Os modelos de domínio, simulador 2D e comunicação entre `SensorAgent`/`InformantAgent` já estão implementados na `main`; a corroboração, a classificação de evidências e a decisão preliminar estão implementadas e testadas na branch `fix/etapa4-classificacao`. Agentes móveis, negociação, missões e políticas avançadas permanecem como arquitetura proposta ou trabalho futuro. As secções com exemplos completos descrevem o desenho-alvo, não uma implementação já demonstrada.
 
 [README](../README.md) · [Plano](development-plan.md) · [Protocolos](protocols.md) · [Decisões pendentes](#decisões-pendentes)
 

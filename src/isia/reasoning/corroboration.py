@@ -106,15 +106,18 @@ def classify_verification_response(
     response: Message,
     max_distance: float,
     max_time_difference: float,
+    *,
+    incompatibility_rules: Mapping[str, object] | None = None,
+    compatibility_rules: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Classify evidence in a validated ``VERIFY_RESPONSE``.
 
     The returned dictionary contains ``classification`` and the unique
-    ``observation_ids`` used for that classification. Possible classifications
-    in the current contract are ``compatible``, ``inconclusive`` and
-    ``no_data``. ``contradictory`` and ``informative_absence`` remain
-    conceptual categories until a response contract carries enough explicit
-    information to distinguish them safely.
+    ``observation_ids`` used for that classification. Contradiction requires
+    an echoed, validated hypothesis and a caller-supplied incompatibility
+    rule. Different event types require a caller-supplied compatibility rule.
+    Informative absence requires an explicit, validated non-detection and
+    coverage declaration; an empty response or timeout is never enough.
 
     A compatible result requires an observation with a different ``event_id``
     and a different ``source_id`` from the initial observation, and satisfying
@@ -129,6 +132,14 @@ def classify_verification_response(
     if status == "no_data":
         return {"classification": "no_data", "observation_ids": ()}
 
+    if status == "informative_absence":
+        if _informative_absence_is_valid(initial_observation, response):
+            return {
+                "classification": "informative_absence",
+                "observation_ids": (),
+            }
+        return {"classification": "inconclusive", "observation_ids": ()}
+
     unique_observations = []
     seen_event_ids = set()
     for observation in observations:
@@ -141,9 +152,27 @@ def classify_verification_response(
         ):
             unique_observations.append(observation)
 
+    incompatible_types = _configured_incompatible_types(
+        initial_observation.event_type, incompatibility_rules
+    )
+    compatible_types = {initial_observation.event_type}
+    compatible_types.update(
+        _configured_compatible_types(
+            initial_observation.event_type, compatibility_rules
+        )
+    )
+    explicit_contradiction = (
+        response.payload.get("evidence_relation") == "contradictory"
+    )
     compatible = [
         observation
         for observation in unique_observations
+        if not explicit_contradiction
+        and observation.event_type in compatible_types
+    ]
+    compatible = [
+        observation
+        for observation in compatible
         if are_observations_compatible(
             initial_observation,
             observation,
@@ -151,6 +180,40 @@ def classify_verification_response(
             max_time_difference,
         )
     ]
+    contradictory = [
+        observation
+        for observation in unique_observations
+        if explicit_contradiction
+        and observation.event_type in incompatible_types
+        and _hypothesis_is_correlated(initial_observation, response)
+        and are_observations_compatible(
+            initial_observation,
+            observation,
+            max_distance,
+            max_time_difference,
+        )
+    ]
+    if compatible and contradictory:
+        return {
+            "classification": "inconclusive",
+            "observation_ids": tuple(
+                observation.event_id
+                for observation in (*compatible, *contradictory)
+            ),
+            "compatible_observation_ids": tuple(
+                observation.event_id for observation in compatible
+            ),
+            "contradictory_observation_ids": tuple(
+                observation.event_id for observation in contradictory
+            ),
+        }
+    if contradictory:
+        return {
+            "classification": "contradictory",
+            "observation_ids": tuple(
+                observation.event_id for observation in contradictory
+            ),
+        }
     if compatible:
         return {
             "classification": "compatible",
@@ -170,6 +233,9 @@ def aggregate_verification_responses(
     request_message_id: str,
     max_distance: float,
     max_time_difference: float,
+    *,
+    incompatibility_rules: Mapping[str, object] | None = None,
+    compatibility_rules: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     """Aggregate several responses for one verification request.
 
@@ -193,6 +259,8 @@ def aggregate_verification_responses(
     seen_message_ids = set()
     unique_observations = {}
     compatible_ids = set()
+    contradictory_ids = set()
+    informative_absence_source_ids = set()
     saw_observation_response = False
     saw_no_data = False
 
@@ -213,9 +281,16 @@ def aggregate_verification_responses(
             response,
             max_distance,
             max_time_difference,
+            incompatibility_rules=incompatibility_rules,
+            compatibility_rules=compatibility_rules,
         )
         if status == "no_data":
             saw_no_data = True
+            continue
+        if status == "informative_absence":
+            if result["classification"] == "informative_absence":
+                if response.source_id:
+                    informative_absence_source_ids.add(response.source_id)
             continue
         saw_observation_response = True
 
@@ -230,6 +305,8 @@ def aggregate_verification_responses(
 
         if result["classification"] == "compatible":
             compatible_ids.update(result["observation_ids"])
+        elif result["classification"] == "contradictory":
+            contradictory_ids.update(result["observation_ids"])
 
     compatible_ids.intersection_update(unique_observations)
     source_ids = {
@@ -239,8 +316,14 @@ def aggregate_verification_responses(
         unique_observations[event_id].source_id for event_id in compatible_ids
     }
 
-    if compatible_ids:
+    if compatible_ids and contradictory_ids:
+        classification = "inconclusive"
+    elif compatible_ids:
         classification = "compatible"
+    elif contradictory_ids:
+        classification = "contradictory"
+    elif informative_absence_source_ids:
+        classification = "informative_absence"
     elif saw_observation_response:
         classification = "inconclusive"
     elif saw_no_data or not seen_message_ids:
@@ -252,9 +335,16 @@ def aggregate_verification_responses(
         "classification": classification,
         "observation_ids": tuple(sorted(unique_observations)),
         "compatible_observation_ids": tuple(sorted(compatible_ids)),
+        "contradictory_observation_ids": tuple(sorted(contradictory_ids)),
         "source_ids": tuple(sorted(source_ids)),
         "compatible_source_ids": tuple(sorted(compatible_source_ids)),
         "compatible_source_count": len(compatible_source_ids),
+        "informative_absence_source_ids": tuple(
+            sorted(informative_absence_source_ids)
+        ),
+        "coverage_source_ids": tuple(
+            sorted(source_ids | informative_absence_source_ids)
+        ),
     }
 
 
@@ -282,7 +372,13 @@ def evaluate_preliminary_corroboration(
     compatible_source_ids = _summary_identifiers(
         aggregate_summary, "compatible_source_ids"
     ) & eligible_set
-    observed_source_ids = _summary_identifiers(aggregate_summary, "source_ids") & eligible_set
+    observed_source_ids = (
+        _summary_identifiers(
+            aggregate_summary,
+            "coverage_source_ids",
+        )
+        or _summary_identifiers(aggregate_summary, "source_ids")
+    ) & eligible_set
 
     eligible_count = len(eligible_set)
     if not eligible_count:
@@ -397,12 +493,16 @@ def _observations_from_response(response: Message) -> tuple[tuple[Observation, .
         raise ValueError("VERIFY_RESPONSE must identify its request message.")
 
     status = payload.get("status")
-    if status not in {"observations_available", "no_data"}:
+    if status not in {
+        "observations_available",
+        "no_data",
+        "informative_absence",
+    }:
         raise ValueError("VERIFY_RESPONSE status is invalid.")
     raw_observations = payload.get("observations")
     if not isinstance(raw_observations, list):
         raise ValueError("VERIFY_RESPONSE observations must be a list.")
-    if status == "no_data" and raw_observations:
+    if status in {"no_data", "informative_absence"} and raw_observations:
         raise ValueError("A no_data response cannot contain observations.")
     if status == "observations_available" and not raw_observations:
         raise ValueError("An observations_available response must contain observations.")
@@ -414,6 +514,144 @@ def _observations_from_response(response: Message) -> tuple[tuple[Observation, .
         except (TypeError, ValueError, KeyError) as error:
             raise ValueError("VERIFY_RESPONSE contains an invalid observation.") from error
     return tuple(observations), status
+
+
+def build_observation_hypothesis(observation: Observation) -> dict[str, object]:
+    """Build the optional, backwards-compatible hypothesis contract."""
+    _validate_observation(observation, "observation")
+    return {
+        "hypothesis_id": f"hypothesis-{observation.event_id}",
+        "event_type": observation.event_type,
+        "position": {"x": observation.position.x, "y": observation.position.y},
+        "valid_from": observation.observed_at,
+        "valid_until": observation.observed_at,
+    }
+
+
+def _configured_incompatible_types(
+    event_type: str,
+    incompatibility_rules: Mapping[str, object] | None,
+) -> set[str]:
+    if incompatibility_rules is None:
+        return set()
+    if not isinstance(incompatibility_rules, Mapping):
+        raise TypeError("incompatibility_rules must be a mapping.")
+    values = incompatibility_rules.get(event_type, ())
+    if isinstance(values, str):
+        values = (values,)
+    try:
+        values = tuple(values)
+    except TypeError as error:
+        raise TypeError("Each incompatibility rule must be iterable.") from error
+    if any(not isinstance(value, str) or not value.strip() for value in values):
+        raise ValueError("Incompatibility rules must contain non-empty strings.")
+    return set(values)
+
+
+def _configured_compatible_types(
+    event_type: str,
+    compatibility_rules: Mapping[str, object] | None,
+) -> set[str]:
+    if compatibility_rules is None:
+        return set()
+    if not isinstance(compatibility_rules, Mapping):
+        raise TypeError("compatibility_rules must be a mapping.")
+    values = compatibility_rules.get(event_type, ())
+    if isinstance(values, str):
+        values = (values,)
+    try:
+        values = tuple(values)
+    except TypeError as error:
+        raise TypeError("Each compatibility rule must be iterable.") from error
+    if any(not isinstance(value, str) or not value.strip() for value in values):
+        raise ValueError("Compatibility rules must contain non-empty strings.")
+    return set(values)
+
+
+def _hypothesis_is_correlated(
+    initial_observation: Observation,
+    response: Message,
+) -> bool:
+    hypothesis = response.payload.get("hypothesis")
+    if not isinstance(hypothesis, Mapping):
+        return False
+    try:
+        hypothesis_id = hypothesis["hypothesis_id"]
+        event_type = hypothesis["event_type"]
+        position = model_from_dict(hypothesis["position"], Position)
+        valid_from = hypothesis["valid_from"]
+        valid_until = hypothesis["valid_until"]
+    except (KeyError, TypeError, ValueError):
+        return False
+    return (
+        isinstance(hypothesis_id, str)
+        and bool(hypothesis_id.strip())
+        and event_type == initial_observation.event_type
+        and position == initial_observation.position
+        and type(valid_from) in (int, float)
+        and type(valid_until) in (int, float)
+        and isfinite(valid_from)
+        and isfinite(valid_until)
+        and valid_from <= initial_observation.observed_at <= valid_until
+        and valid_from <= valid_until
+    )
+
+
+def _informative_absence_is_valid(
+    initial_observation: Observation,
+    response: Message,
+) -> bool:
+    hypothesis = response.payload.get("hypothesis")
+    absence = response.payload.get("absence")
+    if not isinstance(hypothesis, Mapping) or not isinstance(absence, Mapping):
+        return False
+    if not isinstance(response.source_id, str) or not response.source_id.strip():
+        return False
+    if not _hypothesis_is_correlated(initial_observation, response):
+        return False
+    try:
+        coverage = absence["coverage"]
+        coverage_position = model_from_dict(coverage["position"], Position)
+        radius = coverage["radius"]
+        observed_from = absence["observed_from"]
+        observed_until = absence["observed_until"]
+        capability = coverage["capability"]
+        capability_validated = coverage["capability_validated"]
+        opportunity_confirmed = coverage["opportunity_confirmed"]
+        hypothesis_id = absence["hypothesis_id"]
+        declared_non_detection = absence["declared_non_detection"]
+        hypothesis_from = hypothesis["valid_from"]
+        hypothesis_until = hypothesis["valid_until"]
+        hypothesis_position = model_from_dict(hypothesis["position"], Position)
+    except (KeyError, TypeError, ValueError):
+        return False
+    if (
+        not isinstance(coverage, Mapping)
+        or not isinstance(hypothesis_id, str)
+        or not hypothesis_id.strip()
+        or hypothesis_id != hypothesis.get("hypothesis_id")
+        or declared_non_detection is not True
+        or capability_validated is not True
+        or opportunity_confirmed is not True
+        or not isinstance(capability, str)
+        or not capability.strip()
+        or type(radius) not in (int, float)
+        or not isfinite(radius)
+        or radius < 0
+        or type(observed_from) not in (int, float)
+        or type(observed_until) not in (int, float)
+        or not isfinite(observed_from)
+        or not isfinite(observed_until)
+        or observed_from > observed_until
+        or observed_from > hypothesis_from
+        or observed_until < hypothesis_until
+    ):
+        return False
+    distance = hypot(
+        coverage_position.x - hypothesis_position.x,
+        coverage_position.y - hypothesis_position.y,
+    )
+    return distance <= radius
 
 
 def _validate_reference(value: str, name: str) -> None:

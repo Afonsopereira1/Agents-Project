@@ -21,6 +21,7 @@ from isia.communication.transport import (
 )
 from isia.reasoning.corroboration import (
     aggregate_verification_responses,
+    build_observation_hypothesis,
     decide_preliminary_verification,
     evaluate_preliminary_corroboration,
 )
@@ -67,6 +68,8 @@ class SensorAgent(Agent):
         self.max_distance: float | None = None
         self.max_time_difference: float | None = None
         self.minimum_compatible_sources: int | None = None
+        self.incompatibility_rules = None
+        self.compatibility_rules = None
         # Histórico local, indexado pela conversa e pelo pedido. Não contém
         # credenciais, estado do simulador ou ground truth.
         self.verification_history: dict[str, dict[str, dict[str, object]]] = {}
@@ -82,12 +85,16 @@ class SensorAgent(Agent):
         max_distance: float,
         max_time_difference: float,
         minimum_compatible_sources: int,
+        incompatibility_rules=None,
+        compatibility_rules=None,
     ) -> None:
         """Give the agent only the metadata and limits needed for evaluation."""
         self.eligible_source_ids = tuple(eligible_source_ids)
         self.max_distance = max_distance
         self.max_time_difference = max_time_difference
         self.minimum_compatible_sources = minimum_compatible_sources
+        self.incompatibility_rules = incompatibility_rules
+        self.compatibility_rules = compatibility_rules
 
     class VerificationBehaviour(OneShotBehaviour):
         async def run(self):
@@ -107,6 +114,7 @@ class SensorAgent(Agent):
                 )
                 payload = {
                     "observation": model_to_dict(observation),
+                    "hypothesis": build_observation_hypothesis(observation),
                     "question": "Existem observações locais disponíveis para corroborar este sinal?",
                 }
                 event_id = None
@@ -177,6 +185,8 @@ class SensorAgent(Agent):
                             request.message_id,
                             agent.max_distance,
                             agent.max_time_difference,
+                            incompatibility_rules=agent.incompatibility_rules,
+                            compatibility_rules=agent.compatibility_rules,
                         )
                         evaluation = evaluate_preliminary_corroboration(
                             aggregate, agent.eligible_source_ids
