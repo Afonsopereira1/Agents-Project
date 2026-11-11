@@ -229,26 +229,36 @@ de missões continuam nas Etapas 4 e 6.
 
 **Pré-requisitos:** ocorrência avaliada, recurso com posição/capacidade e mensagens correlacionadas.
 
-**Ficheiros envolvidos:** `reasoning/allocation.py`, `communication/protocols.py`, `agents/drone.py`, `vehicle.py`, `ranger.py` (esqueletos), `tests/integration/test_allocation.py`.
+**Ficheiros envolvidos (implementação atual):** `src/isia/reasoning/allocation.py`, `src/isia/communication/messages.py`, `src/isia/communication/transport.py`, `src/isia/agents/mobile.py`, `contract_net_demo.py`, `tests/unit/test_allocation.py`, `tests/unit/test_contract_net_demo.py` e `tests/unit/test_mobile_agent.py`. Os nomes `communication/protocols.py`, `agents/drone.py`, `vehicle.py`, `ranger.py` e `tests/integration/test_allocation.py` eram referências de planeamento e ainda não existem como módulos específicos.
 
 **Tarefas concretas:**
 
-- [ ] Implementar o iniciador local por ocorrência, sem centralizador permanente.
-- [ ] Criar `CFP` com missão, capacidade exigida, posição, prioridade e prazo.
-- [ ] Implementar nos recursos a decisão autónoma de `propose`/`refuse`.
-- [ ] Aplicar filtros de elegibilidade: disponibilidade, competência e reserva mínima de autonomia.
-- [ ] Calcular custo comparável por ETA/energia/carga; definir unidades e normalização.
-- [ ] Ordenar propostas válidas e escolher uma; rejeitar as restantes.
-- [ ] Confirmar a reserva no agente escolhido antes de marcar a missão `RESERVED`.
-- [ ] Tratar propostas tardias, falta de propostas, recusa da reserva e uma nova ronda limitada.
+- [x] Implementar o iniciador local por ocorrência, sem centralizador permanente. Evidência: `ContractNetInitiatorAgent` e `ContractNetBehaviour` em `contract_net_demo.py`; `MissionRegistry` mantém a criação local/idempotente da missão. Testes: `test_repeated_decision_returns_same_mission` e testes do iniciador no `test_contract_net_demo.py`.
+- [x] Criar `CFP` com missão, capacidade exigida, posição, prioridade e prazo. Evidência: `build_cfp_message()` em `allocation.py`. Testes: `test_build_cfp_contains_mission_contract_and_correlation_ids`, `test_cfp_round_trip_json_preserves_contract` e validação de tempos/IDs.
+- [x] Implementar nos recursos a decisão autónoma de `propose`/`refuse`. Evidência: `evaluate_cfp()` e `MobileResourceAgent.ContractNetBehaviour`. Testes: `test_evaluate_cfp_rejects_ineligible_resources` e `test_mobile_agent.py`; os testes SPADE dependem de `spade==4.1.4`.
+- [x] Aplicar filtros de elegibilidade: disponibilidade, competência e reserva mínima de autonomia. Evidência: `evaluate_cfp()`. Testes: recurso indisponível, capacidade incompatível e autonomia insuficiente em `test_allocation.py` e `test_mobile_agent.py`.
+- [x] Calcular custo comparável por ETA/energia/carga; definir unidades e normalização. Evidência: `_proposal_cost()`/`select_best_proposal()`; ETA em segundos simulados, energia em pontos percentuais e carga em fração `0..1`. Testes: `test_selects_lowest_normalized_cost_not_first_response` e `test_equal_cost_uses_resource_id_as_tiebreaker`.
+- [x] Ordenar propostas válidas e escolher uma; rejeitar as restantes. Evidência: `select_best_proposal()` e envio de `REJECT` em `ContractNetBehaviour`. Testes: seleção determinística, duplicação, mensagens inválidas e propostas tardias.
+- [x] Confirmar a reserva no agente escolhido antes de marcar a missão `RESERVED`. Evidência: `LocalResourceReservation.reserve()`, `MobileResourceAgent.AcceptBehaviour` e validação de `STATUS` em `contract_net_demo.py`. Testes: idempotência, concorrência, correlação de confirmação e demonstração XMPP normal validada no Ubuntu.
+- [x] Tratar propostas tardias, falta de propostas, recusa da reserva e uma nova ronda limitada. Evidência: `AllocationOutcome`, `ContractNetResult` e limite `max_rounds`/`CONTRACT_MAX_ROUNDS` em `contract_net_demo.py`. Testes unitários determinísticos cobrem ausência, recusa explícita, segunda ronda, timeout, mensagens tardias e concorrência; os cenários de falha XMPP não foram todos executados contra servidor real.
 
 **Dependências:** Etapa 4 e contratos das Etapas 1–3. A execução das missões (Etapa 6) depende desta etapa.
 
-**Testes a realizar:** duas patrulhas com custos distintos; recurso sem bateria; ambas indisponíveis; proposta atrasada; duas missões a disputar o mesmo recurso.
+**Testes realizados:** duas patrulhas com custos distintos (`test_selects_lowest_normalized_cost_not_first_response`); recurso sem autonomia (`test_evaluate_cfp_rejects_ineligible_resources`); ambas indisponíveis (`test_two_unavailable_resources_leave_mission_unreserved`); proposta/mensagem atrasada (`test_late_proposal_from_previous_round_is_not_valid_for_new_cfp`); duas missões a disputar o mesmo recurso (`test_concurrent_missions_only_one_can_reserve`). Os testes de comportamento SPADE usam mocks e são executáveis quando `spade==4.1.4` está instalado.
 
-**Critérios de conclusão:** a negociação termina em reserva válida ou resultado explícito de ausência de recurso; nunca há dupla reserva incompatível.
+**Critérios de conclusão:** cumpridos para a alocação implementada: a negociação termina em reserva válida ou em resultado explícito (`no_eligible_proposals`, `reservation_rejected` ou `confirmation_unknown`); `LocalResourceReservation` impede dupla reserva incompatível. A execução e recuperação de missões continuam reservadas à Etapa 6.
 
-**Resultado esperado:** uma missão atribuída por mensagens SPADE a um agente móvel autónomo.
+**Resultado esperado:** uma missão atribuída por mensagens SPADE a um agente móvel autónomo. Validado no cenário normal através de `contract_net_demo.py`; os cenários de falha foram validados por testes determinísticos/mocks.
+
+**Auditoria da etapa:** as oito tarefas acima têm implementação e evidência de
+teste no escopo da etapa. O iniciador é atualmente um agente local temporário
+do demonstrador (`ContractNetInitiatorAgent`), e a ponte idempotente da decisão
+`request_mobile_verification` é `MissionRegistry`; a integração automática desta
+ponte no fluxo de produção do `SensorAgent`/`main.py` ainda não existe e deve ser
+feita quando o MVP for integrado. Isto não cria um centralizador permanente.
+Antes da Etapa 6 continuam necessárias a aprovação formal dos contratos pelo
+grupo e a integração ponta a ponta deteção → corroboração → missão; movimento,
+execução, `MISSION_RESULT` e fecho do incidente pertencem à própria Etapa 6.
 
 **Erros prováveis/diagnóstico:** escolha antes do prazo, custo com unidades incompatíveis e corrida entre duas aceitações; usar testes de concorrência e logs de conversação.
 
