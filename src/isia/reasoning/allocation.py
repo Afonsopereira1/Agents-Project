@@ -6,13 +6,75 @@ Contract Net.
 """
 
 from collections.abc import Mapping
+from math import isfinite
+from uuid import uuid4
 
+from isia.communication.messages import Message, MessageType, model_to_dict
 from isia.domain.models import Incident, Mission, Position
 
 
 MOBILE_VERIFICATION_DECISION = "request_mobile_verification"
 MOBILE_VERIFICATION_TASK = "verify_incident"
 MOBILE_VERIFICATION_CAPABILITY = "mobile_verification"
+
+
+def _validate_simulated_time(value: object, name: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not isfinite(value)
+        or value < 0
+    ):
+        raise ValueError(
+            f"{name} deve ser um número finito e não negativo em segundos simulados."
+        )
+    return float(value)
+
+
+def build_cfp_message(
+    mission: Mission,
+    created_at: float,
+    deadline: float,
+    *,
+    message_id: str | None = None,
+    conversation_id: str | None = None,
+) -> Message:
+    """Construir um ``CFP`` para uma missão existente.
+
+    ``created_at`` e ``deadline`` são instantes absolutos em segundos de tempo
+    simulado, usando a mesma referência temporal do relógio da simulação. O
+    prazo tem de ser igual ou posterior à emissão. IDs omitidos são gerados
+    localmente; IDs fornecidos pelo iniciador são mantidos para correlacionar
+    futuras ``PROPOSAL``/respostas com este CFP.
+    """
+    if not isinstance(mission, Mission):
+        raise TypeError("mission deve ser Mission.")
+
+    created_at_value = _validate_simulated_time(created_at, "created_at")
+    deadline_value = _validate_simulated_time(deadline, "deadline")
+    if deadline_value < created_at_value:
+        raise ValueError("deadline não pode ser anterior a created_at.")
+
+    mission_data = model_to_dict(mission)
+    payload = {
+        field: mission_data[field]
+        for field in ("task", "target", "required_capability", "priority")
+    }
+    payload["deadline"] = deadline_value
+
+    return Message(
+        message_id if message_id is not None else f"message-{uuid4()}",
+        MessageType.CFP,
+        created_at_value,
+        payload,
+        incident_id=mission.incident_id,
+        mission_id=mission.mission_id,
+        conversation_id=(
+            conversation_id
+            if conversation_id is not None
+            else f"conversation-{uuid4()}"
+        ),
+    )
 
 
 class MissionRegistry:
