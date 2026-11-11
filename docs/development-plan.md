@@ -201,19 +201,19 @@ de missões continuam nas Etapas 4 e 6.
 - [x] Associar observações a ocorrências com regras espacial/temporal explícitas.
 - [x] Selecionar fontes elegíveis para corroboração por proximidade/capacidade conhecida.
 - [x] Enviar pedidos de verificação e aguardar respostas até ao prazo.
-- [ ] Classificar resposta: evidência compatível, evidência contraditória, ausência informativa ou sem dados.
+- [x] Classificar resposta: evidência compatível, evidência contraditória, ausência informativa, sem dados e resultado auxiliar inconclusivo.
 - [x] Deduplicar por `event_id` e `message_id` e não contar *forwarding* como observações novas.
 - [x] Calcular pontuação preliminar e grau de informação disponível.
 - [x] Decidir, segundo regra simples inicial, observar ou solicitar verificação móvel.
 - [x] Armazenar histórico necessário ao diagnóstico, sem supor que fontes correlacionadas são independentes.
 
-**Evidência (branch `feature/etapa4-corroboracao`, 11-11-2026):** `reasoning/corroboration.py` associa leituras por distância euclidiana e janela temporal, seleciona fontes, classifica observações, deduplica, agrega, calcula indicadores descritivos e produz decisão preliminar. `agents/sensor.py` e `agents/informant.py`, com `verification_demo.py`, demonstraram o fluxo real simulador → observações locais → XMPP → evidências → decisão. A suite local no ambiente SPADE executou **178 testes, OK**, incluindo timeout, mensagens tardias e histórico. A associação é uma correlação candidata; a gestão completa do ciclo de vida do objeto `Incident` pertence ao MVP de etapas posteriores. O histórico é consultável **apenas durante a vida do agente**.
+**Evidência (branch `fix/etapa4-classificacao`, 11-11-2026):** `reasoning/corroboration.py` associa leituras por distância euclidiana e janela temporal, seleciona fontes e implementa as categorias `compatible`, `contradictory`, `informative_absence` e `no_data`, além do resultado auxiliar conservador `inconclusive`. A deduplicação, a correlação, o histórico local e a decisão preliminar foram preservados, sem consulta a `ground_truth`. `agents/sensor.py`, `agents/informant.py` e `verification_demo.py` demonstraram o fluxo real simulador → observações locais → XMPP → evidências → decisão. A suite local no Ubuntu, com SPADE, executou **230 testes, OK**. A demonstração XMPP validou o pedido, a resposta e a corroboração compatível; contradição, ausência informativa e respetivos casos-limite foram validados por testes automatizados, não necessariamente por XMPP real. A associação é uma correlação candidata; a gestão completa do ciclo de vida do objeto `Incident` pertence ao MVP de etapas posteriores. O histórico é consultável **apenas durante a vida do agente**.
 
-**Lacuna mantida em aberto:** a tarefa de classificação em quatro categorias não está integralmente concluída: o contrato atual distingue `compatible`, `inconclusive` e `no_data`, mas não permite demonstrar de forma fundamentada `contradictory` nem `informative_absence`. Não equiparar ausência de resposta a evidência negativa; resolver apenas quando houver contrato/critério explícito aprovado.
+**Pendência formal:** a implementação técnica da classificação está concluída, mas permanece dependente de aprovação formal do grupo a definição concreta das regras de incompatibilidade/compatibilidade, dos critérios de cobertura e janela de observação, da sensibilidade das fontes e da interpretação dos falsos negativos. Ausência de resposta, timeout ou falha de comunicação continuam a ser `no_data`, nunca ausência informativa.
 
 **Dependências:** Etapas 2 e 3. É base da Etapa 5 e do módulo de reputação na Etapa 7.
 
-**Testes a realizar:** duas leituras compatíveis, leituras temporalmente distantes, fonte sem cobertura, duplicação, mensagem tardia e divergência entre modalidades.
+**Testes realizados:** leituras compatíveis, tipos de evento diferentes sem relação explícita, regras explícitas de compatibilidade/incompatibilidade, ausência informativa com cobertura/janela/capacidade válidas, falta de cobertura, período inadequado, ausência de capacidade, `no_data` por timeout, duplicação, mensagens tardias, correlação e conflito entre evidências.
 
 **Critérios de conclusão:** uma ocorrência é tratada por comunicação entre pares; a evidência explica a decisão; duplicações e timeouts não provocam falsas confirmações.
 

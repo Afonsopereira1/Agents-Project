@@ -3,7 +3,7 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado (11-11-2026):** Etapas 1–4 implementadas e validadas. A Etapa 5 está implementada na branch `feature/etapa5-contract-net`, com 217 testes aprovados no Ubuntu e demonstração SPADE/XMPP real do fluxo normal CFP → PROPOSAL/REJECT → seleção → ACCEPT → confirmação → `RESERVED`. Os cenários de falha da Etapa 5 são cobertos por testes unitários/mocks; não se afirma que todos foram executados contra XMPP real. A execução/movimento de missões da Etapa 6 e as Etapas 7–10 permanecem pendentes.
+> **Estado (11-11-2026):** Etapas 1–4 implementadas e validadas tecnicamente, incluindo a classificação de evidências. A Etapa 5 está implementada na branch `feature/etapa5-contract-net`, com 230 testes aprovados no Ubuntu e demonstração SPADE/XMPP real do fluxo normal CFP → PROPOSAL/REJECT → seleção → ACCEPT → confirmação → `RESERVED`. Os cenários de falha da Etapa 5 são cobertos por testes unitários/mocks; não se afirma que todos foram executados contra XMPP real. A execução/movimento de missões da Etapa 6 e as Etapas 7–10 permanecem pendentes.
 
 ## O projeto
 
@@ -90,11 +90,11 @@ no terminal em que foi iniciado.
 
 ### Mapa 2D e relógio da simulação
 
-**Estado atual:** as Etapas 1–3 estão integradas na `main`: modelos e contratos JSON, simulação 2D e troca real de mensagens SPADE/XMPP entre `SensorAgent` e `InformantAgent`. Na branch da Etapa 4, o demonstrador `verification_demo.py` utiliza observações do simulador e mostra classificação, fontes distintas, pontuação descritiva, cobertura e decisão preliminar. A integração com missões/negociação ainda não faz parte desta etapa.
+**Estado atual:** as Etapas 1–4 estão integradas na `main`: modelos e contratos JSON, simulação 2D, troca real de mensagens SPADE/XMPP entre `SensorAgent` e `InformantAgent` e classificação de evidências. Na branch de correção da Etapa 4, o demonstrador `verification_demo.py` utiliza observações do simulador e mostra classificação, fontes distintas, pontuação descritiva, cobertura e decisão preliminar. A integração com missões/negociação ainda não faz parte desta etapa.
 
 ### Demonstração da Etapa 4 — observações reais e decisão preliminar
 
-Na branch `feature/etapa4-corroboracao`, iniciar o servidor local XMPP num terminal (`spade run`). Noutro, ativar o ambiente Python com SPADE 4.1.4 e definir `SENSOR_JID`, `INFORMANT_JID`, `SENSOR_PASSWORD` e `INFORMANT_PASSWORD` para contas locais válidas; **não colocar credenciais em ficheiros versionados**.
+Na branch `fix/etapa4-classificacao`, iniciar o servidor local XMPP num terminal (`spade run`). Noutro, ativar o ambiente Python com SPADE 4.1.4 e definir `SENSOR_JID`, `INFORMANT_JID`, `SENSOR_PASSWORD` e `INFORMANT_PASSWORD` para contas locais válidas; **não colocar credenciais em ficheiros versionados**.
 
 ```bash
 PYTHONPATH=src python verification_demo.py
@@ -102,7 +102,7 @@ PYTHONPATH=src python verification_demo.py
 
 O demonstrador carrega `config/environment.json`, avança o simulador, dá a cada agente apenas o seu feed de observações e troca `VERIFY_REQUEST`/`VERIFY_RESPONSE` através de SPADE/XMPP. Na execução local de 11-11-2026, a observação inicial `obs-000001` recebeu a evidência compatível `obs-000002` de `sensor_02`: pontuação preliminar `1.0`, cobertura `1.0` e decisão `request_mobile_verification`, com mínimo de uma fonte compatível nesta demonstração. Estes indicadores **não são probabilidades calibradas de caça furtiva**.
 
-A implementação também permite `observe` perante informação insuficiente, `no_data`, timeout ou resposta inválida; elimina mensagens/observações repetidas e mantém histórico de diagnóstico em memória por conversa e pedido. O histórico desaparece após terminar o agente. A versão atual não representa ainda evidência negativa explícita para classificar `contradictory` ou `informative_absence`; essa limitação está documentada na checklist da Etapa 4.
+A implementação também permite `observe` perante informação insuficiente, `no_data`, timeout ou resposta inválida; classifica `compatible`, `contradictory`, `informative_absence` e o resultado auxiliar `inconclusive` sob as regras explícitas do contrato; elimina mensagens/observações repetidas e mantém histórico de diagnóstico em memória por conversa e pedido. Contradição e ausência informativa são cobertas por testes automatizados, enquanto a demonstração XMPP real valida o fluxo normal de pedido, resposta e corroboração compatível. A aprovação formal do grupo sobre incompatibilidade, cobertura, sensibilidade e falsos negativos permanece pendente.
 
 Para repetir os testes locais:
 
@@ -110,7 +110,7 @@ Para repetir os testes locais:
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-Última execução local comunicada (11-11-2026): **178 testes, OK**. Isto é distinto da demonstração real XMPP acima.
+Última execução local comunicada (11-11-2026): **230 testes, OK**. Isto é distinto da demonstração real XMPP acima.
 
 ### Demonstração da comunicação entre agentes
 
