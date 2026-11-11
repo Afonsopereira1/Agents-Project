@@ -305,6 +305,73 @@ def evaluate_preliminary_corroboration(
     }
 
 
+def decide_preliminary_verification(
+    evaluation_summary: Mapping[str, object],
+    minimum_compatible_sources: int,
+) -> dict[str, object]:
+    """Choose between observing and requesting mobile verification.
+
+    This is an explicit operational rule: request mobile verification when
+    the deduplicated summary reaches ``minimum_compatible_sources`` distinct
+    compatible sources; otherwise continue observing. The threshold is a
+    caller-supplied engineering parameter, not a scientifically validated
+    estimate of poaching probability.
+
+    No messages or observations are processed here. The caller must provide
+    the result of :func:`evaluate_preliminary_corroboration`, which already
+    applies the response and observation deduplication rules.
+    """
+    if not isinstance(evaluation_summary, Mapping):
+        raise TypeError("evaluation_summary must be a mapping.")
+    if isinstance(minimum_compatible_sources, bool) or not isinstance(
+        minimum_compatible_sources, int
+    ):
+        raise TypeError("minimum_compatible_sources must be a positive integer.")
+    if minimum_compatible_sources <= 0:
+        raise ValueError("minimum_compatible_sources must be a positive integer.")
+
+    eligible_count = _nonnegative_count(
+        evaluation_summary.get("eligible_source_count", 0),
+        "eligible_source_count",
+    )
+    observed_count = _nonnegative_count(
+        evaluation_summary.get("observed_source_count", 0),
+        "observed_source_count",
+    )
+    compatible_source_ids = _summary_identifiers(
+        evaluation_summary, "compatible_source_ids"
+    )
+    compatible_count = len(compatible_source_ids)
+
+    if compatible_count >= minimum_compatible_sources and eligible_count > 0:
+        decision = "request_mobile_verification"
+        reason = "compatible_source_threshold_reached"
+    elif eligible_count == 0:
+        decision = "observe"
+        reason = "no_eligible_sources"
+    elif observed_count == 0:
+        decision = "observe"
+        reason = "no_information"
+    elif compatible_count == 0:
+        decision = "observe"
+        reason = "no_compatible_evidence"
+    else:
+        decision = "observe"
+        reason = "insufficient_compatible_evidence"
+
+    return {
+        "decision": decision,
+        "reason": reason,
+        "compatible_source_ids": tuple(sorted(compatible_source_ids)),
+        "compatible_source_count": compatible_count,
+        "eligible_source_count": eligible_count,
+        "observed_source_count": observed_count,
+        "preliminary_score": evaluation_summary.get("preliminary_score"),
+        "information_coverage": evaluation_summary.get("information_coverage"),
+        "minimum_compatible_sources": minimum_compatible_sources,
+    }
+
+
 def _observations_from_response(response: Message) -> tuple[tuple[Observation, ...], str]:
     if not isinstance(response, Message):
         raise TypeError("response must be a Message.")
@@ -357,6 +424,12 @@ def _summary_identifiers(summary: Mapping[str, object], name: str) -> set[str]:
     values = summary.get(name, ())
     identifiers = _unique_identifiers(values, name)
     return set(identifiers)
+
+
+def _nonnegative_count(value: object, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer.")
+    return value
 
 
 def _validate_observation(observation: Observation, name: str) -> None:

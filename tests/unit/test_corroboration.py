@@ -5,6 +5,7 @@ from isia.reasoning.corroboration import (
     aggregate_verification_responses,
     are_observations_compatible,
     classify_verification_response,
+    decide_preliminary_verification,
     evaluate_preliminary_corroboration,
     select_eligible_sources,
 )
@@ -430,6 +431,96 @@ class TestPreliminaryCorroboration(unittest.TestCase):
         self.assertEqual(result["preliminary_score"], 0.0)
         self.assertEqual(result["information_coverage"], 0.0)
 
+
+class TestPreliminaryVerificationDecision(unittest.TestCase):
+
+    def evaluate(self, compatible_source_ids, observed_source_ids, eligible_count):
+        compatible_source_ids = tuple(compatible_source_ids)
+        observed_source_ids = tuple(observed_source_ids)
+        return {
+            "classification": "compatible" if compatible_source_ids else "inconclusive",
+            "eligible_source_count": eligible_count,
+            "compatible_source_ids": compatible_source_ids,
+            "compatible_source_count": len(set(compatible_source_ids)),
+            "observed_source_ids": observed_source_ids,
+            "observed_source_count": len(set(observed_source_ids)),
+            "preliminary_score": (
+                len(set(compatible_source_ids)) / eligible_count
+                if eligible_count else None
+            ),
+            "information_coverage": (
+                len(set(observed_source_ids)) / eligible_count
+                if eligible_count else None
+            ),
+        }
+
+    def test_pede_verificacao_movel_quando_atinge_o_minimo(self):
+        summary = self.evaluate(("sensor-02", "sensor-03"), ("sensor-02", "sensor-03"), 3)
+
+        result = decide_preliminary_verification(summary, 2)
+
+        self.assertEqual(result["decision"], "request_mobile_verification")
+        self.assertEqual(result["reason"], "compatible_source_threshold_reached")
+        self.assertEqual(result["compatible_source_ids"], ("sensor-02", "sensor-03"))
+
+    def test_continua_a_observar_com_evidencia_insuficiente(self):
+        summary = self.evaluate(("sensor-02",), ("sensor-02",), 2)
+
+        result = decide_preliminary_verification(summary, 2)
+
+        self.assertEqual(result["decision"], "observe")
+        self.assertEqual(result["reason"], "insufficient_compatible_evidence")
+
+    def test_no_data_nao_produz_decisao_de_confirmacao(self):
+        summary = self.evaluate((), (), 2)
+        summary["classification"] = "no_data"
+        summary["preliminary_score"] = 0.0
+        summary["information_coverage"] = 0.0
+
+        result = decide_preliminary_verification(summary, 1)
+
+        self.assertEqual(result["decision"], "observe")
+        self.assertEqual(result["reason"], "no_information")
+        self.assertEqual(result["compatible_source_count"], 0)
+
+    def test_fontes_duplicadas_nao_atingem_o_minimo_independentemente(self):
+        summary = self.evaluate(
+            ("sensor-02", "sensor-02"),
+            ("sensor-02", "sensor-02"),
+            2,
+        )
+
+        result = decide_preliminary_verification(summary, 2)
+
+        self.assertEqual(result["decision"], "observe")
+        self.assertEqual(result["compatible_source_count"], 1)
+
+    def test_sem_fontes_elegiveis_devolve_observe_e_indicadores_indisponiveis(self):
+        summary = self.evaluate((), (), 0)
+
+        result = decide_preliminary_verification(summary, 1)
+
+        self.assertEqual(result["decision"], "observe")
+        self.assertEqual(result["reason"], "no_eligible_sources")
+        self.assertIsNone(result["preliminary_score"])
+        self.assertIsNone(result["information_coverage"])
+
+    def test_rejeita_limiar_invalido(self):
+        summary = self.evaluate(("sensor-02",), ("sensor-02",), 1)
+
+        with self.assertRaises(ValueError):
+            decide_preliminary_verification(summary, 0)
+        with self.assertRaises(TypeError):
+            decide_preliminary_verification(summary, True)
+
+    def test_limite_exato_e_valor_extremo(self):
+        summary = self.evaluate(("sensor-02",), ("sensor-02",), 1)
+
+        result = decide_preliminary_verification(summary, 1)
+
+        self.assertEqual(result["decision"], "request_mobile_verification")
+        self.assertEqual(result["preliminary_score"], 1.0)
+        self.assertEqual(result["information_coverage"], 1.0)
 
 if __name__ == "__main__":
     unittest.main()
