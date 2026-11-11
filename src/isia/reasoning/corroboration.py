@@ -4,9 +4,12 @@ The compatibility check deliberately uses only the two observations and the
 configured limits. It does not inspect simulator ground truth or real events.
 """
 
+from collections.abc import Mapping
 from math import hypot, isfinite
 
 from isia.domain.models import Observation
+from isia.domain.models import Position
+from isia.simulation.scenario import Source
 
 
 def are_observations_compatible(
@@ -48,6 +51,53 @@ def are_observations_compatible(
     time_difference = abs(first.observed_at - second.observed_at)
 
     return distance <= max_distance and time_difference <= max_time_difference
+
+
+def select_eligible_sources(
+    observation: Observation,
+    sensor_positions: Mapping[str, Position],
+    source_profiles: Mapping[str, Source],
+) -> tuple[str, ...]:
+    """Return sensor IDs that can independently help verify an observation.
+
+    A source is eligible when it has a known position and ``Source`` profile,
+    is not the source of ``observation``, and the observation position is at
+    most its configured detection range away. The distance comparison is
+    inclusive. Source modalities are deliberately not compared with the
+    observation type, so acoustic, visual and human sources may complement
+    one another.
+
+    Only the supplied sensor metadata is used: this function does not inspect
+    simulator events, ground truth or another source's observation history.
+    Identifiers are returned once, in lexicographic order.
+    """
+    if not isinstance(observation, Observation):
+        raise TypeError("observation must be an Observation.")
+    if not isinstance(sensor_positions, Mapping):
+        raise TypeError("sensor_positions must be a mapping.")
+    if not isinstance(source_profiles, Mapping):
+        raise TypeError("source_profiles must be a mapping.")
+
+    eligible = []
+    for sensor_id in sorted(set(sensor_positions) & set(source_profiles)):
+        if sensor_id == observation.source_id:
+            continue
+
+        position = sensor_positions[sensor_id]
+        profile = source_profiles[sensor_id]
+        if not isinstance(position, Position):
+            raise TypeError("Each sensor position must be a Position.")
+        if not isinstance(profile, Source):
+            raise TypeError("Each source profile must be a Source.")
+
+        distance = hypot(
+            observation.position.x - position.x,
+            observation.position.y - position.y,
+        )
+        if distance <= profile.detection_range:
+            eligible.append(sensor_id)
+
+    return tuple(eligible)
 
 
 def _validate_observation(observation: Observation, name: str) -> None:
