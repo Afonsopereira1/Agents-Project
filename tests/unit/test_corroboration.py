@@ -3,9 +3,11 @@ import unittest
 from isia.domain.models import Observation, Position
 from isia.reasoning.corroboration import (
     are_observations_compatible,
+    classify_verification_response,
     select_eligible_sources,
 )
 from isia.simulation.scenario import Source
+from isia.communication.messages import Message, MessageType, model_to_dict
 
 
 def make_observation(event_id, position, observed_at, source_id=None):
@@ -26,6 +28,22 @@ def make_sources():
         "sensor-near": Source("human", 3),
         "sensor-far": Source("acoustic", 2),
     }
+
+
+def make_verification_response(observations, status="observations_available"):
+    return Message(
+        "response-001",
+        MessageType.VERIFY_RESPONSE,
+        12.0,
+        {
+            "request_message_id": "request-001",
+            "observations": [model_to_dict(observation) for observation in observations],
+            "status": status,
+        },
+        incident_id="incident-001",
+        source_id="sensor-02",
+        conversation_id="conversation-001",
+    )
 
 
 class TestObservationCompatibility(unittest.TestCase):
@@ -117,6 +135,67 @@ class TestEligibleSources(unittest.TestCase):
             select_eligible_sources(observation, positions, sources),
             ("sensor-a", "sensor-z"),
         )
+
+
+class TestVerificationResponseClassification(unittest.TestCase):
+
+    def setUp(self):
+        self.initial = make_observation("obs-001", (5, 5), 10.0, "sensor-01")
+
+    def test_classifica_evidencia_compativel(self):
+        response = make_verification_response(
+            [make_observation("obs-002", (8, 5), 12.0, "sensor-02")]
+        )
+
+        result = classify_verification_response(self.initial, response, 3.0, 2.0)
+
+        self.assertEqual(result, {
+            "classification": "compatible",
+            "observation_ids": ("obs-002",),
+        })
+
+    def test_observacoes_incompativeis_sao_inconclusivas(self):
+        response = make_verification_response(
+            [make_observation("obs-002", (20, 20), 12.0, "sensor-02")]
+        )
+
+        result = classify_verification_response(self.initial, response, 3.0, 2.0)
+
+        self.assertEqual(result, {
+            "classification": "inconclusive",
+            "observation_ids": ("obs-002",),
+        })
+
+    def test_no_data_e_classificado_como_ausencia_de_dados(self):
+        response = make_verification_response([], status="no_data")
+
+        result = classify_verification_response(self.initial, response, 3.0, 2.0)
+
+        self.assertEqual(result, {
+            "classification": "no_data",
+            "observation_ids": (),
+        })
+
+    def test_repeticoes_nao_contam_como_evidencias_independentes(self):
+        repeated = make_observation("obs-002", (5, 5), 10.0, "sensor-02")
+        response = make_verification_response([repeated, repeated])
+
+        result = classify_verification_response(self.initial, response, 0.0, 0.0)
+
+        self.assertEqual(result["classification"], "compatible")
+        self.assertEqual(result["observation_ids"], ("obs-002",))
+
+    def test_rejeita_resposta_malformada(self):
+        malformed = Message(
+            "response-002",
+            MessageType.VERIFY_RESPONSE,
+            12.0,
+            {"request_message_id": "request-001", "status": "no_data"},
+            conversation_id="conversation-001",
+        )
+
+        with self.assertRaises(ValueError):
+            classify_verification_response(self.initial, malformed, 3.0, 2.0)
 
 
 if __name__ == "__main__":
