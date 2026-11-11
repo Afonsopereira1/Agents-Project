@@ -10,7 +10,7 @@ from spade.agent import Agent
 from spade.behaviour import OneShotBehaviour
 from spade.template import Template
 
-from isia.communication.messages import Message, MessageType
+from isia.communication.messages import Message, MessageType, model_to_dict
 from isia.communication.transport import (
     ONTOLOGY,
     PERFORMATIVE_INFORM,
@@ -49,26 +49,59 @@ class SensorAgent(Agent):
     def __init__(self, jid: str, password: str, informant_jid: str):
         super().__init__(jid, password)
         self.informant_jid = informant_jid
+        self.observation_feed = None
+        self.created_at: float | None = None
         self.response: Message | None = None
         self.conversation_id: str | None = None
+
+    def set_local_observation_feed(self, observation_feed, created_at: float) -> None:
+        """Give the agent only its local feed and simulation emission time."""
+        self.observation_feed = observation_feed
+        self.created_at = created_at
 
     class VerificationBehaviour(OneShotBehaviour):
         async def run(self):
             agent: SensorAgent = self.agent  # type: ignore[assignment]
             conversation_id = f"conversation-{uuid.uuid4().hex}"
             agent.conversation_id = conversation_id
-            request = Message(
-                message_id=f"request-{uuid.uuid4().hex}",
-                message_type=MessageType.VERIFY_REQUEST,
-                created_at=0.0,
-                payload={
+
+            observations = _recent_observations(agent.observation_feed)
+
+            if observations:
+                observation = observations[0]
+                created_at = (
+                    agent.created_at
+                    if isinstance(agent.created_at, (int, float))
+                    else observation.observed_at
+                )
+                payload = {
+                    "observation": model_to_dict(observation),
+                    "question": "Existem observações locais disponíveis para corroborar este sinal?",
+                }
+                event_id = None
+                incident_id = f"incident-{observation.event_id}"
+                source_id = observation.source_id
+            else:
+                # Backwards-compatible Etapa 3 demonstration path. The Etapa 4
+                # demonstration always supplies a real ObservationFeed.
+                created_at = 0.0
+                payload = {
                     "event_type": "suspected_activity",
                     "position": {"x": 6, "y": 9},
                     "question": "Existe evidência independente deste evento?",
-                },
-                event_id="event-example-001",
-                incident_id="incident-example-001",
-                source_id="sensor-example",
+                }
+                event_id = "event-example-001"
+                incident_id = "incident-example-001"
+                source_id = "sensor-example"
+
+            request = Message(
+                message_id=f"request-{uuid.uuid4().hex}",
+                message_type=MessageType.VERIFY_REQUEST,
+                created_at=created_at,
+                payload=payload,
+                event_id=event_id,
+                incident_id=incident_id,
+                source_id=source_id,
                 conversation_id=conversation_id,
             )
             outgoing = build_spade_message(
@@ -108,3 +141,14 @@ class SensorAgent(Agent):
         )
         self.behaviour = self.VerificationBehaviour()
         self.add_behaviour(self.behaviour, template)
+
+
+def _recent_observations(observation_feed) -> tuple:
+    """Read a local feed without accepting arbitrary agent state."""
+    recent = getattr(observation_feed, "recent", None)
+    if not callable(recent):
+        return ()
+    try:
+        return tuple(recent())
+    except TypeError:
+        return ()
