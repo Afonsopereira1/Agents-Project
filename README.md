@@ -89,6 +89,40 @@ no terminal em que foi iniciado.
 
 ### Mapa 2D e relógio da simulação
 
+**Estado atual:** as Etapas 1 e 2 estão concluídas, com modelos, contratos JSON,
+simulação 2D, sensores e cenários implementados e testados. A Etapa 3 está
+implementada nesta branch: `SensorAgent` e `InformantAgent` trocam
+`VERIFY_REQUEST`/`VERIFY_RESPONSE` através de SPADE, com dados de exemplo e
+correlação por `conversation-id`.
+
+### Demonstração da comunicação entre agentes
+
+Depois de instalar `requirements.txt` e iniciar um servidor XMPP compatível
+com SPADE (por exemplo, `spade run`), crie duas contas locais ou use contas
+disponibilizadas pelo servidor. As palavras-passe são sempre fornecidas por
+variáveis de ambiente:
+
+```bash
+export SENSOR_JID=sensor@localhost
+export SENSOR_PASSWORD='password-da-conta-do-servidor'
+export INFORMANT_JID=informant@localhost
+export INFORMANT_PASSWORD='password-da-conta-do-servidor'
+PYTHONPATH=src python3 main.py
+```
+
+O programa inicia os dois agentes, envia um pedido de verificação com um
+evento de exemplo, aguarda a resposta até ao timeout e encerra ambos os
+agentes no bloco `finally`. Não coloque palavras-passe no código ou no Git.
+
+Os testes locais podem ser executados com:
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+```
+
+Os testes de construção/parsing SPADE são ignorados quando SPADE não está
+instalado; para os executar, instale a versão fixada `spade==4.1.4`.
+
 Na raiz do repositório, sem precisar de SPADE nem de servidor XMPP:
 
 ```bash
