@@ -8,6 +8,7 @@ from .corroboration import (
     evaluate_preliminary_corroboration,
     select_eligible_sources,
 )
+from .allocation import MissionRegistry
 
 __all__ = [
     "aggregate_verification_responses",
@@ -16,4 +17,5 @@ __all__ = [
     "decide_preliminary_verification",
     "evaluate_preliminary_corroboration",
     "select_eligible_sources",
+    "MissionRegistry",
 ]
