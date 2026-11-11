@@ -1,6 +1,6 @@
 # Comunicação, mensagens e protocolos — proposta
 
-> **Estado:** modelos e contratos da Etapa 1 implementados e testados localmente, mantendo-se sujeitos à revisão do grupo; os nomes de mensagens e os exemplos JSON não são exigências literais do docente.
+> **Estado revisto (11-11-2026):** modelos e contratos da Etapa 1 implementados e testados; comunicação `VERIFY_REQUEST`/`VERIFY_RESPONSE` real por SPADE/XMPP integrada na `main` na Etapa 3; corroboração e decisão preliminar implementadas na branch da Etapa 4. Contratos de negociação/missões, classificação explícita de evidência negativa e aprovação formal do grupo continuam pendentes. Os nomes de mensagens não são exigências literais do docente.
 
 [README](../README.md) · [Arquitetura](architecture.md) · [Plano](development-plan.md) · [Decisões](architecture.md#decisões-pendentes)
 
@@ -251,9 +251,9 @@ sequenceDiagram
 
 ## 8. Implementação e compatibilidade SPADE
 
-Na Etapa 3 verificar, com a versão realmente instalada: `spade.agent.Agent`, comportamentos (`CyclicBehaviour`, `PeriodicBehaviour`), `spade.message.Message`, `Template`, `send`/`receive` e metadados. A utilização específica de FIPA deverá ser comprovada com um teste de integração, e não presumida a partir de exemplos antigos.
+Na Etapa 3 foram verificados com SPADE 4.1.4: `spade.agent.Agent`, `OneShotBehaviour`, `CyclicBehaviour`, `spade.message.Message`, `Template`, `send`/`receive` e metadados, com demonstração real XMPP. `PeriodicBehaviour` não foi necessário. O suporte de mensagens com metadados não implica validação integral de conformidade FIPA-ACL, que exigiria teste específico.
 
-Os contratos devem ser implementados em `communication/messages.py`, as conversações em `communication/protocols.py`, e a simulação de perda/latência num adaptador em `communication/transport.py`. Testes de serialização podem ser feitos sem XMPP; testes de entrega exigem agentes reais.
+Os contratos atuais estão implementados em `communication/messages.py`, o adaptador SPADE/XMPP em `communication/transport.py`, e a correlação de conversas nos comportamentos dos agentes. `communication/protocols.py` e a injeção parametrizada de perda/latência permanecem propostas para etapas posteriores. Os testes de serialização e mocks não substituem testes de entrega real XMPP; ambos foram executados separadamente para as Etapas 3–4.
 
 ## 9. Checklist de aprovação
 

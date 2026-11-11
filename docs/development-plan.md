@@ -1,6 +1,6 @@
 # Plano de desenvolvimento incremental — Etapas 0 a 10
 
-> **Proposta para aprovação.** Este roteiro deriva da [estratégia](architecture.md#estratégia-técnica-e-algoritmos) e dos [requisitos](../README.md#requisitos-e-fontes). As tarefas marcadas `- [ ]` **não estão concluídas**. Ficheiros Python e estruturas são sugeridos, não código já existente.
+> **Roteiro de acompanhamento (revisto em 2026-11-11).** Este roteiro deriva da [estratégia](architecture.md#estratégia-técnica-e-algoritmos) e dos [requisitos](../README.md#requisitos-e-fontes). `- [x]` indica uma tarefa com implementação/evidência verificada; `- [ ]` indica trabalho pendente, parcialmente demonstrado ou aprovação ainda não comprovada. As listas de ficheiros são orientadoras e não implicam que todos existam.
 
 [README](../README.md) · [Arquitetura](architecture.md) · [Protocolos](protocols.md) · [Equipa](team-tasks.md) · [Avaliação](evaluation.md) · [Decisões](architecture.md#decisões-pendentes)
 
@@ -46,14 +46,16 @@ Alguma documentação e infraestrutura de testes da Etapa 10 podem começar ante
 **Tarefas concretas:**
 
 - [ ] Confirmar a aprovação da documentação e identificar a branch de trabalho.
-- [ ] Listar todos os ficheiros e branches do repositório; examinar código desenvolvido entretanto.
-- [ ] Inventariar partes funcionais, dependências, funcionalidades incompletas e riscos.
-- [ ] Distinguir o ficheiro existente `requirements.md` da futura lista Python `requirements.txt`.
+- [x] Listar todos os ficheiros e branches do repositório; examinar código desenvolvido entretanto.
+- [x] Inventariar partes funcionais, dependências, funcionalidades incompletas e riscos.
+- [x] Distinguir o ficheiro existente `requirements.md` da futura lista Python `requirements.txt`.
 - [ ] Acordar versão de Python e testar instalação do SPADE em cada computador.
-- [ ] Configurar e testar a infraestrutura XMPP prevista para os testes locais.
-- [ ] Criar `.gitignore` para ambientes virtuais, caches, segredos e resultados volumosos.
-- [ ] Estabelecer convenções Git, `src/`, `tests/`, configuração e registo de decisões.
-- [ ] Criar script mínimo ou teste de arranque/paragem de um agente SPADE.
+- [x] Configurar e testar a infraestrutura XMPP prevista para os testes locais.
+- [x] Criar `.gitignore` para ambientes virtuais, caches, segredos e resultados volumosos.
+- [x] Estabelecer convenções Git, `src/`, `tests/`, configuração e registo de decisões.
+- [x] Criar script mínimo ou teste de arranque/paragem de um agente SPADE.
+
+**Evidência de execução (11-11-2026):** `requirements.txt` fixa `spade==4.1.4`; `.gitignore`, `src/`, `tests/`, `config/`, `docs/` e `hello_agent.py` existem. O servidor XMPP e a comunicação SPADE foram testados localmente, e a auditoria ao repositório identificou dependências e lacunas. **Ainda não há comprovação da aprovação formal da documentação nem de instalação/teste em todos os três computadores** — por isso essas duas tarefas permanecem por assinalar.
 
 **Dependências:** nenhuma etapa técnica anterior; depende da **aprovação da proposta** pelos três elementos. Permite iniciar as Etapas 1–3.
 
@@ -87,7 +89,7 @@ Alguma documentação e infraestrutura de testes da Etapa 10 podem começar ante
 - [x] Escrever exemplos válidos e inválidos.
 - [ ] Pedir revisão cruzada dos exemplos a quem implementará agentes e simulação.
 
-**Implementação verificada nesta branch:** `IncidentState`, contratos JSON
+**Implementação integrada na `main`:** `IncidentState`, contratos JSON
 independentes de SPADE, serialização/desserialização dos modelos e
 deduplicação por `message_id` estão implementados e testados. O contrato
 estrutural de `CFP` exige missão, incidente, conversa, tarefa, destino,
@@ -164,13 +166,15 @@ de missões continuam nas Etapas 4 e 6.
 
 **Tarefas concretas:**
 
-- [ ] Criar `SensorAgent` mínimo com `setup()` e comportamento de receção.
-- [ ] Criar segundo agente com `CyclicBehaviour` e, quando útil, `PeriodicBehaviour`.
-- [ ] Implementar envio/receção com `spade.message.Message` e `Template`.
-- [ ] Adicionar `performative`, `ontology`, referência de conversação e corpo JSON validado.
-- [ ] Fazer uma troca `VERIFY_REQUEST` → `VERIFY_RESPONSE` com IDs e timeout.
-- [ ] Tratar mensagem inválida, agente ausente, timeout e desligamento limpo.
-- [ ] Registar eventos de envio/receção para diagnóstico.
+- [x] Criar `SensorAgent` mínimo com `setup()` e comportamento de receção.
+- [x] Criar segundo agente com `CyclicBehaviour` e, quando útil, `PeriodicBehaviour`.
+- [x] Implementar envio/receção com `spade.message.Message` e `Template`.
+- [x] Adicionar `performative`, `ontology`, referência de conversação e corpo JSON validado.
+- [x] Fazer uma troca `VERIFY_REQUEST` → `VERIFY_RESPONSE` com IDs e timeout.
+- [x] Tratar mensagem inválida, agente ausente, timeout e desligamento limpo.
+- [x] Registar eventos de envio/receção para diagnóstico.
+
+**Evidência (PR #5, integrado em 11-11-2026):** `agents/sensor.py` utiliza `OneShotBehaviour` e `Template`; `agents/informant.py` utiliza `CyclicBehaviour` e `Template` (não foi necessário `PeriodicBehaviour`). `communication/transport.py` valida metadados e corpo; `main.py` inicia/encerra os dois agentes. Foram testados contratos, templates, rejeições, correlação, timeouts e conversas independentes, além de troca real SPADE/XMPP no servidor local. Um teste unitário com mocks não substitui a demonstração XMPP, realizada separadamente.
 
 **Dependências:** Etapas 0 e 1; pode decorrer **em paralelo com a Etapa 2**. Necessária à Etapa 4.
 
@@ -194,14 +198,18 @@ de missões continuam nas Etapas 4 e 6.
 
 **Tarefas concretas:**
 
-- [ ] Associar observações a ocorrências com regras espacial/temporal explícitas.
-- [ ] Selecionar fontes elegíveis para corroboração por proximidade/capacidade conhecida.
-- [ ] Enviar pedidos de verificação e aguardar respostas até ao prazo.
+- [x] Associar observações a ocorrências com regras espacial/temporal explícitas.
+- [x] Selecionar fontes elegíveis para corroboração por proximidade/capacidade conhecida.
+- [x] Enviar pedidos de verificação e aguardar respostas até ao prazo.
 - [ ] Classificar resposta: evidência compatível, evidência contraditória, ausência informativa ou sem dados.
-- [ ] Deduplicar por `event_id` e `message_id` e não contar *forwarding* como observações novas.
-- [ ] Calcular pontuação preliminar e grau de informação disponível.
-- [ ] Decidir, segundo regra simples inicial, observar ou solicitar verificação móvel.
-- [ ] Armazenar histórico necessário ao diagnóstico, sem supor que fontes correlacionadas são independentes.
+- [x] Deduplicar por `event_id` e `message_id` e não contar *forwarding* como observações novas.
+- [x] Calcular pontuação preliminar e grau de informação disponível.
+- [x] Decidir, segundo regra simples inicial, observar ou solicitar verificação móvel.
+- [x] Armazenar histórico necessário ao diagnóstico, sem supor que fontes correlacionadas são independentes.
+
+**Evidência (branch `feature/etapa4-corroboracao`, 11-11-2026):** `reasoning/corroboration.py` associa leituras por distância euclidiana e janela temporal, seleciona fontes, classifica observações, deduplica, agrega, calcula indicadores descritivos e produz decisão preliminar. `agents/sensor.py` e `agents/informant.py`, com `verification_demo.py`, demonstraram o fluxo real simulador → observações locais → XMPP → evidências → decisão. A suite local no ambiente SPADE executou **178 testes, OK**, incluindo timeout, mensagens tardias e histórico. A associação é uma correlação candidata; a gestão completa do ciclo de vida do objeto `Incident` pertence ao MVP de etapas posteriores. O histórico é consultável **apenas durante a vida do agente**.
+
+**Lacuna mantida em aberto:** a tarefa de classificação em quatro categorias não está integralmente concluída: o contrato atual distingue `compatible`, `inconclusive` e `no_data`, mas não permite demonstrar de forma fundamentada `contradictory` nem `informative_absence`. Não equiparar ausência de resposta a evidência negativa; resolver apenas quando houver contrato/critério explícito aprovado.
 
 **Dependências:** Etapas 2 e 3. É base da Etapa 5 e do módulo de reputação na Etapa 7.
 
@@ -415,7 +423,7 @@ de missões continuam nas Etapas 4 e 6.
 ## Checklist de marcos
 
 - [ ] Etapas 0–1: ambiente e contratos aceites pela equipa.
-- [ ] Etapas 2–3: simulador mínimo e comunicação real entre agentes.
+- [x] Etapas 2–3: simulador mínimo e comunicação real entre agentes.
 - [ ] Etapas 4–5: corroboração e negociação funcionais.
 - [ ] **Etapa 6: MVP validado em teste de integração.**
 - [ ] Etapas 7–8: reputação, política de resposta e falhas validadas.
