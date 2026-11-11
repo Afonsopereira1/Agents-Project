@@ -1,6 +1,6 @@
 # Comunicação, mensagens e protocolos — proposta
 
-> **Estado revisto (11-11-2026):** modelos e contratos da Etapa 1 implementados e testados; comunicação `VERIFY_REQUEST`/`VERIFY_RESPONSE` real por SPADE/XMPP integrada na `main` na Etapa 3; corroboração e decisão preliminar implementadas na branch da Etapa 4. Contratos de negociação/missões, classificação explícita de evidência negativa e aprovação formal do grupo continuam pendentes. Os nomes de mensagens não são exigências literais do docente.
+> **Estado revisto (11-11-2026):** modelos e contratos das Etapas 1–4 implementados e testados; comunicação de verificação real por SPADE/XMPP integrada na `main`; Contract Net e reserva local implementados na branch `feature/etapa5-contract-net`. O fluxo normal CFP → PROPOSAL/REJECT → ACCEPT → confirmação → `RESERVED` foi validado por XMPP no Ubuntu. Falhas, timeouts, mensagens tardias e rondas limitadas são cobertos por testes unitários/mocks; não se afirma validação XMPP real de todos esses cenários. A execução das missões e a recuperação após falha do iniciador continuam posteriores.
 
 [README](../README.md) · [Arquitetura](architecture.md) · [Plano](development-plan.md) · [Decisões](architecture.md#decisões-pendentes)
 
@@ -11,7 +11,7 @@
 | Transporte | Entrega assíncrona entre identidades | SPADE + XMPP |
 | Metadados da mensagem | Intenção, protocolo e associação à conversa | Campos/`metadata` com semântica FIPA-ACL |
 | Corpo da mensagem | Dados do domínio | JSON UTF-8 validado e versionado |
-| Protocolo | Ordem de mensagens, prazos, recusa e falhas | `verification`, `task-allocation`, `mission-report` |
+| Protocolo | Ordem de mensagens, prazos, recusa e falhas | `verification`, `contract-net` |
 | Lógica de domínio | Corroboração, reputação e decisões | Funções locais em `reasoning/`, sem gestor global |
 
 **Nota:** `ALERT`, `VERIFY_REQUEST` etc. são **tipos de conteúdo do domínio**. `inform`, `request`, `cfp`, `propose`, `accept-proposal`, `reject-proposal` são *performatives* FIPA. Não devem ser confundidos.
@@ -88,10 +88,10 @@ arquitetura e são imutáveis: cada mudança devolve um novo `IncidentState`.
 `deadline` em segundos simulados. Esta validação é estrutural; a negociação e
 a reserva pertencem a etapas posteriores.
 
-**Aprovação formal ainda pendente dos três elementos:** confirmar estes
-contratos e a política proposta de retenção de `600.0` segundos. Esta
-implementação não impõe UUID aos IDs existentes, não implementa expiração
-operacional, transporte, agentes SPADE, corroboração ou Contract Net.
+Os contratos de negociação usados atualmente estão implementados em
+`src/isia/reasoning/allocation.py`, e o adaptador SPADE/XMPP está em
+`src/isia/communication/transport.py`. A implementação não impõe UUID aos IDs
+existentes, mas gera IDs locais únicos para CFPs, conversas, ACCEPTs e estados.
 
 Metadados SPADE recomendados: `performative`, `ontology`, `protocol`, `conversation-id` (ou correlação por `thread`, a validar no SPADE escolhido), `reply-with` e `in-reply-to` quando aplicáveis. O endereço do remetente/destinatário deverá ser obtido e validado pela infraestrutura SPADE, evitando confiar cegamente num `source_id` declarado no corpo.
 
@@ -208,8 +208,13 @@ sequenceDiagram
   alt Proposta válida aceite
     M->>D: accept-proposal / ACCEPT
     M->>V: reject-proposal / REJECT
-    D-->>M: agree / reserva confirmada
-    D-->>M: inform ou failure / MISSION_RESULT
+    D-->>M: inform / STATUS(reserved)
+    Note over M: Só depois da confirmação: Mission.PROPOSED → RESERVED
+  else Reserva recusada explicitamente
+    D-->>M: inform / STATUS(reservation_failed)
+    Note over M: Nova ronda limitada, com novo CFP/conversa
+  else Confirmação desconhecida
+    Note over M: Timeout real; não enviar outro ACCEPT
   else Sem proposta elegível
     Note over M: Marcar incidente não resolvido ou tentar nova ronda
   end
@@ -217,14 +222,32 @@ sequenceDiagram
 
 ### Regras operacionais
 
-1. Cada CFP contém `conversation-id`, `mission_id`, capacidades mínimas e `deadline`.
+1. Cada CFP contém `conversation-id`, `mission_id`, `incident_id`, capacidades mínimas e `deadline`.
 2. O recurso avalia localmente se pode executar, rejeitando missões incompatíveis com a sua disponibilidade ou autonomia.
 3. A proposta calcula ETA, consumo energético e custo dentro de unidades explicitadas.
 4. O iniciador ignora propostas tardias, duplicadas e de missões diferentes.
 5. A aceitação só se torna **missão confirmada** após o recurso garantir uma reserva válida.
-6. A ausência de confirmação ou falha é tratada com timeout, estado explícito e eventual negociação alternativa.
-7. A perda do iniciador deve ter uma política de recuperação acordada (p. ex. expiração de liderança local e novo iniciador determinístico). **Ainda não está definida.**
-8. O encerramento deve ser idempotente: mensagens repetidas não criam novas missões.
+6. `STATUS(reserved)` confirma a reserva; `STATUS(reservation_failed)` é uma recusa explícita. Um timeout depois de `ACCEPT` produz `confirmation_unknown` e não autoriza outro `ACCEPT` automático.
+7. A nova ronda só é permitida após recusa explícita, usa novos IDs e está limitada a duas rondas (`CONTRACT_MAX_ROUNDS`); ausência de propostas produz `no_eligible_proposals`.
+8. O encerramento deve ser idempotente: mensagens repetidas não criam novas missões nem reservas incompatíveis. A perda do iniciador continua sem política de recuperação distribuída.
+
+### Resultados da ronda
+
+O iniciador expõe quatro resultados distintos, sem os converter
+silenciosamente em estados de missão:
+
+| Resultado | Condição | Estado da missão |
+|---|---|---|
+| `reservation_confirmed` | `STATUS/inform` válido com `status=reserved` | `RESERVED` |
+| `no_eligible_proposals` | nenhuma `PROPOSAL` válida antes do `ACCEPT` | permanece `PROPOSED` |
+| `reservation_rejected` | recurso respondeu `STATUS/inform` com `reservation_failed` | permanece `PROPOSED` |
+| `confirmation_unknown` | nenhum `STATUS` correlacionado chegou no timeout real | permanece `PROPOSED`; não há novo `ACCEPT` automático |
+
+As propostas são comparadas por custo normalizado:
+`w_eta * ETA/eta_scale + w_energy * energy/energy_scale +
+w_load * load/load_scale`. O desempate é determinístico por `resource_id` e
+`message_id`. Uma proposta não reserva o recurso; a reserva ocorre apenas ao
+processar `ACCEPT` no agente móvel através de `LocalResourceReservation`.
 
 ## 6. Estado e ordenação
 
@@ -251,9 +274,9 @@ sequenceDiagram
 
 ## 8. Implementação e compatibilidade SPADE
 
-Na Etapa 3 foram verificados com SPADE 4.1.4: `spade.agent.Agent`, `OneShotBehaviour`, `CyclicBehaviour`, `spade.message.Message`, `Template`, `send`/`receive` e metadados, com demonstração real XMPP. `PeriodicBehaviour` não foi necessário. O suporte de mensagens com metadados não implica validação integral de conformidade FIPA-ACL, que exigiria teste específico.
+Na Etapa 3 foram verificados com SPADE 4.1.4: `spade.agent.Agent`, `OneShotBehaviour`, `CyclicBehaviour`, `spade.message.Message`, `Template`, `send`/`receive` e metadados, com demonstração real XMPP. Na Etapa 5, `MobileResourceAgent` reutiliza `CyclicBehaviour` e `Template` para `CFP` e `accept-proposal`; `contract_net_demo.py` usa `OneShotBehaviour` no iniciador. `PeriodicBehaviour` não foi necessário. O suporte de mensagens com metadados não implica validação integral de conformidade FIPA-ACL, que exigiria teste específico.
 
-Os contratos atuais estão implementados em `communication/messages.py`, o adaptador SPADE/XMPP em `communication/transport.py`, e a correlação de conversas nos comportamentos dos agentes. `communication/protocols.py` e a injeção parametrizada de perda/latência permanecem propostas para etapas posteriores. Os testes de serialização e mocks não substituem testes de entrega real XMPP; ambos foram executados separadamente para as Etapas 3–4.
+Os contratos atuais estão implementados em `src/isia/communication/messages.py`, o adaptador SPADE/XMPP em `src/isia/communication/transport.py`, a lógica de alocação em `src/isia/reasoning/allocation.py`, e a correlação nos comportamentos dos agentes e no demo. Não existe atualmente `communication/protocols.py` separado, nem módulos específicos `drone.py`, `vehicle.py` ou `ranger.py`; o recurso móvel comum está em `src/isia/agents/mobile.py`. A injeção parametrizada de perda/latência permanece proposta para etapas posteriores. Os testes de serialização e mocks não substituem testes de entrega real XMPP; na Etapa 5 o cenário normal foi executado com XMPP e os cenários de falha foram testados localmente com mocks/determinismo.
 
 ## 9. Checklist de aprovação
 

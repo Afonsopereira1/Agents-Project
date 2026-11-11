@@ -8,6 +8,22 @@ from .corroboration import (
     evaluate_preliminary_corroboration,
     select_eligible_sources,
 )
+from .allocation import (
+    AllocationOutcome,
+    ContractNetResult,
+    LocalResourceReservation,
+    MissionRegistry,
+    ReservationResult,
+    ReservationStatus,
+    accept_matches_proposal,
+    build_accept_message,
+    build_cfp_message,
+    build_proposal_rejection_message,
+    build_reservation_status_message,
+    evaluate_cfp,
+    reservation_status_matches_accept,
+    select_best_proposal,
+)
 
 __all__ = [
     "aggregate_verification_responses",
@@ -16,4 +32,18 @@ __all__ = [
     "decide_preliminary_verification",
     "evaluate_preliminary_corroboration",
     "select_eligible_sources",
+    "MissionRegistry",
+    "AllocationOutcome",
+    "ContractNetResult",
+    "LocalResourceReservation",
+    "ReservationResult",
+    "ReservationStatus",
+    "accept_matches_proposal",
+    "build_accept_message",
+    "build_cfp_message",
+    "build_proposal_rejection_message",
+    "build_reservation_status_message",
+    "evaluate_cfp",
+    "reservation_status_matches_accept",
+    "select_best_proposal",
 ]

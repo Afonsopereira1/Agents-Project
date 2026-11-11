@@ -16,6 +16,11 @@ ONTOLOGY = "isia"
 VERIFICATION_PROTOCOL = "verification"
 PERFORMATIVE_REQUEST = "request"
 PERFORMATIVE_INFORM = "inform"
+PERFORMATIVE_CFP = "cfp"
+PERFORMATIVE_PROPOSE = "propose"
+PERFORMATIVE_REJECT_PROPOSAL = "reject-proposal"
+PERFORMATIVE_ACCEPT_PROPOSAL = "accept-proposal"
+CONTRACT_NET_PROTOCOL = "contract-net"
 
 
 def build_spade_message(
@@ -26,6 +31,7 @@ def build_spade_message(
     conversation_id: str,
     reply_with: str | None = None,
     in_reply_to: str | None = None,
+    protocol: str = VERIFICATION_PROTOCOL,
 ) -> Any:
     """Cria uma mensagem SPADE com corpo e metadados do contrato ISIA."""
     if SpadeMessage is None:
@@ -39,7 +45,7 @@ def build_spade_message(
     metadata = {
         "performative": performative,
         "ontology": ONTOLOGY,
-        "protocol": VERIFICATION_PROTOCOL,
+        "protocol": protocol,
         "conversation-id": conversation_id,
     }
     if reply_with is not None:
@@ -51,13 +57,17 @@ def build_spade_message(
     return message
 
 
-def parse_spade_message(message: Any) -> Message:
+def parse_spade_message(
+    message: Any,
+    *,
+    expected_protocol: str = VERIFICATION_PROTOCOL,
+) -> Message:
     """Valida metadados essenciais e descodifica o corpo JSON ISIA."""
     if message is None:
         raise ValueError("Mensagem SPADE ausente.")
     if message.get_metadata("ontology") != ONTOLOGY:
         raise ValueError("Ontology SPADE inesperada.")
-    if message.get_metadata("protocol") != VERIFICATION_PROTOCOL:
+    if message.get_metadata("protocol") != expected_protocol:
         raise ValueError("Protocol SPADE inesperado.")
     conversation_id = message.get_metadata("conversation-id")
     if not conversation_id:

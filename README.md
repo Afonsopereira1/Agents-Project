@@ -3,7 +3,7 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado (11-11-2026):** Etapas 1–3 implementadas, testadas e integradas na `main`. A Etapa 4 está implementada e validada na branch `feature/etapa4-corroboracao` (178 testes locais aprovados e demonstração SPADE/XMPP real), pendente de revisão/integração. A classificação explícita de evidência contraditória e ausência informativa ainda não está suportada pelo contrato atual. As Etapas 5–10 e as aprovações formais da arquitetura/contratos pelos três elementos permanecem pendentes.
+> **Estado (11-11-2026):** Etapas 1–4 implementadas e validadas. A Etapa 5 está implementada na branch `feature/etapa5-contract-net`, com 217 testes aprovados no Ubuntu e demonstração SPADE/XMPP real do fluxo normal CFP → PROPOSAL/REJECT → seleção → ACCEPT → confirmação → `RESERVED`. Os cenários de falha da Etapa 5 são cobertos por testes unitários/mocks; não se afirma que todos foram executados contra XMPP real. A execução/movimento de missões da Etapa 6 e as Etapas 7–10 permanecem pendentes.
 
 ## O projeto
 
@@ -20,6 +20,7 @@ O simulador mantém a verdade dos acontecimentos apenas para avaliação; os age
 | Arquitetura, agentes, algoritmos e decisões pendentes | [docs/architecture.md](docs/architecture.md) |
 | Mensagens e protocolos de comunicação | [docs/protocols.md](docs/protocols.md) |
 | Testes, métricas e três cenários | [docs/evaluation.md](docs/evaluation.md) |
+| Demonstração Contract Net da Etapa 5 | [contract_net_demo.py](contract_net_demo.py) |
 | Organização flexível dos colegas | [docs/team-tasks.md](docs/team-tasks.md) e [Issues](https://github.com/Afonsopereira1/Agents-Project/issues) |
 
 **MVP previsto:** ocorrência → observação → evidências → avaliação → propostas de recursos → missão → resultado. O MVP não substitui os requisitos da entrega final.
@@ -138,6 +139,42 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 
 Os testes de construção/parsing SPADE são ignorados quando SPADE não está
 instalado; para os executar, instale a versão fixada `spade==4.1.4`.
+
+### Demonstração da Etapa 5 — Contract Net e reserva
+
+Com um servidor XMPP local compatível com SPADE em execução, a demonstração
+[contract_net_demo.py](contract_net_demo.py) inicia um agente iniciador e dois
+recursos móveis. O cenário normal envia CFP, recolhe `PROPOSAL`/`REJECT`,
+seleciona deterministicamente a melhor proposta, envia `ACCEPT`, aguarda o
+`STATUS/inform` de reserva e só então altera a missão para `RESERVED`.
+
+Os prazos em `CFP` são instantes absolutos em **segundos simulados**. O tempo
+de espera por mensagens XMPP é um timeout de parede independente.
+
+As palavras-passe devem ser fornecidas apenas por variáveis de ambiente:
+
+```bash
+export CONTRACT_INITIATOR_JID=initiator@localhost
+export CONTRACT_INITIATOR_PASSWORD='password-da-conta'
+export CONTRACT_RESOURCE_ONE_JID=drone@localhost
+export CONTRACT_RESOURCE_ONE_PASSWORD='password-da-conta'
+export CONTRACT_RESOURCE_TWO_JID=vehicle@localhost
+export CONTRACT_RESOURCE_TWO_PASSWORD='password-da-conta'
+export CONTRACT_MAX_ROUNDS=2
+export CONTRACT_RECEIVE_TIMEOUT_SECONDS=10
+PYTHONPATH=src python3 contract_net_demo.py
+```
+
+`CONTRACT_MAX_ROUNDS` aceita `1` ou `2` e impede ciclos infinitos. Uma recusa
+explícita de reserva pode iniciar a ronda seguinte com novos IDs de CFP e
+conversa, mantendo `mission_id` e `incident_id`. Um timeout depois de `ACCEPT`
+produz `confirmation_unknown`; não provoca outro `ACCEPT` nem marca a missão
+como reservada. A ausência de propostas produz `no_eligible_proposals`.
+
+Os testes com mocks validam ausência de propostas, recusas, timeouts, mensagens
+tardias, limite de rondas e concorrência. A demonstração XMPP real validada no
+Ubuntu cobre o cenário normal; os testes unitários não substituem essa
+validação de transporte.
 
 Na raiz do repositório, sem precisar de SPADE nem de servidor XMPP:
 
