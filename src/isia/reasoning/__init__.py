@@ -13,8 +13,13 @@ from .allocation import (
     MissionRegistry,
     ReservationResult,
     ReservationStatus,
+    accept_matches_proposal,
+    build_accept_message,
     build_cfp_message,
+    build_proposal_rejection_message,
+    build_reservation_status_message,
     evaluate_cfp,
+    reservation_status_matches_accept,
     select_best_proposal,
 )
 
@@ -29,7 +34,12 @@ __all__ = [
     "LocalResourceReservation",
     "ReservationResult",
     "ReservationStatus",
+    "accept_matches_proposal",
+    "build_accept_message",
     "build_cfp_message",
+    "build_proposal_rejection_message",
+    "build_reservation_status_message",
     "evaluate_cfp",
+    "reservation_status_matches_accept",
     "select_best_proposal",
 ]

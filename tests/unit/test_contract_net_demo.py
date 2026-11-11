@@ -1,15 +1,26 @@
 import unittest
 
 from isia.communication.messages import Message, MessageType
-from isia.domain.models import Position
+from isia.domain.models import Position, ResourceState
 
 try:
     from spade.message import Message as SpadeMessage
 
-    from contract_net_demo import ContractNetInitiatorAgent, response_matches_cfp
+    from contract_net_demo import (
+        ContractNetInitiatorAgent,
+        confirmation_matches_accept,
+        response_matches_cfp,
+    )
     from isia.communication.transport import (
         CONTRACT_NET_PROTOCOL,
         ONTOLOGY,
+        PERFORMATIVE_INFORM,
+        build_spade_message,
+    )
+    from isia.reasoning.allocation import (
+        LocalResourceReservation,
+        build_accept_message,
+        build_reservation_status_message,
     )
 except ImportError:
     SpadeMessage = None
@@ -123,6 +134,49 @@ class TestContractNetDemoCorrelation(unittest.TestCase):
             )
         )
         self.assertEqual(response.payload["reason"], "cfp_expired")
+
+    def test_confirmation_is_correlated_with_accept_and_resource(self):
+        proposal = self.response()
+        accept = build_accept_message(self.cfp, proposal, 22.0)
+        result = LocalResourceReservation(
+            ResourceState("drone-demo", "drone", Position(1, 2), True, 80.0)
+        ).reserve("mission-1")
+        status = build_reservation_status_message(
+            accept, result, resource_id="drone-demo", created_at=22.0
+        )
+        incoming = SpadeMessage(
+            to="initiator@localhost", sender="drone@localhost", body=status.to_json()
+        )
+        for key, value in {
+            "ontology": ONTOLOGY,
+            "protocol": CONTRACT_NET_PROTOCOL,
+            "performative": PERFORMATIVE_INFORM,
+            "conversation-id": self.cfp.conversation_id,
+            "in-reply-to": accept.message_id,
+        }.items():
+            incoming.set_metadata(key, value)
+
+        self.assertTrue(
+            confirmation_matches_accept(
+                incoming,
+                status,
+                accept,
+                winner_jid="drone@localhost",
+                resource_id="drone-demo",
+                initiator_jid="initiator@localhost",
+            )
+        )
+        incoming.sender = "other@localhost"
+        self.assertFalse(
+            confirmation_matches_accept(
+                incoming,
+                status,
+                accept,
+                winner_jid="drone@localhost",
+                resource_id="drone-demo",
+                initiator_jid="initiator@localhost",
+            )
+        )
 
 
 @unittest.skipUnless(SpadeMessage is not None, "SPADE não está instalado")

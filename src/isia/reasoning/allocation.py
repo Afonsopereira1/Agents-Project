@@ -1,5 +1,7 @@
 """Raciocínio local para criação, negociação e reserva de missões."""
 
+from __future__ import annotations
+
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from math import isfinite
@@ -26,6 +28,164 @@ MOBILE_VERIFICATION_DECISION = "request_mobile_verification"
 MOBILE_VERIFICATION_TASK = "verify_incident"
 MOBILE_VERIFICATION_CAPABILITY = "mobile_verification"
 CONTRACT_NET_REJECT_REASON = "cfp_rejected"
+
+
+def _validate_contract_net_message(message: Message, message_type: MessageType) -> None:
+    if not isinstance(message, Message):
+        raise TypeError("message deve ser Message.")
+    if message.message_type is not message_type:
+        raise ValueError(f"A mensagem deve ser {message_type.value}.")
+    for name in ("mission_id", "incident_id", "conversation_id"):
+        if not isinstance(getattr(message, name), str) or not getattr(message, name).strip():
+            raise ValueError(f"{name} deve estar presente.")
+
+
+def build_accept_message(
+    cfp: Message,
+    proposal: Message,
+    created_at: float,
+    *,
+    message_id: str | None = None,
+    source_id: str | None = None,
+) -> Message:
+    """Construir ACCEPT correlacionado com um CFP e uma PROPOSAL.
+
+    ``created_at`` é um instante absoluto em segundos simulados. A mensagem
+    referencia explicitamente os IDs do CFP e da proposta, permitindo ao
+    recurso rejeitar ACCEPTs de outra ronda sem reservar nada.
+    """
+    _validate_contract_net_message(cfp, MessageType.CFP)
+    _validate_contract_net_message(proposal, MessageType.PROPOSAL)
+    if (proposal.mission_id, proposal.incident_id, proposal.conversation_id) != (
+        cfp.mission_id,
+        cfp.incident_id,
+        cfp.conversation_id,
+    ):
+        raise ValueError("A proposta não pertence ao CFP.")
+    if proposal.payload.get("cfp_message_id") != cfp.message_id:
+        raise ValueError("A proposta não referencia o CFP.")
+    bid = model_from_dict(proposal.payload.get("bid"), Bid)
+    if bid.mission_id != cfp.mission_id or bid.resource_id != proposal.source_id:
+        raise ValueError("A proposta contém uma Bid incoerente.")
+    created = _validate_simulated_time(created_at, "created_at")
+    return Message(
+        message_id or f"accept-{uuid4()}",
+        MessageType.ACCEPT,
+        created,
+        {
+            "cfp_message_id": cfp.message_id,
+            "proposal_message_id": proposal.message_id,
+            "resource_id": bid.resource_id,
+        },
+        incident_id=cfp.incident_id,
+        mission_id=cfp.mission_id,
+        source_id=source_id,
+        conversation_id=cfp.conversation_id,
+    )
+
+
+def build_proposal_rejection_message(
+    cfp: Message,
+    proposal: Message,
+    created_at: float,
+    *,
+    message_id: str | None = None,
+) -> Message:
+    """Construir REJECT do iniciador para uma proposta não selecionada."""
+    accept = build_accept_message(
+        cfp, proposal, created_at, message_id=message_id or f"reject-{uuid4()}"
+    )
+    return Message(
+        accept.message_id,
+        MessageType.REJECT,
+        accept.created_at,
+        {**accept.payload, "reason": "proposal_not_selected"},
+        incident_id=accept.incident_id,
+        mission_id=accept.mission_id,
+        source_id=accept.source_id,
+        conversation_id=accept.conversation_id,
+    )
+
+
+def accept_matches_proposal(
+    accept: Message,
+    cfp: Message,
+    proposal: Message,
+    resource_id: str,
+) -> bool:
+    """Validar todos os identificadores de uma aceitação para um recurso."""
+    try:
+        _validate_contract_net_message(accept, MessageType.ACCEPT)
+        _validate_contract_net_message(cfp, MessageType.CFP)
+        _validate_contract_net_message(proposal, MessageType.PROPOSAL)
+        bid = model_from_dict(proposal.payload.get("bid"), Bid)
+    except (TypeError, ValueError):
+        return False
+    return (
+        accept.mission_id == cfp.mission_id == proposal.mission_id == bid.mission_id
+        and accept.incident_id == cfp.incident_id == proposal.incident_id
+        and accept.conversation_id == cfp.conversation_id == proposal.conversation_id
+        and accept.payload.get("cfp_message_id") == cfp.message_id
+        and accept.payload.get("proposal_message_id") == proposal.message_id
+        and accept.payload.get("resource_id") == resource_id == proposal.source_id == bid.resource_id
+    )
+
+
+def build_reservation_status_message(
+    accept: Message,
+    result: ReservationResult,
+    *,
+    resource_id: str,
+    created_at: float,
+) -> Message:
+    """Construir STATUS ``reserved`` ou falha, sem esconder a reserva."""
+    _validate_contract_net_message(accept, MessageType.ACCEPT)
+    if not isinstance(result, ReservationResult):
+        raise TypeError("result deve ser ReservationResult.")
+    if not isinstance(resource_id, str) or not resource_id.strip():
+        raise ValueError("resource_id inválido.")
+    status = "reserved" if result.confirmed else "reservation_failed"
+    payload = {
+        "accept_message_id": accept.message_id,
+        "mission_id": accept.mission_id,
+        "resource_id": resource_id,
+        "status": status,
+        "reservation_status": result.status,
+    }
+    if not result.confirmed:
+        payload["reason"] = result.reason
+    return Message(
+        f"status-{resource_id}-{accept.message_id}",
+        MessageType.STATUS,
+        _validate_simulated_time(created_at, "created_at"),
+        payload,
+        incident_id=accept.incident_id,
+        mission_id=accept.mission_id,
+        source_id=resource_id,
+        conversation_id=accept.conversation_id,
+    )
+
+
+def reservation_status_matches_accept(
+    status: Message,
+    accept: Message,
+    resource_id: str,
+) -> bool:
+    """Validar confirmação STATUS recebida do recurso vencedor."""
+    try:
+        _validate_contract_net_message(status, MessageType.STATUS)
+        _validate_contract_net_message(accept, MessageType.ACCEPT)
+    except (TypeError, ValueError):
+        return False
+    return (
+        status.mission_id == accept.mission_id
+        and status.incident_id == accept.incident_id
+        and status.conversation_id == accept.conversation_id
+        and status.source_id == resource_id
+        and status.payload.get("accept_message_id") == accept.message_id
+        and status.payload.get("resource_id") == resource_id
+        and status.payload.get("status") in ("reserved", "reservation_failed")
+    )
 
 
 class ReservationStatus:

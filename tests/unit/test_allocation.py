@@ -15,8 +15,11 @@ from isia.reasoning.allocation import (
     LocalResourceReservation,
     MissionRegistry,
     ReservationStatus,
+    build_accept_message,
     build_cfp_message,
+    build_reservation_status_message,
     evaluate_cfp,
+    reservation_status_matches_accept,
     select_best_proposal,
 )
 
@@ -428,6 +431,33 @@ class TestMissionRegistry(unittest.TestCase):
         self.assertEqual(wrong_resource.reason, "resource_id_invalid")
         self.assertEqual(reservation.resource_state.status, ResourceStatus.AVAILABLE)
         self.assertIsNone(reservation.reserved_mission_id)
+
+    def test_accept_and_reservation_confirmation_preserve_correlations(self):
+        cfp = self._cfp()
+        proposal = self._proposal(cfp, "drone-1")
+        accept = build_accept_message(cfp, proposal, 22.0, source_id="initiator-1")
+        result = LocalResourceReservation(self._resource()).reserve(
+            cfp.mission_id, resource_id="drone-1"
+        )
+        status = build_reservation_status_message(
+            accept, result, resource_id="drone-1", created_at=22.0
+        )
+
+        self.assertEqual(accept.mission_id, cfp.mission_id)
+        self.assertEqual(accept.incident_id, cfp.incident_id)
+        self.assertEqual(accept.conversation_id, cfp.conversation_id)
+        self.assertEqual(accept.payload["cfp_message_id"], cfp.message_id)
+        self.assertEqual(accept.payload["proposal_message_id"], proposal.message_id)
+        restored = Message.from_json(status.to_json())
+        self.assertTrue(reservation_status_matches_accept(restored, accept, "drone-1"))
+        self.assertEqual(restored.payload["status"], "reserved")
+
+    def test_accept_rejects_proposal_from_another_conversation(self):
+        cfp = self._cfp()
+        proposal = self._proposal(cfp, "drone-1", conversation_id="other")
+
+        with self.assertRaises(ValueError):
+            build_accept_message(cfp, proposal, 22.0)
 
 
 if __name__ == "__main__":

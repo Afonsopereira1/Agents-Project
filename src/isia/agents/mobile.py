@@ -8,20 +8,33 @@ from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
 from spade.template import Template
 
-from isia.communication.messages import MessageType
+from isia.communication.messages import Message, MessageType
 from isia.communication.transport import (
     CONTRACT_NET_PROTOCOL,
     ONTOLOGY,
     PERFORMATIVE_CFP,
+    PERFORMATIVE_ACCEPT_PROPOSAL,
+    PERFORMATIVE_INFORM,
     PERFORMATIVE_PROPOSE,
     PERFORMATIVE_REJECT_PROPOSAL,
     build_spade_message,
     parse_spade_message,
 )
 from isia.domain.models import ResourceState
-from isia.reasoning.allocation import evaluate_cfp
+from isia.reasoning.allocation import (
+    LocalResourceReservation,
+    ReservationResult,
+    ReservationStatus,
+    accept_matches_proposal,
+    build_reservation_status_message,
+    evaluate_cfp,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _bare_jid(value: object) -> str:
+    return str(value).split("/", 1)[0].lower()
 
 
 class MobileResourceAgent(Agent):
@@ -53,6 +66,8 @@ class MobileResourceAgent(Agent):
         self.energy_cost_percent = energy_cost_percent
         self.load = load
         self.simulated_time = simulated_time
+        self.reservation = LocalResourceReservation(resource)
+        self._proposal_context: dict[str, tuple[Message, Message, str]] = {}
 
     def set_simulated_time(self, simulated_time: float) -> None:
         self.simulated_time = simulated_time
@@ -72,7 +87,7 @@ class MobileResourceAgent(Agent):
                 agent: MobileResourceAgent = self.agent  # type: ignore[assignment]
                 response = evaluate_cfp(
                     cfp,
-                    agent.resource,
+                    agent.reservation.resource_state,
                     agent.capabilities,
                     current_time=agent.simulated_time,
                     minimum_autonomy_percent=agent.minimum_autonomy_percent,
@@ -93,8 +108,75 @@ class MobileResourceAgent(Agent):
                     protocol=CONTRACT_NET_PROTOCOL,
                 )
                 await self.send(reply)
+                if response.message_type is MessageType.PROPOSAL:
+                    agent._proposal_context[response.message_id] = (
+                        cfp,
+                        response,
+                        str(incoming.sender),
+                    )
             except (TypeError, ValueError) as error:
                 logger.warning("CFP rejeitado: %s", error)
+
+    class AcceptBehaviour(CyclicBehaviour):
+        async def run(self):
+            incoming = await self.receive(timeout=10)
+            if incoming is None:
+                return
+            agent: MobileResourceAgent = self.agent  # type: ignore[assignment]
+            try:
+                accept = parse_spade_message(
+                    incoming,
+                    expected_protocol=CONTRACT_NET_PROTOCOL,
+                )
+                if accept.message_type is not MessageType.ACCEPT:
+                    return
+                context = agent._proposal_context.get(
+                    accept.payload.get("proposal_message_id")
+                )
+                if context is None:
+                    result = ReservationResult(
+                        ReservationStatus.INVALID_REQUEST,
+                        agent.reservation.resource_state,
+                        accept.mission_id,
+                        "proposal_not_correlated",
+                    )
+                else:
+                    cfp, proposal, initiator = context
+                    valid_sender = _bare_jid(incoming.sender) == _bare_jid(initiator)
+                    valid_recipient = _bare_jid(getattr(incoming, "to", "")) == _bare_jid(agent.jid)
+                    valid_source = accept.source_id is None or _bare_jid(accept.source_id) == _bare_jid(initiator)
+                    if not valid_sender or not valid_source or not accept_matches_proposal(
+                        accept, cfp, proposal, agent.reservation.resource_state.resource_id
+                    ) or not valid_recipient:
+                        result = ReservationResult(
+                            ReservationStatus.INVALID_REQUEST,
+                            agent.reservation.resource_state,
+                            accept.mission_id,
+                            "accept_correlation_invalid",
+                        )
+                    else:
+                        result = agent.reservation.reserve(
+                            accept.mission_id,
+                            resource_id=agent.reservation.resource_state.resource_id,
+                        )
+                        agent.resource = result.resource_state
+                status = build_reservation_status_message(
+                    accept,
+                    result,
+                    resource_id=agent.reservation.resource_state.resource_id,
+                    created_at=agent.simulated_time,
+                )
+                reply = build_spade_message(
+                    str(incoming.sender),
+                    status,
+                    performative=PERFORMATIVE_INFORM,
+                    conversation_id=accept.conversation_id,
+                    in_reply_to=accept.message_id,
+                    protocol=CONTRACT_NET_PROTOCOL,
+                )
+                await self.send(reply)
+            except (TypeError, ValueError) as error:
+                logger.warning("ACCEPT rejeitado: %s", error)
 
     async def setup(self):
         template = Template(
@@ -105,3 +187,11 @@ class MobileResourceAgent(Agent):
             }
         )
         self.add_behaviour(self.ContractNetBehaviour(), template)
+        accept_template = Template(
+            metadata={
+                "performative": PERFORMATIVE_ACCEPT_PROPOSAL,
+                "ontology": ONTOLOGY,
+                "protocol": CONTRACT_NET_PROTOCOL,
+            }
+        )
+        self.add_behaviour(self.AcceptBehaviour(), accept_template)

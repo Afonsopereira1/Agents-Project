@@ -21,14 +21,22 @@ from isia.communication.messages import Message, MessageType
 from isia.communication.transport import (
     CONTRACT_NET_PROTOCOL,
     ONTOLOGY,
+    PERFORMATIVE_ACCEPT_PROPOSAL,
     PERFORMATIVE_CFP,
+    PERFORMATIVE_INFORM,
     PERFORMATIVE_PROPOSE,
     PERFORMATIVE_REJECT_PROPOSAL,
     build_spade_message,
     parse_spade_message,
 )
-from isia.domain.models import Mission, Position, ResourceState
-from isia.reasoning.allocation import build_cfp_message, select_best_proposal
+from isia.domain.models import Mission, MissionStatus, Position, ResourceState
+from isia.reasoning.allocation import (
+    build_accept_message,
+    build_cfp_message,
+    build_proposal_rejection_message,
+    reservation_status_matches_accept,
+    select_best_proposal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +98,26 @@ def response_matches_cfp(
     )
 
 
+def confirmation_matches_accept(
+    incoming,
+    status: Message,
+    accept: Message,
+    *,
+    winner_jid: str,
+    resource_id: str,
+    initiator_jid: str,
+) -> bool:
+    """Validar a confirmação XMPP do recurso exatamente aceite."""
+    return (
+        bare_jid(getattr(incoming, "sender", "")) == bare_jid(winner_jid)
+        and bare_jid(getattr(incoming, "to", "")) == bare_jid(initiator_jid)
+        and reservation_status_matches_accept(status, accept, resource_id)
+        and incoming.get_metadata("ontology") == ONTOLOGY
+        and incoming.get_metadata("protocol") == CONTRACT_NET_PROTOCOL
+        and incoming.get_metadata("performative") == PERFORMATIVE_INFORM
+        and incoming.get_metadata("conversation-id") == accept.conversation_id
+        and incoming.get_metadata("in-reply-to") == accept.message_id
+    )
 class ContractNetInitiatorAgent(Agent):
     """Iniciador temporário que apenas envia um CFP e recolhe respostas."""
 
@@ -112,6 +140,9 @@ class ContractNetInitiatorAgent(Agent):
         self.receive_timeout = receive_timeout
         self.cfp: Message | None = None
         self.responses: dict[str, Message] = {}
+        self.selection = None
+        self.accept: Message | None = None
+        self.confirmation: Message | None = None
         self.behaviour = None
 
     class ContractNetBehaviour(OneShotBehaviour):
@@ -197,6 +228,118 @@ class ContractNetInitiatorAgent(Agent):
                     sorted(missing),
                 )
 
+            selection = select_best_proposal(
+                cfp,
+                agent.responses.values(),
+            )
+            agent.selection = selection
+            if selection.winner is None:
+                logger.info("Nenhuma proposta válida: %s", selection.reason)
+                return
+
+            winner = selection.winner
+            winner_sender = next(
+                sender
+                for sender, response in agent.responses.items()
+                if response.message_id == winner.message_id
+            )
+            accept = build_accept_message(
+                cfp,
+                winner,
+                agent.simulated_time,
+                source_id=bare_jid(agent.jid),
+            )
+            agent.accept = accept
+            await self.send(
+                build_spade_message(
+                    winner_sender,
+                    accept,
+                    performative=PERFORMATIVE_ACCEPT_PROPOSAL,
+                    conversation_id=accept.conversation_id,
+                    in_reply_to=winner.message_id,
+                    reply_with=accept.message_id,
+                    protocol=CONTRACT_NET_PROTOCOL,
+                )
+            )
+            logger.info(
+                "ACCEPT enviado para %s: mission_id=%s proposal_message_id=%s",
+                winner_sender,
+                accept.mission_id,
+                winner.message_id,
+            )
+
+            for proposal in selection.valid_proposals:
+                if proposal.message_id == winner.message_id:
+                    continue
+                sender = next(
+                    candidate
+                    for candidate, response in agent.responses.items()
+                    if response.message_id == proposal.message_id
+                )
+                rejection = build_proposal_rejection_message(
+                    cfp, proposal, agent.simulated_time
+                )
+                await self.send(
+                    build_spade_message(
+                        sender,
+                        rejection,
+                        performative=PERFORMATIVE_REJECT_PROPOSAL,
+                        conversation_id=rejection.conversation_id,
+                        in_reply_to=proposal.message_id,
+                        protocol=CONTRACT_NET_PROTOCOL,
+                    )
+                )
+                logger.info("REJECT de proposta não selecionada enviado para %s", sender)
+
+            started_confirmation = time.monotonic()
+            while True:
+                remaining = agent.receive_timeout - (
+                    time.monotonic() - started_confirmation
+                )
+                if remaining <= 0:
+                    break
+                incoming = await self.receive(timeout=remaining)
+                if incoming is None:
+                    break
+                try:
+                    status = parse_spade_message(
+                        incoming,
+                        expected_protocol=CONTRACT_NET_PROTOCOL,
+                    )
+                except (TypeError, ValueError):
+                    continue
+                if not confirmation_matches_accept(
+                    incoming,
+                    status,
+                    accept,
+                    winner_jid=winner_sender,
+                    resource_id=winner.source_id,
+                    initiator_jid=str(agent.jid),
+                ):
+                    logger.warning("Confirmação inválida ou não correlacionada ignorada.")
+                    continue
+                agent.confirmation = status
+                if status.payload.get("status") == "reserved":
+                    agent.mission = agent.mission.change_status(MissionStatus.RESERVED)
+                    logger.info(
+                        "Reserva confirmada por XMPP: mission_id=%s resource_id=%s",
+                        agent.mission.mission_id,
+                        winner.source_id,
+                    )
+                else:
+                    logger.warning(
+                        "Reserva recusada por %s: %s",
+                        winner_sender,
+                        status.payload.get("reason", "não indicado"),
+                    )
+                break
+            if agent.confirmation is None:
+                logger.warning(
+                    "Timeout real de %.3fs pela confirmação; estado da missão permanece %s.",
+                    agent.receive_timeout,
+                    agent.mission.status.value,
+                )
+
     async def setup(self):
         self.behaviour = self.ContractNetBehaviour()
         self.add_behaviour(
@@ -270,18 +413,15 @@ async def main():
             started.append(agent)
         await initiator.behaviour.join()
         logger.info("Ronda terminada: %d resposta(s) válida(s).", len(initiator.responses))
-        selection = select_best_proposal(
-            initiator.cfp,
-            initiator.responses.values(),
-        )
-        if selection.winner is None:
-            logger.info("Nenhuma proposta válida: %s", selection.reason)
+        if initiator.selection is None or initiator.selection.winner is None:
+            logger.info("Nenhuma proposta válida.")
         else:
             logger.info(
                 "Melhor proposta: recurso=%s custo_normalizado=%.6f",
-                selection.winner_bid.resource_id,
-                selection.winner_cost,
+                initiator.selection.winner_bid.resource_id,
+                initiator.selection.winner_cost,
             )
+            logger.info("Estado final da missão: %s", initiator.mission.status.value)
     finally:
         for agent in reversed(started):
             try:
