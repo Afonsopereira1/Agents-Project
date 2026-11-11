@@ -12,6 +12,7 @@ from isia.domain.models import (
     ResourceStatus,
 )
 from isia.reasoning.allocation import (
+    AllocationOutcome,
     LocalResourceReservation,
     MissionRegistry,
     ReservationStatus,
@@ -458,6 +459,121 @@ class TestMissionRegistry(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             build_accept_message(cfp, proposal, 22.0)
+
+    def test_allocation_outcomes_are_distinct_and_failure_is_not_confirmation(self):
+        self.assertEqual(
+            {
+                AllocationOutcome.RESERVATION_CONFIRMED,
+                AllocationOutcome.NO_ELIGIBLE_PROPOSALS,
+                AllocationOutcome.RESERVATION_REJECTED,
+                AllocationOutcome.CONFIRMATION_UNKNOWN,
+            },
+            {
+                "reservation_confirmed",
+                "no_eligible_proposals",
+                "reservation_rejected",
+                "confirmation_unknown",
+            },
+        )
+        cfp = self._cfp()
+        proposal = self._proposal(cfp, "drone-1")
+        accept = build_accept_message(cfp, proposal, 22.0)
+        result = LocalResourceReservation(
+            self._resource(available=False, status=ResourceStatus.UNAVAILABLE)
+        ).reserve(cfp.mission_id)
+        status = build_reservation_status_message(
+            accept, result, resource_id="drone-1", created_at=22.0
+        )
+
+        self.assertEqual(status.payload["status"], "reservation_failed")
+        self.assertEqual(status.payload["reservation_status"], ReservationStatus.RESOURCE_OCCUPIED)
+        self.assertNotEqual(status.payload["status"], "reserved")
+
+    def test_two_unavailable_resources_leave_mission_unreserved(self):
+        mission = self.registry.create_from_decision(
+            self.incident, {"decision": "request_mobile_verification"}
+        )
+        cfp = build_cfp_message(mission, 20.0, 35.0, message_id="cfp-1", conversation_id="conversation-1")
+        responses = tuple(
+            evaluate_cfp(
+                cfp,
+                ResourceState(
+                    resource_id,
+                    "drone",
+                    Position(1, 2),
+                    False,
+                    80.0,
+                    ResourceStatus.UNAVAILABLE,
+                ),
+                ("mobile_verification",),
+                current_time=21.0,
+                minimum_autonomy_percent=20.0,
+                eta_seconds=4.0,
+                energy_cost_percent=10.0,
+                load=0.25,
+            )
+            for resource_id in ("drone-a", "drone-b")
+        )
+
+        selection = select_best_proposal(cfp, responses)
+
+        self.assertIsNone(selection.winner)
+        self.assertEqual(selection.reason, "no_valid_proposals")
+        self.assertEqual(mission.status, MissionStatus.PROPOSED)
+
+    def test_explicit_reservation_failure_can_be_followed_by_new_cfp(self):
+        mission = self.registry.create_from_decision(
+            self.incident, {"decision": "request_mobile_verification"}
+        )
+        first_cfp = build_cfp_message(
+            mission, 20.0, 35.0, message_id="cfp-1", conversation_id="conversation-1"
+        )
+        first_proposal = self._proposal(first_cfp, "drone-a")
+        first_accept = build_accept_message(first_cfp, first_proposal, 22.0)
+        failed_result = LocalResourceReservation(
+            self._resource(available=False, status=ResourceStatus.UNAVAILABLE)
+        ).reserve(first_cfp.mission_id)
+        failed_status = build_reservation_status_message(
+            first_accept, failed_result, resource_id="drone-a", created_at=22.0
+        )
+
+        second_cfp = build_cfp_message(
+            mission,
+            created_at=23.0,
+            deadline=35.0,
+        )
+        second_proposal = self._proposal(second_cfp, "drone-b")
+        second_accept = build_accept_message(second_cfp, second_proposal, 24.0)
+        confirmed_result = LocalResourceReservation(
+            ResourceState("drone-b", "drone", Position(1, 2), True, 80.0)
+        ).reserve(second_cfp.mission_id)
+        confirmed_status = build_reservation_status_message(
+            second_accept, confirmed_result, resource_id="drone-b", created_at=24.0
+        )
+
+        self.assertEqual(failed_status.payload["status"], "reservation_failed")
+        self.assertEqual(confirmed_status.payload["status"], "reserved")
+        self.assertNotEqual(first_cfp.message_id, second_cfp.message_id)
+        self.assertNotEqual(first_cfp.conversation_id, second_cfp.conversation_id)
+        self.assertEqual(first_cfp.mission_id, second_cfp.mission_id)
+        self.assertEqual(first_cfp.incident_id, second_cfp.incident_id)
+
+    def test_late_proposal_from_previous_round_is_not_valid_for_new_cfp(self):
+        mission = self.registry.create_from_decision(
+            self.incident, {"decision": "request_mobile_verification"}
+        )
+        first_cfp = build_cfp_message(
+            mission, 20.0, 35.0, message_id="cfp-1", conversation_id="conversation-1"
+        )
+        late_proposal = self._proposal(first_cfp, "drone-a", created_at=34.0)
+        second_cfp = build_cfp_message(
+            mission, 23.0, 35.0
+        )
+
+        selection = select_best_proposal(second_cfp, (late_proposal,))
+
+        self.assertIsNone(selection.winner)
+        self.assertEqual(selection.reason, "no_valid_proposals")
 
 
 if __name__ == "__main__":

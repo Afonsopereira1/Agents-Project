@@ -9,6 +9,8 @@ from .corroboration import (
     select_eligible_sources,
 )
 from .allocation import (
+    AllocationOutcome,
+    ContractNetResult,
     LocalResourceReservation,
     MissionRegistry,
     ReservationResult,
@@ -31,6 +33,8 @@ __all__ = [
     "evaluate_preliminary_corroboration",
     "select_eligible_sources",
     "MissionRegistry",
+    "AllocationOutcome",
+    "ContractNetResult",
     "LocalResourceReservation",
     "ReservationResult",
     "ReservationStatus",

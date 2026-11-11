@@ -15,7 +15,9 @@ try:
         CONTRACT_NET_PROTOCOL,
         ONTOLOGY,
         PERFORMATIVE_INFORM,
+        PERFORMATIVE_PROPOSE,
         build_spade_message,
+        parse_spade_message,
     )
     from isia.reasoning.allocation import (
         LocalResourceReservation,
@@ -216,6 +218,85 @@ class TestContractNetInitiatorTimeout(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(sent), 1)
         self.assertEqual(agent.responses, {})
+
+    async def test_confirmation_timeout_does_not_retry_accept_or_reserve_mission(self):
+        from isia.domain.models import Mission
+
+        agent = ContractNetInitiatorAgent(
+            "initiator@localhost",
+            "password",
+            Mission(
+                "mission-1",
+                "incident-1",
+                "verify_incident",
+                Position(6, 9),
+                "mobile_verification",
+                2,
+            ),
+            {"drone@localhost": "drone-demo"},
+            simulated_time=20.0,
+            deadline=35.0,
+            receive_timeout=1.0,
+            max_rounds=2,
+        )
+        behaviour = ContractNetInitiatorAgent.ContractNetBehaviour()
+        behaviour.set_agent(agent)
+        sent = []
+        proposal_sent = False
+
+        async def receive(timeout):
+            nonlocal proposal_sent
+            if proposal_sent:
+                return None
+            cfp = parse_spade_message(
+                sent[0], expected_protocol=CONTRACT_NET_PROTOCOL
+            )
+            proposal = Message(
+                "proposal-drone",
+                MessageType.PROPOSAL,
+                21.0,
+                {
+                    "cfp_message_id": cfp.message_id,
+                    "bid": {
+                        "mission_id": cfp.mission_id,
+                        "resource_id": "drone-demo",
+                        "eta": 4.0,
+                        "energy_cost": 10.0,
+                        "load": 0.25,
+                    },
+                },
+                incident_id=cfp.incident_id,
+                mission_id=cfp.mission_id,
+                source_id="drone-demo",
+                conversation_id=cfp.conversation_id,
+            )
+            incoming = build_spade_message(
+                "initiator@localhost",
+                proposal,
+                performative=PERFORMATIVE_PROPOSE,
+                conversation_id=cfp.conversation_id,
+                in_reply_to=cfp.message_id,
+                protocol=CONTRACT_NET_PROTOCOL,
+            )
+            incoming.sender = "drone@localhost"
+            proposal_sent = True
+            return incoming
+
+        async def send(message):
+            sent.append(message)
+
+        behaviour.receive = receive
+        behaviour.send = send
+        await behaviour.run()
+
+        message_types = [
+            parse_spade_message(item, expected_protocol=CONTRACT_NET_PROTOCOL).message_type
+            for item in sent
+        ]
+        self.assertEqual(message_types.count(MessageType.ACCEPT), 1)
+        self.assertEqual(message_types.count(MessageType.CFP), 1)
+        self.assertEqual(agent.result.outcome, "confirmation_unknown")
+        self.assertEqual(agent.mission.status.value, "proposed")
 
 
 if __name__ == "__main__":

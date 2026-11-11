@@ -338,6 +338,27 @@ class ProposalSelection:
     reason: str
 
 
+class AllocationOutcome:
+    """Resultados finais distintos da negociação Contract Net."""
+
+    RESERVATION_CONFIRMED = "reservation_confirmed"
+    NO_ELIGIBLE_PROPOSALS = "no_eligible_proposals"
+    RESERVATION_REJECTED = "reservation_rejected"
+    CONFIRMATION_UNKNOWN = "confirmation_unknown"
+
+
+@dataclass(frozen=True)
+class ContractNetResult:
+    """Resultado explícito de uma ou mais rondas de alocação."""
+
+    outcome: str
+    mission: Mission
+    rounds: int
+    reason: str
+    selection: ProposalSelection | None = None
+    confirmation: Message | None = None
+
+
 def _validate_simulated_time(value: object, name: str) -> float:
     if (
         isinstance(value, bool)
