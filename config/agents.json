@@ -1,0 +1,25 @@
+{
+  "reputation": {
+    "alpha": 2.0,
+    "beta": 2.0
+  },
+  "policy": {
+    "patrol_threshold": 0.25,
+    "ranger_threshold": 0.65,
+    "severe_threshold": 0.8,
+    "severe_patrol_threshold": 0.08,
+    "ranger_min_groups": 2,
+    "ranger_min_modalities": 2
+  },
+  "severity": 0.5,
+  "sources": {
+    "sensor-1": {
+      "modality": "acoustic",
+      "correlation_group": "local_acoustic"
+    },
+    "sensor-2": {
+      "modality": "acoustic",
+      "correlation_group": "local_acoustic"
+    }
+  }
+}

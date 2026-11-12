@@ -333,6 +333,7 @@ reservar recursos. O envio de resultado preserva ID e corpo se uma chamada de
 envio falhar; não implementa confirmação de entrega nem recuperação distribuída.
 
 - `not_confirmed`: fecha o incidente com esse resultado, sem pedir um guarda.
+  Não equivale a refutação fundamentada nem atualiza reputações.
 - `confirmed` na verificação: cria **nova missão** `respond_incident`, capacidade
   `incident_response`, para os `RangerAgent` conhecidos. Usa o mesmo protocolo
   CFP → PROPOSAL → ACCEPT → STATUS → MISSION_RESULT. Só o resultado da resposta
@@ -357,6 +358,12 @@ A inspeção é local e idealizada, consultada apenas na célula visitada; o age
 recebe a classificação, sem acesso aos eventos de referência. A intervenção
 simulada do guarda não remove eventos globais. Estes limites antecedem os
 cenários e a política de resposta das Etapas 7–9.
+
+A política opcional da Etapa 7 reutiliza este contrato e o mesmo ciclo. Pode
+pedir diretamente `respond_incident`, com capacidade `incident_response`, sem
+uma verificação móvel prévia. Os resultados atuais não incluem prova de
+cobertura nem referências independentes para aprendizagem automática;
+ver [reputação e política](reputation-policy.md).
 
 ## 6. Estado e ordenação
 

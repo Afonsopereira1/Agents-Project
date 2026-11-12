@@ -324,22 +324,45 @@ O MVP foi integrado na `main` pelo PR #12 em 12-11-2026.
 
 **Pré-requisitos:** resultados de missões e verdade de referência disponíveis em camada de avaliação.
 
-**Ficheiros envolvidos:** `reasoning/reputation.py`, `corroboration.py`, `policy.py`, `config/agents.json`, `tests/unit/test_reputation.py`, `test_policy.py`.
+**Ficheiros envolvidos:** `reasoning/reputation.py`, `corroboration.py`, `policy.py`, `config/agents.json`, `tests/unit/test_reputation.py`, `test_policy.py`, `agents/sensor.py`, `agents/incident.py`, `simulation/runner.py` e `tests/scenarios/test_mvp_policy.py`.
 
 **Tarefas concretas:**
 
-- [ ] Definir quando uma observação pode ser avaliada contra um resultado suficientemente fundamentado.
-- [ ] Calcular reputação suavizada, por exemplo `(a+α)/(a+b+α+β)`, com parâmetros aprovados.
-- [ ] Evitar atualizar confiança apenas por concordância entre agentes.
-- [ ] Combinar confiança das fontes com evidência temporal, espacial e diversidade de modalidades.
-- [ ] Distinguir *score* de suspeita de probabilidade calibrada; documentar significado.
-- [ ] Implementar política configurável: observar, verificar com patrulha, solicitar rangers, encerrar.
-- [ ] Verificar sensibilidade a limiares e gravidade do evento, evitando copiar 30%/75% como valores científicos.
-- [ ] Registar os fatores determinantes da decisão para posterior análise.
+- [x] Definir quando uma observação pode ser avaliada contra um resultado suficientemente fundamentado.
+- [x] Calcular reputação suavizada `(a+α)/(a+b+α+β)` com parâmetros experimentais explícitos.
+- [x] Evitar atualizar confiança apenas por concordância entre agentes.
+- [x] Combinar confiança das fontes com evidência temporal, espacial e diversidade de modalidades.
+- [x] Distinguir *score* de suspeita de probabilidade calibrada; documentar significado.
+- [x] Implementar política configurável: observar, verificar com patrulha, solicitar rangers, encerrar.
+- [x] Verificar sensibilidade a limiares e gravidade do evento, evitando copiar 30%/75% como valores científicos.
+- [x] Registar os fatores determinantes da decisão para posterior análise.
+
+- [ ] Aprovar formalmente os parâmetros com a equipa.
+- [ ] Ligar resultados de missão a adjudicação automática com cobertura e referências suficientes.
+
+**Correção da base (12-11-2026):** confirmou-se a Etapa 6 em `94e60ca`, integrada
+pelo PR #12, e a correção `aacbe34`, integrada pelo PR #13. Esta branch estava em
+`ee0fc98` e foi avançada para `96fd866`, preservando as alterações locais num
+stash e num arquivo com hashes verificados. A Etapa 7 reutiliza agora
+`IncidentSensorAgent`, `MissionExecution` e o contrato `MISSION_RESULT` existentes;
+a implementação paralela de coordenação/movimento deixou de fazer parte do código ativo.
+
+**Implementação local:** reputação com prior Beta, score ponderado e política
+configurável. O runner aceita `--policy config/agents.json` e pesos previamente
+avaliados. O sensor recebe apenas esses pesos. O resultado `not_confirmed` mantém
+o encerramento operacional da Etapa 6, sem ser usado como refutação para aprender.
+A adjudicação automática de missões e a aprovação dos parâmetros permanecem
+pendentes; ver [reputação e política](reputation-policy.md).
 
 **Dependências:** Etapas 4 e 6. Pode desenvolver-se **em paralelo com a Etapa 8**.
 
-**Testes a realizar:** fonte nova, fonte historicamente incorreta, ausência de confirmação, falsas observações correlacionadas, eventos graves com evidência insuficiente.
+**Testes locais:** fonte nova, histórico incorreto, referências insuficientes, correlação, gravidade e limiares; ligação da decisão às patrulhas e aos guardas do MVP, com regresso e libertação. O teste de envio direto ao guarda injeta a decisão para isolar a ligação; os cálculos da política são testados separadamente.
+
+**Verificação desta integração (12-11-2026):** a base `96fd866` passou 365 testes;
+após adaptação, a suite completa passou **393 testes, OK**. O runner normal
+terminou `closed`, com drone e guarda, reservas libertadas e energia 94%/100%/90%.
+Com a configuração da Etapa 7, terminou `expired`, decisão `observe`, sem missões.
+`git diff --check` passou. Não foi repetida a demonstração XMPP nesta integração.
 
 **Critérios de conclusão:** pontuações são reproduzíveis, explicáveis e têm comportamento sensato nos extremos; atualizações de reputação só ocorrem quando justificadas.
 
@@ -459,6 +482,7 @@ O MVP foi integrado na `main` pelo PR #12 em 12-11-2026.
 - [x] Etapas 2–3: simulador mínimo e comunicação real entre agentes.
 - [ ] Etapas 4–5: corroboração e negociação funcionais.
 - [x] **Etapa 6: MVP validado em integração local dos comportamentos SPADE; demonstração ligada a XMPP também executada (agentes no mesmo processo).**
-- [ ] Etapas 7–8: reputação, política de resposta e falhas validadas.
+- [ ] Etapa 7: implementação local testada; adjudicação automática de missões e aprovação dos parâmetros pendentes.
+- [ ] Etapa 8: falhas e recuperação distribuída validadas.
 - [ ] Etapa 9: três cenários contrastantes medidos e analisados.
 - [ ] Etapa 10: documentação e demonstração finais revistas.

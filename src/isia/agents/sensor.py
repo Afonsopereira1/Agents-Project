@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from copy import deepcopy
 from time import monotonic
 from typing import Any
 
@@ -11,7 +12,7 @@ from spade.agent import Agent
 from spade.behaviour import OneShotBehaviour
 from spade.template import Template
 
-from isia.communication.messages import Message, MessageType, model_to_dict
+from isia.communication.messages import Message, MessageType, model_from_dict, model_to_dict
 from isia.communication.transport import (
     ONTOLOGY,
     PERFORMATIVE_INFORM,
@@ -25,8 +26,12 @@ from isia.reasoning.corroboration import (
     build_observation_hypothesis,
     decide_preliminary_verification,
     evaluate_preliminary_corroboration,
+    evaluate_reputation_corroboration,
+    validate_source_profiles,
 )
 from isia.domain.models import Observation
+from isia.domain.validation import is_finite_number
+from isia.reasoning.policy import ResponsePolicy, decide_response
 
 logger = logging.getLogger(__name__)
 RESPONSE_TIMEOUT_SECONDS = 10.0
@@ -73,6 +78,11 @@ class SensorAgent(Agent):
         self.minimum_compatible_sources: int | None = None
         self.incompatibility_rules = None
         self.compatibility_rules = None
+        self.response_policy = None
+        self.reputation_scores = {}
+        self.source_profiles = {}
+        self.default_reputation = 0.5
+        self.severity = 0.5
         # Histórico local, indexado pela conversa e pelo pedido. Não contém
         # credenciais, estado do simulador ou ground truth.
         self.verification_history: dict[str, dict[str, dict[str, object]]] = {}
@@ -98,6 +108,23 @@ class SensorAgent(Agent):
         self.minimum_compatible_sources = minimum_compatible_sources
         self.incompatibility_rules = incompatibility_rules
         self.compatibility_rules = compatibility_rules
+
+    def set_response_policy(
+        self, policy: ResponsePolicy, reputation_scores, source_profiles,
+        *, severity: float = 0.5, default_reputation: float = 0.5,
+    ) -> None:
+        """Receber apenas pesos históricos; o sensor não recebe resultados de referência."""
+        if not isinstance(policy, ResponsePolicy):
+            raise TypeError("policy deve ser ResponsePolicy.")
+        for value in (severity, default_reputation, *reputation_scores.values()):
+            if not is_finite_number(value) or not 0 <= value <= 1:
+                raise ValueError("Gravidade e reputações devem estar entre 0 e 1.")
+        validate_source_profiles(source_profiles)
+        self.response_policy = policy
+        self.reputation_scores = dict(reputation_scores)
+        self.source_profiles = deepcopy(source_profiles)
+        self.severity = severity
+        self.default_reputation = default_reputation
 
     class VerificationBehaviour(OneShotBehaviour):
         async def run(self):
@@ -196,12 +223,17 @@ class SensorAgent(Agent):
                             compatibility_rules=agent.compatibility_rules,
                             expected_incident_id=request.incident_id,
                         )
-                        evaluation = evaluate_preliminary_corroboration(
-                            aggregate, agent.eligible_source_ids
-                        )
-                        decision = decide_preliminary_verification(
-                            evaluation, agent.minimum_compatible_sources
-                        )
+                        if isinstance(getattr(agent, "response_policy", None), ResponsePolicy):
+                            evaluation, decision = _evaluate_response_policy(
+                                agent, observation, aggregate, request.incident_id
+                            )
+                        else:
+                            evaluation = evaluate_preliminary_corroboration(
+                                aggregate, agent.eligible_source_ids
+                            )
+                            decision = decide_preliminary_verification(
+                                evaluation, agent.minimum_compatible_sources
+                            )
                     except (TypeError, ValueError) as error:
                         logger.warning("Corroboração não avaliada: %s", error)
                         rejected_responses.append({
@@ -288,41 +320,28 @@ def _record_response_wait_diagnostics(
 
 
 def _record_safe_observe(agent, observation, reason: str, request: Message) -> None:
-    """Record a conservative local result for missing or invalid responses."""
+    """Registar falta de resposta; a política pode pedir patrulha pela evidência local."""
     eligible = getattr(agent, "eligible_source_ids", ())
     if not isinstance(eligible, (tuple, list, set)):
         eligible = ()
     try:
-        evaluation = evaluate_preliminary_corroboration(
-            {
-                "classification": "no_data",
-                "compatible_observation_ids": (),
-                "compatible_source_ids": (),
-                "source_ids": (),
-            },
-            eligible,
-        )
-        minimum = getattr(agent, "minimum_compatible_sources", None)
-        if not isinstance(minimum, int) or isinstance(minimum, bool) or minimum <= 0:
-            minimum = 1
-        decision = decide_preliminary_verification(evaluation, minimum)
-        decision["decision"] = "observe"
-        decision["reason"] = reason
-        agent.aggregate_summary = None
-        agent.evaluation_summary = evaluation
-        agent.decision = decision
-        _record_verification_history(
-            agent,
-            request,
-            observation,
-            {},
-            evaluation,
-            decision,
-            classification=reason,
-        )
-        _log_corroboration_result(observation, {}, evaluation, decision)
+        if isinstance(observation, Observation) and isinstance(
+            getattr(agent, "response_policy", None), ResponsePolicy
+        ):
+            evaluation, decision = _evaluate_response_policy(
+                agent, observation, {"classification": "no_data"}, request.incident_id
+            )
+            decision["response_status"] = reason
+        else:
+            evaluation = evaluate_preliminary_corroboration({"classification": "no_data"}, eligible)
+            minimum = getattr(agent, "minimum_compatible_sources", None)
+            if not isinstance(minimum, int) or isinstance(minimum, bool) or minimum <= 0:
+                minimum = 1
+            decision = decide_preliminary_verification(evaluation, minimum)
+            decision.update(decision="observe", reason=reason)
     except (TypeError, ValueError):
-        agent.decision = {
+        evaluation = {}
+        decision = {
             "decision": "observe",
             "reason": reason,
             "compatible_observation_ids": (),
@@ -330,15 +349,14 @@ def _record_safe_observe(agent, observation, reason: str, request: Message) -> N
             "preliminary_score": None,
             "information_coverage": None,
         }
-        _record_verification_history(
-            agent,
-            request,
-            observation,
-            {},
-            {},
-            agent.decision,
-            classification=reason,
-        )
+    else:
+        agent.aggregate_summary = None
+        agent.evaluation_summary = evaluation
+        _log_corroboration_result(observation, {}, evaluation, decision)
+    agent.decision = decision
+    _record_verification_history(
+        agent, request, observation, {}, evaluation, decision, classification=reason,
+    )
 
 
 def _record_verification_history(
@@ -381,10 +399,27 @@ def _record_verification_history(
         "information_coverage": decision.get("information_coverage"),
         "decision": decision.get("decision", "observe"),
         "reason": decision.get("reason"),
+        "response_policy": deepcopy(decision) if "suspicion_score" in decision else None,
     }
 
 
+def _evaluate_response_policy(agent, observation, aggregate, incident_id):
+    evaluation = evaluate_reputation_corroboration(
+        observation, aggregate, agent.eligible_source_ids,
+        agent.reputation_scores, agent.source_profiles,
+        agent.max_distance, agent.max_time_difference,
+        default_reputation=agent.default_reputation,
+    )
+    decision = decide_response(
+        evaluation, agent.response_policy, severity=agent.severity,
+        initial_observation=observation, incident_id=incident_id,
+    )
+    return evaluation, decision
+
+
 def _log_corroboration_result(observation, aggregate, evaluation, decision) -> None:
+    if "suspicion_score" in decision:
+        logger.info("Política de resposta | fatores=%s", decision)
     logger.info(
         "Corroboração | observação inicial=%s | observações compatíveis=%s | "
         "fontes distintas=%s | pontuação preliminar=%s | cobertura=%s | "
