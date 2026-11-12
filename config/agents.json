@@ -21,5 +21,9 @@
       "modality": "acoustic",
       "correlation_group": "local_acoustic"
     }
+  },
+  "adjudication": {
+    "max_distance": 1,
+    "max_delay_seconds": 30.0
   }
 }

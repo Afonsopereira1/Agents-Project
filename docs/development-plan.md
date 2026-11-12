@@ -338,7 +338,7 @@ O MVP foi integrado na `main` pelo PR #12 em 12-11-2026.
 - [x] Registar os fatores determinantes da decisão para posterior análise.
 
 - [ ] Aprovar formalmente os parâmetros com a equipa.
-- [ ] Ligar resultados de missão a adjudicação automática com cobertura e referências suficientes.
+- [x] Ligar resultados de missão a adjudicação automática com cobertura e referências suficientes.
 
 **Correção da base (12-11-2026):** confirmou-se a Etapa 6 em `94e60ca`, integrada
 pelo PR #12, e a correção `aacbe34`, integrada pelo PR #13. Esta branch estava em
@@ -351,8 +351,11 @@ a implementação paralela de coordenação/movimento deixou de fazer parte do c
 configurável. O runner aceita `--policy config/agents.json` e pesos previamente
 avaliados. O sensor recebe apenas esses pesos. O resultado `not_confirmed` mantém
 o encerramento operacional da Etapa 6, sem ser usado como refutação para aprender.
-A adjudicação automática de missões e a aprovação dos parâmetros permanecem
-pendentes; ver [reputação e política](reputation-policy.md).
+A aprovação dos parâmetros permanece pendente; ver [reputação e política](reputation-policy.md).
+
+**Adjudicação (12-11-2026):** `result_from_mission()` só aprende com `verify_incident`
+confirmado, com célula e instante inspecionados dentro de `adjudication`. O runner
+aplica-a depois da decisão; `not_confirmed` e o guarda continuam sem atualizar.
 
 **Dependências:** Etapas 4 e 6. Pode desenvolver-se **em paralelo com a Etapa 8**.
 
@@ -378,18 +381,28 @@ Com a configuração da Etapa 7, terminou `expired`, decisão `observe`, sem mis
 
 **Pré-requisitos:** MVP, timeouts, estados e reserva de recursos funcionais.
 
-**Ficheiros envolvidos:** `communication/transport.py`, `communication/protocols.py`, `simulation/scenario.py`, `simulation/runner.py`, `tests/integration/test_faults.py`.
+**Ficheiros envolvidos:** `simulation/runner.py`, `config/faults.json`, `tests/integration/test_faults.py` e [falhas](faults.md).
 
 **Tarefas concretas:**
 
-- [ ] Implementar injeção parametrizada de atraso e perda no adaptador de comunicação da aplicação.
-- [ ] Tratar duplicação e chegada tardia sem repetir efeitos operacionais.
-- [ ] Simular indisponibilidade temporária de sensores, drones, veículos ou rangers.
-- [ ] Limitar retransmissões e número de rondas de negociação.
-- [ ] Definir estados de incidente quando não há confirmação ou recursos.
-- [ ] Definir e testar política de recuperação quando falha o iniciador local.
-- [ ] Simular bateria/combustível insuficiente e recurso ocupado.
-- [ ] Guardar probabilidades/parâmetros e sementes utilizadas.
+- [x] Implementar injeção parametrizada de atraso e perda no adaptador de comunicação da aplicação.
+- [x] Tratar duplicação e chegada tardia sem repetir efeitos operacionais.
+- [x] Simular indisponibilidade temporária de sensores, drones, veículos ou rangers.
+- [x] Limitar retransmissões e número de rondas de negociação.
+- [x] Definir estados de incidente quando não há confirmação ou recursos.
+- [x] Definir e testar política de recuperação quando falha o iniciador local.
+- [x] Simular bateria/combustível insuficiente e recurso ocupado.
+- [x] Guardar probabilidades/parâmetros e sementes utilizadas.
+
+**Implementação (12-11-2026):** o transporte local do runner aceita `faults`
+(perda aleatória com semente, perda por tipo, atraso, duplicação, agentes
+indisponíveis e recurso ocupado após proposta). Não há retransmissões; as rondas
+continuam limitadas por `max_attempts`. Recuperação do iniciador: o recurso
+termina, regressa e liberta a reserva; o incidente fica `unresolved`. A
+indisponibilidade dura toda a execução de janela única. Ver [falhas](faults.md).
+
+**Verificação (12-11-2026):** a suite completa passou **410 testes, OK**; os testes
+de falhas repetidos três vezes passaram. A injeção não se aplica ao XMPP.
 
 **Dependências:** Etapa 6; pode decorrer **em paralelo com a Etapa 7**. Necessária aos cenários de robustez da Etapa 9.
 
@@ -482,7 +495,7 @@ Com a configuração da Etapa 7, terminou `expired`, decisão `observe`, sem mis
 - [x] Etapas 2–3: simulador mínimo e comunicação real entre agentes.
 - [ ] Etapas 4–5: corroboração e negociação funcionais.
 - [x] **Etapa 6: MVP validado em integração local dos comportamentos SPADE; demonstração ligada a XMPP também executada (agentes no mesmo processo).**
-- [ ] Etapa 7: implementação local testada; adjudicação automática de missões e aprovação dos parâmetros pendentes.
-- [ ] Etapa 8: falhas e recuperação distribuída validadas.
+- [ ] Etapa 7: implementação local testada, com adjudicação automática; aprovação dos parâmetros pendente.
+- [x] Etapa 8: falhas injetadas no transporte local com estados explícitos; queda de processo e XMPP não validados.
 - [ ] Etapa 9: três cenários contrastantes medidos e analisados.
 - [ ] Etapa 10: documentação e demonstração finais revistas.

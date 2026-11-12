@@ -79,10 +79,18 @@ IDs `sensor-1` e `sensor-2` deste MVP; a demonstração isolada da Etapa 4 mant�
 `incident_response`. A negociação, movimento, consumo, tentativas e regresso
 usam a implementação da Etapa 6 e o seu contrato `MISSION_RESULT`.
 
-**Limite da aprendizagem:** o resultado atual da missão contém `outcome`, motivo
-e instante, mas não comprova cobertura temporal/espacial nem referências
-independentes. Por isso não é convertido automaticamente em `EvaluationResult`.
-`not_confirmed` encerra operacionalmente o incidente, como na Etapa 6, sem
-significar `refuted` nem penalizar fontes. O avaliador pode atualizar `book` com
-verdade de referência de eventos terminados ou uma adjudicação independente
-fundamentada. Automatizar esta adjudicação continua pendente.
+**Adjudicação automática:** `result_from_mission()` converte cada `MISSION_RESULT`
+aceite pelo sensor num `EvaluationResult` com fundamento `independent_mission`.
+`MissionExecution` regista no resultado a célula inspecionada (`position`). Só um
+`verify_incident` com `confirmed` é final. Há cobertura suficiente quando a célula
+está a `max_distance` ou menos da observação e a inspeção ocorre até
+`max_delay_seconds` depois dela (`adjudication` em `config/agents.json`: `1` e `30`,
+valores experimentais). `not_confirmed`, `failed`, `inconclusive` e a intervenção
+do guarda nunca atualizam a reputação. Uma patrulha não valida as suas próprias
+observações.
+
+O runner aplica a adjudicação **depois** de o sensor terminar e atualiza o `book`
+recebido; a decisão dessa execução usou apenas o histórico anterior. Só são
+avaliadas as observações locais do sensor iniciador; as do par chegam por
+`VERIFY_RESPONSE` e não são atualizadas. O relatório expõe `reputation_updates`,
+com as atualizações aceites e recusadas.

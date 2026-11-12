@@ -148,3 +148,35 @@ def result_from_ground_truth(
         evidence_ids=(f"{run_id}:ground_truth:{event_id}",) if resolved else (),
         final=resolved, sufficient_coverage=resolved,
     )
+
+
+def result_from_mission(
+    result, observation: Observation, incident_id: str,
+    *, max_distance: float, max_delay_seconds: float,
+) -> EvaluationResult:
+    """Adjudicação automática de um ``MISSION_RESULT`` já validado pelo sensor.
+
+    Só ``verify_incident`` confirmado é final. ``not_confirmed`` não exclui a
+    ameaça e fica ``inconclusive``. Há cobertura quando a célula inspecionada
+    e o instante da inspeção estão dentro dos limites experimentais dados.
+    """
+    for value in (max_distance, max_delay_seconds):
+        if not is_finite_number(value) or value < 0:
+            raise ValueError("Limites de cobertura devem ser finitos e não negativos.")
+    payload = result.payload
+    position = payload.get("position")
+    try:
+        gap = abs(position["x"] - observation.position.x) + abs(position["y"] - observation.position.y)
+        delay = payload["completed_at"] - observation.observed_at
+        covered = (payload.get("task") == "verify_incident"
+                   and gap <= max_distance and 0 <= delay <= max_delay_seconds)
+    except (KeyError, TypeError):
+        covered = False  # Resultado sem posição/instante não comprova cobertura.
+    confirmed = payload.get("outcome") == "confirmed" and payload.get("task") == "verify_incident"
+    return EvaluationResult(
+        result_id=f"{result.message_id}:evaluation:{observation.event_id}",
+        incident_id=incident_id, observation_ids=(observation.event_id,),
+        outcome="confirmed" if confirmed else "inconclusive", basis="independent_mission",
+        evaluated_at=result.created_at, evidence_ids=(result.message_id,),
+        evidence_source_ids=(result.source_id,), final=confirmed, sufficient_coverage=covered,
+    )

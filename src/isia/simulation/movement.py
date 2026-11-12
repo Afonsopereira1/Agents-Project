@@ -99,7 +99,10 @@ class MissionExecution:
 
     def _result(self, outcome, reason, at):
         if self.result is None:
-            self.result = {"outcome": outcome, "reason": reason, "completed_at": at}
+            position = self.resource.position
+            # A posição inspecionada permite ao avaliador verificar cobertura (Etapa 7).
+            self.result = {"outcome": outcome, "reason": reason, "completed_at": at,
+                           "position": {"x": position.x, "y": position.y}}
             self.mission = self.mission.change_status(
                 MissionStatus.FAILED if outcome == "failed" else MissionStatus.DONE)
             self._record("MISSION_RESULT", at, outcome=outcome, reason=reason)

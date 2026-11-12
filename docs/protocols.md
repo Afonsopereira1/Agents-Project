@@ -327,6 +327,9 @@ O payload exige:
 | `reason` | Motivo textual, incluindo falha de inspeção/interrupção |
 | `completed_at` | Segundos simulados, entre a aceitação e a emissão |
 
+O executor acrescenta `position` (`{"x", "y"}`), a célula onde a missão terminou ou
+foi inspecionada. O sensor não o exige; o avaliador usa-o para verificar cobertura.
+
 O iniciador verifica remetente, destinatário, conversa, missão, incidente,
 ACCEPT, tarefa e cronologia. Replays de aceitações terminadas não voltam a
 reservar recursos. O envio de resultado preserva ID e corpo se uma chamada de

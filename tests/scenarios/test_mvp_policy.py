@@ -41,6 +41,15 @@ class TestMvpPolicy(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all("outcome" in r["payload"] and "finding" not in r["payload"]
                             for r in report["results"]))
 
+    async def test_covered_patrol_confirmation_updates_reputation_after_run(self):
+        self.settings["severity"] = 0.8
+        book = ReputationBook(**self.settings["reputation"])
+        report = await run_mvp(response_settings=self.settings, reputation=book)
+        self.assertEqual(report["reputation_scores"]["sensor-1"], 0.5)  # decisão usou o prior
+        self.assertEqual([(u["source_id"], u["reason"]) for u in report["reputation_updates"]],
+                         [("sensor-1", "grounded_result"), ("sensor-1", "unresolved_result")])
+        self.assertEqual(book.score("sensor-1"), 0.6)
+
     async def test_learned_weights_change_dispatch_without_learning_from_non_detection(self):
         book = ReputationBook()
         for index in range(10):
@@ -62,7 +71,9 @@ class TestMvpPolicy(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(report["results"]), 1)
         self.assertEqual(report["reputation_scores"], before)
         self.assertEqual(book.snapshot(self.settings["sources"]), before)
-        self.assertEqual(len(book.history), 20)
+        self.assertEqual(len(book.history), 21)  # 20 passadas + recusa auditada do not_confirmed
+        self.assertEqual((book.history[-1]["updated"], book.history[-1]["reason"]),
+                         (False, "unresolved_result"))
 
     async def test_ranger_decision_uses_existing_capability_and_dispatches_once(self):
         # A política é testada com evidência diversa em test_policy. Aqui isolamos
