@@ -15,17 +15,22 @@ from isia.agents.incident import IncidentSensorAgent
 from isia.agents.informant import InformantAgent
 from isia.communication.messages import model_to_dict
 from isia.domain.models import Position, ResourceState
+from isia.reasoning.policy import ResponsePolicy
+from isia.reasoning.reputation import ReputationBook
 from isia.simulation.world import World
 from isia.simulation.scenario import Scenario, Source, Event
 
 
 async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None,
-                  interrupt_resource=None, max_seconds=10.0):
+                  interrupt_resource=None, max_seconds=10.0,
+                  response_settings=None, reputation=None):
     """O runner só fornece ambiente, relógio e transporte; agentes decidem.
 
     inspection_outcomes e interrupt_resource permitem testes determinísticos.
     O transporte local executa os mesmos comportamentos e contratos SPADE,
     mas não demonstra entrega pela rede XMPP.
+    response_settings ativa a Etapa 7. reputation contém apenas aprendizagem
+    previamente validada pelo avaliador; o sensor recebe uma cópia dos pesos.
     """
     world = World(8, 8, {"sensor-1": Position(2, 2), "sensor-2": Position(4, 2)})
     scenario = Scenario(world, {key: Source("acoustic", 5) for key in world.sensors},
@@ -34,6 +39,15 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     peer = InformantAgent("sensor-peer-mvp@localhost", password)
     sensor.set_local_observation_feed(scenario.source("sensor-1"), 0.0)
     sensor.set_corroboration_context(("sensor-2",), 3.0, 2.0, 1)
+    if response_settings is not None:
+        if reputation is None:
+            reputation = ReputationBook(**response_settings["reputation"])
+        sensor.set_response_policy(
+            ResponsePolicy(**response_settings["policy"]),
+            reputation.snapshot(world.sensors), response_settings["sources"],
+            severity=response_settings["severity"],
+            default_reputation=reputation.score("sensor-1"),
+        )
     peer.set_local_observation_feed(scenario.source("sensor-2"), "sensor-2", 0.0)
     mobiles = []
     for agent_class, name, origin, capability in (
@@ -118,6 +132,9 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
             *(entry for agent in mobiles for execution in agent.executions for entry in execution.timeline),
         ], key=lambda entry: entry["time"])
         return {"transport": "xmpp" if xmpp else "local",
+                "response_settings": response_settings,
+                "reputation_scores": sensor.reputation_scores,
+                "decision": sensor.decision, "verification": sensor.verification_history,
                 "incident_status": sensor.incident_state.status.value if sensor.incident_state else None,
                 "reason": sensor.close_reason,
                 "results": [result.to_dict() for result in sensor.results],
@@ -138,12 +155,18 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--xmpp", action="store_true", help="Usar servidor XMPP em localhost")
+    parser.add_argument("--policy", metavar="JSON", help="Ativar a política da Etapa 7 com esta configuração")
     args = parser.parse_args()
+    settings = None
+    if args.policy:
+        with open(args.policy, encoding="utf-8") as stream:
+            settings = json.load(stream)
     password = os.environ.get("XMPP_PASSWORD", "local-demo")
     if args.xmpp and "XMPP_PASSWORD" not in os.environ:
         parser.error("Defina XMPP_PASSWORD para as cinco contas locais do MVP.")
     async def demo():
-        print(json.dumps(await run_mvp(xmpp=args.xmpp, password=password), ensure_ascii=False, indent=2))
+        print(json.dumps(await run_mvp(xmpp=args.xmpp, password=password,
+                                      response_settings=settings), ensure_ascii=False, indent=2))
     if args.xmpp:
         import spade
         spade.run(demo())

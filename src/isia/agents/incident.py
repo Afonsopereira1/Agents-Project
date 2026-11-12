@@ -16,7 +16,7 @@ from isia.domain.models import Bid, Incident, Mission, MissionStatus
 from isia.reasoning.allocation import (
     MissionRegistry, build_cfp_message, build_accept_message,
     build_proposal_rejection_message, select_best_proposal,
-    reservation_status_matches_accept,
+    reservation_status_matches_accept, RANGER_TASK, RANGER_CAPABILITY,
 )
 
 
@@ -221,11 +221,13 @@ class IncidentSensorAgent(SensorAgent):
                 agent.close_reason = "insufficient_corroboration"
             else:
                 agent.transition(IncidentStatus.ALLOCATING)
-                result = await self.execute_task(mission, agent.patrols)
-                if result is not None and result.payload["outcome"] == "confirmed":
+                candidates = agent.rangers if mission.task == RANGER_TASK else agent.patrols
+                result = await self.execute_task(mission, candidates)
+                if (mission.task == "verify_incident" and result is not None
+                        and result.payload["outcome"] == "confirmed"):
                     agent.transition(IncidentStatus.ALLOCATING)
                     response = Mission(f"{mission.mission_id}-response", incident_id,
-                                       "respond_incident", mission.target, "incident_response", mission.priority)
+                                       RANGER_TASK, mission.target, RANGER_CAPABILITY, mission.priority)
                     result = await self.execute_task(response, agent.rangers)
                 if result is None:
                     agent.transition(IncidentStatus.UNRESOLVED)

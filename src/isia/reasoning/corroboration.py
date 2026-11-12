@@ -5,9 +5,9 @@ configured limits. It does not inspect simulator ground truth or real events.
 """
 
 from collections.abc import Mapping
-from math import hypot
+from math import fsum, hypot
 
-from isia.communication.messages import Message, MessageType, model_from_dict
+from isia.communication.messages import Message, MessageType, model_from_dict, model_to_dict
 from isia.domain.models import Observation
 from isia.domain.models import Position
 from isia.domain.validation import is_finite_number
@@ -399,6 +399,7 @@ def aggregate_verification_responses(
 
     return {
         "classification": classification,
+        "observations": tuple(model_to_dict(unique_observations[key]) for key in sorted(unique_observations)),
         "observation_ids": tuple(sorted(unique_observations)),
         "compatible_observation_ids": tuple(sorted(compatible_ids)),
         "contradictory_observation_ids": tuple(sorted(contradictory_ids)),
@@ -413,6 +414,109 @@ def aggregate_verification_responses(
             sorted(source_ids | informative_absence_source_ids)
         ),
     }
+
+
+def validate_source_profiles(source_profiles: Mapping[str, Mapping[str, str]]) -> None:
+    for source_id, profile in source_profiles.items():
+        _validate_reference(source_id, "source_id")
+        if set(profile) != {"modality", "correlation_group"}:
+            raise ValueError("Cada fonte requer modality e correlation_group.")
+        for value in profile.values():
+            _validate_reference(value, "source profile")
+
+
+def evaluate_reputation_corroboration(
+    initial_observation: Observation,
+    aggregate_summary: Mapping[str, object],
+    eligible_source_ids,
+    reputation_scores: Mapping[str, float],
+    source_profiles: Mapping[str, Mapping[str, str]],
+    max_distance: float,
+    max_time_difference: float,
+    *,
+    default_reputation: float = 0.5,
+) -> dict[str, object]:
+    """Score heurístico de suspeita, nunca probabilidade calibrada.
+
+    Peso = reputação × confiança declarada × proximidade temporal × espacial.
+    Cada grupo de fontes correlacionadas contribui no máximo uma vez por sinal
+    (positivo/negativo). Metadados desconhecidos partilham um grupo conservador.
+    Ausência informativa reduz apoio; timeout/no_data não o reduz.
+    """
+    _validate_observation(initial_observation, "initial_observation")
+    _validate_limit(max_distance, "max_distance")
+    _validate_limit(max_time_difference, "max_time_difference")
+    for value in (default_reputation, *reputation_scores.values()):
+        if not is_finite_number(value) or not 0 <= value <= 1:
+            raise ValueError("Reputação deve estar entre 0 e 1.")
+    validate_source_profiles(source_profiles)
+    eligible = set(_unique_identifiers(eligible_source_ids, "eligible_source_ids"))
+    evaluation = evaluate_preliminary_corroboration(aggregate_summary, eligible)
+    positive = set(aggregate_summary.get("compatible_observation_ids", ()))
+    negative = set(aggregate_summary.get("contradictory_observation_ids", ()))
+    conflicted = set(aggregate_summary.get("conflicted_observation_ids", ()))
+    factors = []
+    groups = {}
+
+    def add(source_id, event_id, relation, confidence, temporal, spatial):
+        profile = source_profiles.get(source_id, {})
+        group = profile.get("correlation_group", "unknown")
+        modality = profile.get("modality", "unknown")
+        reputation = reputation_scores.get(source_id, default_reputation)
+        weight = reputation * confidence * temporal * spatial
+        factors.append({
+            "source_id": source_id, "event_id": event_id, "relation": relation,
+            "reputation": reputation, "confidence": confidence,
+            "temporal_factor": temporal, "spatial_factor": spatial,
+            "modality": modality, "correlation_group": group, "weight": weight,
+        })
+        entry = groups.setdefault(group, {"positive": 0.0, "negative": 0.0, "modalities": set()})
+        entry[relation] = max(entry[relation], weight)
+        if relation == "positive" and weight > 0 and modality != "unknown":
+            entry["modalities"].add(modality)
+
+    add(initial_observation.source_id, initial_observation.event_id, "positive",
+        initial_observation.confidence_score, 1.0, 1.0)
+    for raw in aggregate_summary.get("observations", ()):
+        observation = model_from_dict(raw, Observation)
+        event_id = observation.event_id
+        if (observation.source_id not in eligible or event_id in conflicted
+                or observation.source_id == initial_observation.source_id):
+            continue
+        if event_id not in positive | negative or not are_observations_compatible(
+            initial_observation, observation, max_distance, max_time_difference
+        ):
+            continue
+        distance = hypot(initial_observation.position.x - observation.position.x,
+                         initial_observation.position.y - observation.position.y)
+        delta = abs(initial_observation.observed_at - observation.observed_at)
+        temporal = 1 / (1 + delta / max_time_difference) if max_time_difference else 1.0
+        spatial = 1 / (1 + distance / max_distance) if max_distance else 1.0
+        add(observation.source_id, event_id, "negative" if event_id in negative else "positive",
+            observation.confidence_score, temporal, spatial)
+    for source_id in sorted(set(aggregate_summary.get("informative_absence_source_ids", ())) & eligible):
+        if source_id != initial_observation.source_id:
+            add(source_id, None, "negative", 1.0, 1.0, 1.0)
+
+    supporting = [entry for entry in groups.values() if entry["positive"] > entry["negative"]]
+    modalities = set().union(*(entry["modalities"] for entry in supporting))
+    diversity = 0.5 + 0.25 * min(2, len(modalities))
+    support = fsum(entry["positive"] for entry in groups.values())
+    opposition = fsum(entry["negative"] for entry in groups.values())
+    # ponytail: máximo por grupo é uma heurística; substituir só após medir dependências.
+    # Duas unidades de apoio líquido saturam a escala. Evidência de peso zero
+    # não dilui apoio existente só por acrescentar outro grupo.
+    score = max(0.0, min(1.0, (support - opposition) / 2)) * diversity
+    evaluation.update({
+        "suspicion_score": score, "score_kind": "heuristic_not_probability",
+        "support": support, "opposition": opposition, "diversity_factor": diversity,
+        "supporting_group_count": len(supporting), "modalities": tuple(sorted(modalities)),
+        "conflicting_evidence": bool(conflicted) or (support > 0 and opposition > 0),
+        "factors": tuple(sorted(factors, key=lambda item: (item["source_id"], item["event_id"] or ""))),
+        "group_count": len(groups),
+        "max_distance": max_distance, "max_time_difference": max_time_difference,
+    })
+    return evaluation
 
 
 def _observation_sort_key(observation: Observation) -> tuple:
@@ -473,9 +577,9 @@ def evaluate_preliminary_corroboration(
 
     return {
         "classification": aggregate_summary.get("classification"),
-        "compatible_observation_ids": _summary_identifiers(
+        "compatible_observation_ids": tuple(sorted(_summary_identifiers(
             aggregate_summary, "compatible_observation_ids"
-        ),
+        ))),
         "eligible_source_count": eligible_count,
         "compatible_source_ids": tuple(sorted(compatible_source_ids)),
         "compatible_source_count": len(compatible_source_ids),

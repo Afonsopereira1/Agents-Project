@@ -30,6 +30,62 @@ def observation(event_id, source_id, position=(5, 6), observed_at=1.0):
 
 @unittest.skipUnless(SpadeMessage is not None, "SPADE não está instalado")
 class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
+    async def test_stage7_policy_uses_snapshot_and_records_factors(self):
+        import json
+        from isia.reasoning.policy import ResponsePolicy
+        from isia.reasoning.reputation import ReputationBook
+
+        local = observation("obs-1", "sensor_01")
+        other = observation("obs-2", "sensor_02")
+        agent = self._agent(local, eligible_source_ids=("sensor_02",), max_distance=2,
+                            max_time_difference=2)
+        book = ReputationBook()
+        SensorAgent.set_response_policy(
+            agent, ResponsePolicy(), book.snapshot(("sensor_01", "sensor_02")),
+            {"sensor_01": {"modality": "acoustic", "correlation_group": "a"},
+             "sensor_02": {"modality": "visual", "correlation_group": "b"}},
+        )
+
+        def response_for(request):
+            return Message("response", MessageType.VERIFY_RESPONSE, 1,
+                           {"request_message_id": request.message_id, "status": "observations_available",
+                            "observations": [model_to_dict(other)]},
+                           conversation_id=request.conversation_id, incident_id=request.incident_id,
+                           source_id="sensor_02")
+
+        await self._run_with_response(agent, response_for)
+        self.assertEqual(agent.decision["decision"], "request_mobile_verification")
+        self.assertEqual(agent.decision["suspicion_score"], 0.4)
+        history = next(iter(agent.verification_history[agent.conversation_id].values()))
+        self.assertEqual(history["response_policy"]["suspicion_score"], 0.4)
+        json.dumps(history, allow_nan=False)
+        self.assertEqual(book.history, [])
+
+    async def test_stage7_rejects_bad_source_profile_at_configuration(self):
+        from isia.reasoning.policy import ResponsePolicy
+
+        agent = self._agent(observation("obs-1", "sensor_01"))
+        with self.assertRaises(ValueError):
+            SensorAgent.set_response_policy(
+                agent, ResponsePolicy(), {}, {"sensor_01": {"modality": "acoustic", "correlation": "typo"}})
+
+    async def test_stage7_severe_alert_still_requests_patrol_after_timeout(self):
+        from unittest.mock import AsyncMock
+        from isia.reasoning.policy import ResponsePolicy
+
+        local = observation("obs-1", "sensor_01")
+        agent = self._agent(local, max_distance=2, max_time_difference=2)
+        SensorAgent.set_response_policy(agent, ResponsePolicy(), {}, {}, severity=1)
+        behaviour = SensorAgent.VerificationBehaviour()
+        behaviour.set_agent(agent)
+        behaviour.send = AsyncMock()
+        behaviour.receive = AsyncMock(return_value=None)
+        await behaviour.run()
+        self.assertEqual(agent.decision["decision"], "request_mobile_verification")
+        self.assertEqual(agent.decision["response_status"], "timeout")
+        history = next(iter(agent.verification_history[agent.conversation_id].values()))
+        self.assertTrue(history["response_wait_timed_out"])
+
     def _agent(self, local, **context):
         from unittest.mock import Mock
 

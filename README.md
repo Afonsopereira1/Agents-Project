@@ -3,7 +3,7 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado (12-11-2026):** Etapa 6 integrada na `main` pelo [PR #12](https://github.com/Afonsopereira1/Agents-Project/pull/12): deteção, corroboração, negociação, missão, intervenção de guarda e encerramento. O MVP usa dois sensores e duas patrulhas candidatas, com regresso e libertação dos recursos. Os testes locais executam os comportamentos SPADE com transporte em memória; o demonstrador também completou o ciclo ligado a um servidor XMPP temporário, com todos os agentes no mesmo processo. Isto não prova transporte pela rede em cada mensagem. Etapas 7–10 e aprovações formais do grupo continuam pendentes.
+> **Estado (12-11-2026):** Etapa 6 integrada na `main` pelos PRs #12 e #13. Esta branch inclui essa base e adapta a reputação e a política da Etapa 7 ao ciclo existente. A integração foi testada com transporte local dos comportamentos SPADE. A aprendizagem automática a partir das missões, as Etapas 8–10 e as aprovações formais continuam pendentes. Ver [reputação e limites](docs/reputation-policy.md).
 
 ## O projeto
 
@@ -22,6 +22,7 @@ O simulador mantém a verdade dos acontecimentos apenas para avaliação; os age
 | Testes, métricas e três cenários | [docs/evaluation.md](docs/evaluation.md) |
 | Demonstração Contract Net da Etapa 5 | [contract_net_demo.py](contract_net_demo.py) |
 | MVP completo da Etapa 6 | [runner.py](src/isia/simulation/runner.py) |
+| Política da Etapa 7 e limites da aprendizagem | [docs/reputation-policy.md](docs/reputation-policy.md) |
 | Organização flexível dos colegas | [docs/team-tasks.md](docs/team-tasks.md) e [Issues](https://github.com/Afonsopereira1/Agents-Project/issues) |
 
 **MVP implementado:** ocorrência → observação → evidências → avaliação → propostas de recursos → missão → resultado. O MVP não substitui os requisitos da entrega final.
@@ -84,8 +85,18 @@ O mapa não tem obstáculos: percorre primeiro x e depois y, a uma célula por
 segundo simulado. Cada célula gasta um ponto percentual de energia; a inspeção
 leva um segundo e não tem consumo adicional. A inspeção local é idealizada e a
 intervenção do guarda é uma ação simulada bem-sucedida, sem remover o evento do
-ambiente. Reputação, falhas sistemáticas e avaliação experimental ficam para
-as etapas seguintes. Ver o [protocolo da missão](docs/protocols.md#missões-e-intervenção--etapa-6).
+ambiente. Falhas sistemáticas e avaliação experimental ficam para as etapas
+seguintes. Ver o [protocolo da missão](docs/protocols.md#missões-e-intervenção--etapa-6).
+
+Para ativar a política da Etapa 7 sobre os mesmos agentes:
+
+```bash
+PYTHONPATH=src python -m isia.simulation.runner --policy config/agents.json > /tmp/isia-policy.json
+```
+
+Com os parâmetros fornecidos, as duas fontes acústicas correlacionadas levam a
+`observe`, sem missões, e a janela termina como `expired`. A configuração,
+pesos e razões constam do JSON. Ver os [parâmetros e a aprendizagem](docs/reputation-policy.md).
 
 ### Requisitos
 - Python 3.12

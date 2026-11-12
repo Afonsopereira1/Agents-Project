@@ -28,6 +28,9 @@ from isia.domain.validation import is_finite_number
 MOBILE_VERIFICATION_DECISION = "request_mobile_verification"
 MOBILE_VERIFICATION_TASK = "verify_incident"
 MOBILE_VERIFICATION_CAPABILITY = "mobile_verification"
+RANGER_DECISION = "request_rangers"
+RANGER_TASK = "respond_incident"
+RANGER_CAPABILITY = "incident_response"
 CONTRACT_NET_REJECT_REASON = "cfp_rejected"
 
 
@@ -774,7 +777,7 @@ class MissionRegistry:
     ) -> Mission | None:
         """Criar a missão móvel correspondente à decisão, se aplicável.
 
-        ``None`` representa uma decisão que não pede verificação móvel. Para
+        ``None`` representa uma decisão que não pede patrulha nem rangers. Para
         manter a ponte mínima, o destino default é a posição da primeira
         observação do incidente, usada como âncora determinística da
         ocorrência. O chamador pode fornecer um ``target`` explícito.
@@ -784,20 +787,22 @@ class MissionRegistry:
         if not isinstance(decision, Mapping):
             raise TypeError("decision deve ser um mapping.")
 
-        if decision.get("decision") != MOBILE_VERIFICATION_DECISION:
+        action = decision.get("decision")
+        if action not in (MOBILE_VERIFICATION_DECISION, RANGER_DECISION):
             return None
 
-        key = (incident.incident_id, MOBILE_VERIFICATION_DECISION)
+        key = (incident.incident_id, action)
         existing = self._missions.get(key)
         if existing is not None:
             return existing
 
+        ranger = action == RANGER_DECISION
         mission = Mission(
-            mission_id=mission_id or f"mission-{incident.incident_id}-mobile-verification",
+            mission_id=mission_id or f"mission-{incident.incident_id}-{'ranger-response' if ranger else 'mobile-verification'}",
             incident_id=incident.incident_id,
-            task=MOBILE_VERIFICATION_TASK,
+            task=RANGER_TASK if ranger else MOBILE_VERIFICATION_TASK,
             target=target or incident.observations[0].position,
-            required_capability=MOBILE_VERIFICATION_CAPABILITY,
+            required_capability=RANGER_CAPABILITY if ranger else MOBILE_VERIFICATION_CAPABILITY,
             priority=priority,
         )
         self._missions[key] = mission
