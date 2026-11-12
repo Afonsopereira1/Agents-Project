@@ -90,7 +90,7 @@ def flat_summary(scenario, variant, rows):
 
 def write_csv(path, rows):
     with open(path, "w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        writer = csv.DictWriter(stream, fieldnames=list(rows[0]), lineterminator="\n")
         writer.writeheader()
         writer.writerows([{k: "N/A" if v is None else v for k, v in row.items()} for row in rows])
 

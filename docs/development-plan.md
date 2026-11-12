@@ -446,7 +446,9 @@ cenários × variantes × sementes e escreve `runs.csv`, `summary.csv` e
 Resultados e limitações: [experiências](experiments.md).
 
 **Verificação (12-11-2026):** a suite completa passou **419 testes, OK**.
-Foram feitas 560 execuções no commit `c5b717c`.
+Foram feitas 560 execuções no commit `667cba2` (`dirty: false`). Depois das correções
+de validação e proveniência, a suite passou **420 testes, OK**. A nova recolha
+deu as mesmas decisões em todas as execuções.
 
 **Dependências:** Etapas 7 e 8; a infraestrutura de métricas pode ser iniciada durante a Etapa 2. Permite fechar a Etapa 10.
 

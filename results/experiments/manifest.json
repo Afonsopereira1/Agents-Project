@@ -1,5 +1,6 @@
 {
-  "commit": "c5b717cfd44d29097cb77143fafb619591c48516",
+  "commit": "667cba2d07ea5c6e5ae4d077f7146f90f6f27d26",
+  "dirty": false,
   "scenarios": [
     "config/scenarios/A.json",
     "config/scenarios/B.json",

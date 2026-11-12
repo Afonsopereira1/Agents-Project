@@ -4,11 +4,12 @@
 
 Os números abaixo vêm das **560 execuções** registadas em
 [`results/experiments/`](../results/experiments/), feitas no commit
-`c5b717c` (ver `manifest.json`). Os relatórios completos de cada execução
+`667cba2`, sem alterações por fazer commit (ver `commit` e `dirty` em `manifest.json`). Os relatórios completos de cada execução
 (`results/experiments/runs/`) não são versionados. Para os regenerar:
 
 ```bash
 PYTHONPATH=src python -m isia.evaluation.collector config/scenarios/*.json --output results/experiments
+# A pasta runs/ é apagada e recriada; summary.csv inclui média, mediana, desvio-padrão e n.
 PYTHONPATH=src python -m unittest tests.unit.test_metrics tests.scenarios.test_experiments -v
 ```
 
@@ -30,7 +31,7 @@ Todos usam o mundo do MVP: `sensor-1` acústico em (2,2), que inicia o incidente
 |---|---|---|---|
 | **A** — normal | `threat`, `empty` | FP 5 %, FN 5–10 %, sem erro de posição | Drone com carga 0.5; sem falhas |
 | **B** — ruído | `threat`, `thunder`, `thunder+tourist` | FP 50–60 %, FN 20–25 %, erro de posição ±1, confiança 0.7 | Drone com carga 0.5; sem falhas |
-| **C** — falhas/escassez | `threat`, `empty` | Iguais às de A | Drone com 15 % de autonomia, guarda com carga 0.8; perda de 10 %, atraso de 0.05 s em `PROPOSAL`/`MISSION_RESULT`, `MISSION_RESULT` duplicado |
+| **C** — falhas/escassez | `threat`, `empty` | Iguais às de A | Drone com 15 % de autonomia; perda de 10 %, atraso de 0.05 s em `PROPOSAL`/`MISSION_RESULT`, `MISSION_RESULT` duplicado |
 
 A política e a reputação são as de `config/agents.json`. Os sensores pertencem a grupos e modalidades diferentes. Uma regra explícita, `compatibility_rules`, permite que `suspicious_movement` corrobore `gunshot_like_sound`.
 
@@ -85,7 +86,7 @@ Cada variante muda uma só coisa em relação a `full`:
 
 - **A:** em todas as variantes, 1 das 20 ameaças não gerou alerta (FN do sensor). Em `full`, `no_reputation` e `nearest`, 2 ameaças terminaram `expired` por falta de corroboração (repetições 1 e 5): o sensor visual não detetou. Os 20 episódios vazios nunca geraram alerta.
 - **B:** das 13 ameaças mobilizadas em `full`, só 2 foram confirmadas. As outras 11 terminaram `not_confirmed` porque o erro de posição ±1 mandou a patrulha inspecionar a célula errada. Em `full`, o episódio `thunder` nunca mobilizou, porque o sensor visual não vê trovão. Já `thunder+tourist` mobilizou 10 vezes, porque cada fonte deu um falso positivo, de origens diferentes, e as duas pareceram corroborar-se.
-- **C:** o drone recusou sempre (`autonomy_insufficient`). Por isso, nas 20 ameaças de `full`, houve 6 `no_eligible_proposals`, 3 `confirmation_unknown` e 1 `mission_result_unknown`. Todos os casos analisados coincidem com uma única mensagem perdida (`CFP`, `PROPOSAL`, `ACCEPT`/`STATUS` ou `MISSION_RESULT`) no único recurso elegível. Não há retransmissões (Etapa 8). As 11 linhas `Timeout à espera de VERIFY_RESPONSE` no registo correspondem a pedidos de corroboração perdidos, que terminaram `expired` ou `observe`.
+- **C:** o drone recusou sempre (`autonomy_insufficient`). Por isso, nas 20 ameaças de `full`, houve 6 `no_eligible_proposals`, 3 `confirmation_unknown` e 1 `mission_result_unknown`. Todos os casos analisados coincidem com uma única mensagem perdida (`CFP`, `PROPOSAL`, `ACCEPT`/`STATUS` ou `MISSION_RESULT`) no único recurso elegível. Não há retransmissões (Etapa 8). Houve 12 pedidos ou respostas de corroboração perdidos (linhas `Timeout à espera de VERIFY_RESPONSE`). Sem resposta, o sensor decide só com a evidência local. Em `full`, `no_reputation` e `nearest`, 7 terminaram `observe`/`expired` e 2 mobilizaram na mesma: em `full` e `nearest`, já com a reputação do `sensor-1` alta o suficiente. Em `no_corroboration`, os 3 casos mobilizaram.
 
 ## Discussão
 
