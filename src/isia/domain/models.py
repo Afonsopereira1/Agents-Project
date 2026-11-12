@@ -1,7 +1,8 @@
 
 from dataclasses import dataclass, replace
 from enum import Enum
-from math import isfinite
+
+from isia.domain.validation import is_finite_number
 
 
 @dataclass(frozen=True)
@@ -41,9 +42,7 @@ class Observation:
         if not isinstance(self.position, Position):
             raise TypeError("A posição deve ser do tipo Position.")
 
-        if isinstance(self.observed_at, bool) or not isinstance(
-            self.observed_at, (int, float)
-        ) or not 0 <= self.observed_at < float("inf"):
+        if not is_finite_number(self.observed_at) or self.observed_at < 0:
             raise ValueError("O instante deve ser finito e não negativo.")
 
         if isinstance(self.confidence_score, bool) or not isinstance(
@@ -52,9 +51,7 @@ class Observation:
             raise ValueError("A confiança deve estar entre 0 e 1.")
 
         if self.intensity_score is not None and (
-            isinstance(self.intensity_score, bool)
-            or not isinstance(self.intensity_score, (int, float))
-            or not isfinite(self.intensity_score)
+            not is_finite_number(self.intensity_score)
             or not 0 <= self.intensity_score <= 1
         ):
             raise ValueError("A intensidade deve estar entre 0 e 1.")
@@ -117,9 +114,7 @@ class ResourceState:
             raise TypeError("A disponibilidade deve ser True ou False.")
 
         if self.autonomy_percent is not None and (
-            isinstance(self.autonomy_percent, bool)
-            or not isinstance(self.autonomy_percent, (int, float))
-            or not isfinite(self.autonomy_percent)
+            not is_finite_number(self.autonomy_percent)
             or not 0 <= self.autonomy_percent <= 100
         ):
             raise ValueError("A autonomia deve estar entre 0 e 100.")
@@ -302,16 +297,14 @@ class Bid:
         if not isinstance(self.resource_id, str) or not self.resource_id.strip():
             raise ValueError("O identificador do recurso não pode estar vazio.")
 
-        if isinstance(self.eta, bool) or not isinstance(self.eta, (int, float)) or not 0 <= self.eta < float("inf"):
+        if not is_finite_number(self.eta) or self.eta < 0:
             raise ValueError("O tempo estimado deve ser finito e não negativo.")
 
-        if isinstance(self.energy_cost, bool) or not isinstance(self.energy_cost,(int, float)) or not 0 <= self.energy_cost < float("inf"):
+        if not is_finite_number(self.energy_cost) or self.energy_cost < 0:
             raise ValueError("O custo energético deve ser finito e não negativo.")
 
         if (
-            isinstance(self.load, bool)
-            or not isinstance(self.load, (int, float))
-            or not isfinite(self.load)
+            not is_finite_number(self.load)
             or not 0 <= self.load <= 1
         ):
             raise ValueError("A carga de trabalho deve estar entre 0 e 1.")

@@ -25,6 +25,7 @@ from isia.reasoning.allocation import (
     LocalResourceReservation,
     ReservationResult,
     ReservationStatus,
+    _validate_simulated_time,
     accept_matches_proposal,
     build_reservation_status_message,
     evaluate_cfp,
@@ -61,6 +62,7 @@ class MobileResourceAgent(Agent):
         load: float,
         simulated_time: float = 0.0,
     ):
+        simulated_time = _validate_simulated_time(simulated_time, "simulated_time")
         super().__init__(jid, password)
         self.resource = resource
         self.capabilities = tuple(capabilities)
@@ -77,7 +79,7 @@ class MobileResourceAgent(Agent):
         self._accepted_proposal_ids: set[str] = set()
 
     def set_simulated_time(self, simulated_time: float) -> None:
-        self.simulated_time = simulated_time
+        self.simulated_time = _validate_simulated_time(simulated_time, "simulated_time")
         self._expire_proposals()
 
     def _invalidate_proposal(self, proposal_id: str) -> None:
@@ -86,6 +88,7 @@ class MobileResourceAgent(Agent):
             self._closed_cfp_ids.add(context[0].message_id)
 
     def _expire_proposals(self) -> None:
+        _validate_simulated_time(self.simulated_time, "simulated_time")
         for proposal_id, (cfp, _, _) in tuple(self._proposal_context.items()):
             if proposal_id in self._accepted_proposal_ids:
                 continue  # Preservar confirmações idempotentes de reservas existentes.

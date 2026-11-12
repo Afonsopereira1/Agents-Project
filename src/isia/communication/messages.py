@@ -14,6 +14,7 @@ from isia.domain.models import (
     ResourceState,
     ResourceStatus,
 )
+from isia.domain.validation import is_finite_number
 
 
 class MessageType(Enum):
@@ -78,7 +79,7 @@ def _validate_cfp(message_ids: dict[str, str | None], payload: dict[str, Any]) -
     if type(payload["priority"]) is not int or payload["priority"] < 0:
         raise ValueError("priority deve ser um inteiro não negativo.")
     deadline = payload["deadline"]
-    if type(deadline) not in (int, float) or not isfinite(deadline) or deadline < 0:
+    if not is_finite_number(deadline) or deadline < 0:
         raise ValueError("deadline deve ser finito e não negativo.")
     if "round_number" in payload:
         round_number = payload["round_number"]
@@ -192,11 +193,7 @@ class Message:
         self.message_id = _require_identifier(message_id, "message_id")
         if not isinstance(message_type, MessageType):
             raise TypeError("message_type deve ser MessageType.")
-        if (
-            type(created_at) not in (int, float)
-            or not isfinite(created_at)
-            or created_at < 0
-        ):
+        if not is_finite_number(created_at) or created_at < 0:
             raise ValueError("created_at deve ser finito e não negativo.")
         if not isinstance(payload, dict):
             raise TypeError("payload deve ser um objeto JSON.")

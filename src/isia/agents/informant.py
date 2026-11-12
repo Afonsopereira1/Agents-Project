@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from math import hypot, isfinite
 
 from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
@@ -19,7 +18,8 @@ from isia.communication.transport import (
     parse_spade_message,
 )
 from isia.domain.models import Position
-from isia.reasoning.corroboration import capability_supports_signal
+from isia.domain.validation import is_finite_number
+from isia.reasoning.corroboration import capability_supports_signal, positions_within_distance
 
 logger = logging.getLogger(__name__)
 
@@ -76,13 +76,19 @@ class InformantAgent(Agent):
             if request.message_type is not MessageType.VERIFY_REQUEST:
                 return
 
-            observations = _recent_observations(self.agent.observation_feed)
             source_id = self.agent.source_id
             if not isinstance(source_id, str) or not source_id.strip():
                 source_id = "informant-example"
             created_at = self.agent.created_at
-            if not isinstance(created_at, (int, float)):
+            if not is_finite_number(created_at) or created_at < 0:
                 created_at = request.created_at
+            if created_at < request.created_at:
+                logger.warning("Pedido posterior ao instante local do informador")
+                return
+            observations = tuple(
+                observation for observation in _recent_observations(self.agent.observation_feed)
+                if observation.observed_at <= created_at
+            )
 
             status = "observations_available" if observations else "no_data"
             payload = {
@@ -149,6 +155,9 @@ def _informative_absence_payload(agent, request: Message) -> dict[str, object] |
     coverage_capability = getattr(agent, "coverage_capability", None)
     observed_from = getattr(agent, "coverage_observed_from", None)
     observed_until = getattr(agent, "coverage_observed_until", None)
+    created_at = getattr(agent, "created_at", None)
+    if not is_finite_number(created_at) or created_at < 0:
+        created_at = request.created_at
     opportunity_confirmed = getattr(agent, "coverage_opportunity_confirmed", False)
     if (
         not isinstance(coverage_position, Position)
@@ -171,26 +180,23 @@ def _informative_absence_payload(agent, request: Message) -> dict[str, object] |
     except (KeyError, TypeError, ValueError):
         return None
     if (
-        type(coverage_radius) not in (int, float)
-        or not isfinite(coverage_radius)
+        not is_finite_number(coverage_radius)
         or coverage_radius < 0
-        or type(observed_from) not in (int, float)
-        or type(observed_until) not in (int, float)
-        or not isfinite(observed_from)
-        or not isfinite(observed_until)
+        or not is_finite_number(observed_from)
+        or not is_finite_number(observed_until)
         or observed_from > observed_until
-        or type(hypothesis_from) not in (int, float)
-        or type(hypothesis_until) not in (int, float)
-        or not isfinite(hypothesis_from)
-        or not isfinite(hypothesis_until)
+        or observed_until > created_at
+        or not is_finite_number(hypothesis_from)
+        or not is_finite_number(hypothesis_until)
         or hypothesis_from > hypothesis_until
         or observed_from > hypothesis_from
         or observed_until < hypothesis_until
-        or hypot(
-            coverage_position.x - hypothesis_position.x,
-            coverage_position.y - hypothesis_position.y,
-        ) > coverage_radius
     ):
+        return None
+    try:
+        if not positions_within_distance(coverage_position, hypothesis_position, coverage_radius):
+            return None
+    except ValueError:
         return None
     return {
         "hypothesis_id": hypothesis.get("hypothesis_id"),

@@ -45,6 +45,7 @@ def response_matches_request(
         response.message_type is MessageType.VERIFY_RESPONSE
         and response.conversation_id == request.conversation_id
         and response.incident_id == request.incident_id
+        and response.created_at >= request.created_at
         and incoming.get_metadata("conversation-id") == request.conversation_id
         and incoming.get_metadata("in-reply-to") == request.message_id
         and response.payload.get("request_message_id") == request.message_id

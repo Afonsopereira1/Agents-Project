@@ -22,6 +22,7 @@ from isia.domain.models import (
     ResourceState,
     ResourceStatus,
 )
+from isia.domain.validation import is_finite_number
 
 
 MOBILE_VERIFICATION_DECISION = "request_mobile_verification"
@@ -399,7 +400,7 @@ def _validate_simulated_time(value: object, name: str) -> float:
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))
-        or not isfinite(value)
+        or not is_finite_number(value)
         or value < 0
     ):
         raise ValueError(
@@ -576,7 +577,7 @@ def _validate_cost_parameter(value: object, name: str, *, positive: bool) -> flo
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))
-        or not isfinite(value)
+        or not is_finite_number(value)
         or (value <= 0 if positive else value < 0)
     ):
         qualifier = "positivo" if positive else "não negativo"
@@ -595,11 +596,17 @@ def _proposal_cost(
     load_scale: float,
 ) -> float:
     """Normalizar as três dimensões antes de aplicar os pesos."""
-    return (
-        eta_weight * (bid.eta / eta_scale_seconds)
-        + energy_weight * (bid.energy_cost / energy_scale_percent)
-        + load_weight * (bid.load / load_scale)
-    )
+    cost = 0.0
+    for weight, value, scale in (
+        (eta_weight, bid.eta, eta_scale_seconds),
+        (energy_weight, bid.energy_cost, energy_scale_percent),
+        (load_weight, bid.load, load_scale),
+    ):
+        if weight != 0:
+            cost += weight * (value / scale)
+    if not isfinite(cost):
+        raise ValueError("O custo da proposta deve ser finito.")
+    return cost
 
 
 def select_best_proposal(
