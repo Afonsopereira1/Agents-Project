@@ -3,9 +3,12 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import json
+import sys
 import unittest
+from unittest.mock import patch
 
 try:
+    from isia.evaluation import collector
     from isia.evaluation.collector import VARIANTS, load_scenario, run_scenario
     from isia.simulation.runner import run_mvp
 except ImportError:
@@ -61,9 +64,28 @@ class TestExperiments(unittest.IsolatedAsyncioTestCase):
         config = load_scenario(ROOT / "config/scenarios/A.json")
         with TemporaryDirectory() as directory:
             path = Path(directory, "empty.json")
-            path.write_text(json.dumps({**config, "episodes": []}))
-            with self.assertRaisesRegex(ValueError, "episodes"):
-                load_scenario(path)
+            for episodes in ([], [{"events": []}]):
+                path.write_text(json.dumps({**config, "episodes": episodes}))
+                with self.assertRaisesRegex(ValueError, "episodes"):
+                    load_scenario(path)
+
+
+@unittest.skipUnless(run_mvp, "SPADE não está instalado")
+class TestCollectorOutput(unittest.TestCase):
+    def test_failed_collection_leaves_no_stale_results(self):
+        with TemporaryDirectory() as output:
+            for name in ("runs.csv", "summary.csv", "manifest.json", "runs/A/full/old.json"):
+                Path(output, name).parent.mkdir(parents=True, exist_ok=True)
+                Path(output, name).write_text("antigo")
+            argv = ["collector", str(ROOT / "config/scenarios/A.json"), "--output", output]
+
+            async def fail(*args, **kwargs):
+                raise RuntimeError("falha a meio")
+
+            with patch.object(sys, "argv", argv), patch.object(collector, "run_scenario", fail):
+                with self.assertRaises(RuntimeError):
+                    collector.main()
+            self.assertEqual(list(Path(output).rglob("*")), [])
 
 
 if __name__ == "__main__":

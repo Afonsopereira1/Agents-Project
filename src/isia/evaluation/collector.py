@@ -39,8 +39,9 @@ def load_scenario(path):
         raise ValueError(f"{path}: o cenário exige {sorted(expected)}.")
     if type(config["repetitions"]) is not int or config["repetitions"] < 1:
         raise ValueError(f"{path}: repetitions deve ser inteiro positivo.")
-    if not isinstance(config["episodes"], list) or not config["episodes"]:
-        raise ValueError(f"{path}: episodes deve ser uma lista não vazia.")
+    if not isinstance(config["episodes"], list) or not config["episodes"] or any(
+            not isinstance(e, dict) or set(e) != {"label", "events"} for e in config["episodes"]):
+        raise ValueError(f"{path}: episodes deve ser uma lista não vazia de {{label, events}}.")
     return config
 
 
@@ -108,8 +109,14 @@ def main():
         configs = [load_scenario(path) for path in args.scenarios]
     except (OSError, ValueError) as error:
         parser.error(str(error))
-    # Os relatórios por execução são sempre os desta recolha, como o manifesto.
+    # Proveniência lida antes de correr: commits ou edições durante a recolha não contam.
+    git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True).stdout.strip()
+    commit = git("rev-parse", "HEAD") or None
+    dirty = bool(git("status", "--porcelain", "--", "src", "config"))
+    # Tudo o que é desta recolha sai junto; se ela falhar, fica sem manifesto (incompleta).
     shutil.rmtree(args.output / "runs", ignore_errors=True)
+    for name in ("runs.csv", "summary.csv", "manifest.json"):
+        (args.output / name).unlink(missing_ok=True)
     args.output.mkdir(parents=True, exist_ok=True)
 
     async def collect():
@@ -126,11 +133,9 @@ def main():
     runs, summaries = asyncio.run(collect())
     write_csv(args.output / "runs.csv", runs)
     write_csv(args.output / "summary.csv", summaries)
-    git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True).stdout.strip()
     (args.output / "manifest.json").write_text(json.dumps({
-        "commit": git("rev-parse", "HEAD") or None,
-        # Alterações sem commit (código ou cenários) tornam o commit insuficiente.
-        "dirty": bool(git("status", "--porcelain", "--", "src", "config")),
+        # dirty: alterações sem commit em código ou cenários tornam o commit insuficiente.
+        "commit": commit, "dirty": dirty,
         "scenarios": [str(p) for p in args.scenarios],
         "variants": {name: VARIANTS[name] for name in args.variants},
         "repetitions_override": args.repetitions, "runs": len(runs),
