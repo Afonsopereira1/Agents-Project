@@ -96,7 +96,7 @@ class Scenario:
     """O avaliador conserva este objeto; agentes recebem apenas source(id)."""
 
     def __init__(self, world: World, sources: dict[str, Source], events: tuple[Event, ...],
-                 seed: int, corroboration_window: float = 5.0):
+                 seed: int, corroboration_window: float = 5.0, observation_prefix: str = "obs"):
         if not isinstance(world, World):
             raise TypeError("world deve ser World.")
         if world.clock.now != 0:
@@ -123,6 +123,8 @@ class Scenario:
         self._sources = dict(sorted(sources.items()))
         self._events = tuple(sorted(events, key=lambda event: event.event_id))
         self._rng = random.Random(seed)
+        # IDs únicos entre execuções permitem à reputação aprender sem colisões.
+        self._observation_prefix = observation_prefix
         self._feeds = {key: ObservationFeed(world.clock, corroboration_window)
                        for key in self._sources}
         self._attributions: dict[str, str] = {}
@@ -218,7 +220,7 @@ class Scenario:
                     min(self.world.width - 1, max(0, real.x + self._rng.randint(-error, error))),
                     min(self.world.height - 1, max(0, real.y + self._rng.randint(-error, error))),
                 )
-                obs_id = f"obs-{len(self._attributions) + 1:06d}"
+                obs_id = f"{self._observation_prefix}-{len(self._attributions) + 1:06d}"
                 observation = Observation(obs_id, source_id, SIGNALS[source.kind], position,
                                           now, source.confidence)
                 self._feeds[source_id]._history.append(observation)
