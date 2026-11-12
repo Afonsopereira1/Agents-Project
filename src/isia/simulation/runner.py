@@ -19,7 +19,7 @@ from isia.domain.models import Position, ResourceState
 from isia.reasoning.policy import ResponsePolicy
 from isia.reasoning.reputation import ReputationBook, result_from_mission
 from isia.simulation.world import World
-from isia.simulation.scenario import Scenario, Source, Event
+from isia.simulation.scenario import Scenario, Source, Event, event_from_dict
 
 
 SCENARIO_SEED = 6
@@ -68,16 +68,13 @@ def scenario_settings(scenario):
         raise ValueError(f"scenario.resources aceita {sorted(MVP_RESOURCES)} com {sorted(RESOURCE_KEYS)}.")
     try:
         sources = {key: Source(**value) for key, value in scenario["sources"].items()}
-        events = []
-        for item in scenario["events"]:
-            values = dict(item)
-            values["position"] = model_from_dict(values["position"], Position)
-            if values.get("destination") is not None:
-                values["destination"] = model_from_dict(values["destination"], Position)
-            events.append(Event(**values))
+        events = tuple(event_from_dict(item) for item in scenario["events"])
     except (AttributeError, KeyError, TypeError) as error:
         raise ValueError("Fontes ou eventos do cenário inválidos.") from error
-    return scenario["seed"], sources, tuple(events), resources, f"{scenario['run_id']}-obs"
+    if any(event.starts_at != 0 for event in events):
+        # O sensor só lê o feed em t=0 (janela única); um evento posterior seria um FN falso.
+        raise ValueError("Nesta janela única os eventos têm de começar em t=0.")
+    return scenario["seed"], sources, events, resources, f"{scenario['run_id']}-obs"
 
 
 async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None,

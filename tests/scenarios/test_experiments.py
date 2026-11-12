@@ -51,6 +51,19 @@ class TestExperiments(unittest.IsolatedAsyncioTestCase):
     async def test_scenario_validation(self):
         with self.assertRaises(ValueError):
             await run_mvp(scenario={"seed": 1})
+        config = load_scenario(ROOT / "config/scenarios/A.json")
+        late = {**config["episodes"][0]["events"][0], "starts_at": 2.0}
+        with self.assertRaisesRegex(ValueError, "t=0"):
+            await run_mvp(scenario={"run_id": "late", "seed": 1, "sources": config["sources"],
+                                    "events": [late], "resources": {}})
+
+    def test_empty_episodes_are_rejected(self):
+        config = load_scenario(ROOT / "config/scenarios/A.json")
+        with TemporaryDirectory() as directory:
+            path = Path(directory, "empty.json")
+            path.write_text(json.dumps({**config, "episodes": []}))
+            with self.assertRaisesRegex(ValueError, "episodes"):
+                load_scenario(path)
 
 
 if __name__ == "__main__":

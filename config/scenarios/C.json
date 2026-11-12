@@ -1,6 +1,6 @@
 {
   "scenario_id": "C",
-  "description": "Falhas e escassez: perda/atraso de mensagens, drone com pouca autonomia e guarda ocupado.",
+  "description": "Falhas e escassez: perda/atraso/duplicação de mensagens e drone com pouca autonomia.",
   "repetitions": 20,
   "base_seed": 1000,
   "episodes": [
@@ -45,9 +45,6 @@
   "resources": {
     "drone": {
       "autonomy_percent": 15.0
-    },
-    "ranger": {
-      "load": 0.8
     }
   },
   "faults": {

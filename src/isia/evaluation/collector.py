@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import csv
 import json
+import shutil
 import subprocess
 from copy import deepcopy
 from pathlib import Path
@@ -38,6 +39,8 @@ def load_scenario(path):
         raise ValueError(f"{path}: o cenário exige {sorted(expected)}.")
     if type(config["repetitions"]) is not int or config["repetitions"] < 1:
         raise ValueError(f"{path}: repetitions deve ser inteiro positivo.")
+    if not isinstance(config["episodes"], list) or not config["episodes"]:
+        raise ValueError(f"{path}: episodes deve ser uma lista não vazia.")
     return config
 
 
@@ -78,8 +81,8 @@ def flat_summary(scenario, variant, rows):
     flat = {"scenario": scenario, "variant": variant}
     for key, value in summary.items():
         if key in NUMERIC:
-            flat[f"{key}_mean"], flat[f"{key}_stdev"], flat[f"{key}_n"] = (
-                value["mean"], value["stdev"], value["n"])
+            for stat in ("mean", "median", "stdev", "n"):
+                flat[f"{key}_{stat}"] = value[stat]
         else:
             flat[key] = value
     return flat
@@ -99,7 +102,14 @@ def main():
     parser.add_argument("--repetitions", type=int, help="Substitui repetitions dos cenários")
     parser.add_argument("--output", type=Path, default=Path("results/experiments"))
     args = parser.parse_args()
-    configs = [load_scenario(path) for path in args.scenarios]
+    if args.repetitions is not None and args.repetitions < 1:
+        parser.error("--repetitions deve ser positivo.")
+    try:
+        configs = [load_scenario(path) for path in args.scenarios]
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    # Os relatórios por execução são sempre os desta recolha, como o manifesto.
+    shutil.rmtree(args.output / "runs", ignore_errors=True)
     args.output.mkdir(parents=True, exist_ok=True)
 
     async def collect():
@@ -116,9 +126,12 @@ def main():
     runs, summaries = asyncio.run(collect())
     write_csv(args.output / "runs.csv", runs)
     write_csv(args.output / "summary.csv", summaries)
-    commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True).stdout.strip()
     (args.output / "manifest.json").write_text(json.dumps({
-        "commit": commit or None, "scenarios": [str(p) for p in args.scenarios],
+        "commit": git("rev-parse", "HEAD") or None,
+        # Alterações sem commit (código ou cenários) tornam o commit insuficiente.
+        "dirty": bool(git("status", "--porcelain", "--", "src", "config")),
+        "scenarios": [str(p) for p in args.scenarios],
         "variants": {name: VARIANTS[name] for name in args.variants},
         "repetitions_override": args.repetitions, "runs": len(runs),
     }, ensure_ascii=False, indent=2) + "\n")
