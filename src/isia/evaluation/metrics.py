@@ -4,6 +4,9 @@ Unidade de avaliação: uma execução = uma zona (o mapa do MVP) numa janela ú
 Positivo real: existe pelo menos um evento ``threat`` no cenário.
 Positivo previsto: a política mobiliza recursos (patrulha ou guardas).
 Denominador zero devolve ``None`` (``N/A``), nunca 0 ou 1.
+Energia desconhecida em qualquer recurso torna o consumo total indisponível.
+As contagens de missões incluem apenas estados conhecidos pelo coordenador;
+conclusões locais cujo resultado não chegou não são contadas como conhecidas.
 """
 
 from statistics import mean, median, stdev
@@ -41,7 +44,12 @@ def run_metrics(report):
     verify = [r["completed_at"] for r in results if r["task"] == "verify_incident"]
     respond = [r["completed_at"] for r in results if r["task"] == RANGER_TASK]
     initial = {r["resource_id"]: r["autonomy_percent"] for r in report["initial_resources"]}
+    known_autonomy = (all(value is not None for value in initial.values())
+                      and all(r["autonomy_percent"] is not None for r in report["resources"]))
+    energy_used = (sum(initial[r["resource_id"]] - r["autonomy_percent"]
+                       for r in report["resources"]) if known_autonomy else None)
     faults = [entry["fault"] for entry in report["fault_log"]]
+    # Conhecimento do coordenador, não todas as conclusões da timeline móvel.
     statuses = [mission["status"] for mission in report["missions"]]
     return {
         "threat": truth,
@@ -55,7 +63,7 @@ def run_metrics(report):
         # Segundos simulados desde t=0 (início dos eventos e do alerta nesta janela única).
         "verification_time": min(verify) if verify else None,
         "response_time": min(respond) if respond else None,
-        "energy_used": sum(initial[r["resource_id"]] - r["autonomy_percent"] for r in report["resources"]),
+        "energy_used": energy_used,
         "messages_sent": len(report["messages"]),
         "messages_lost": faults.count("lost"),
         "messages_duplicated": faults.count("duplicated"),

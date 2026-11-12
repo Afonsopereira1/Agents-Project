@@ -6,15 +6,17 @@ import json
 import os
 import random
 from contextlib import suppress
+from copy import deepcopy
 
 from spade.behaviour import OneShotBehaviour
 
+from isia.agents import sensor as sensor_module
 from isia.agents.drone import DroneAgent
 from isia.agents.vehicle import VehicleAgent
 from isia.agents.ranger import RangerAgent
 from isia.agents.incident import IncidentSensorAgent
 from isia.agents.informant import InformantAgent
-from isia.communication.messages import model_from_dict, model_to_dict
+from isia.communication.messages import MessageType, model_from_dict, model_to_dict
 from isia.domain.models import Position, ResourceState
 from isia.reasoning.policy import ResponsePolicy
 from isia.reasoning.reputation import ReputationBook, result_from_mission
@@ -23,6 +25,10 @@ from isia.simulation.scenario import Scenario, Source, Event, event_from_dict
 
 
 SCENARIO_SEED = 6
+MVP_RESOURCE_IDS = frozenset(("drone", "vehicle", "ranger"))
+MVP_AGENT_IDS = frozenset(("sensor-mvp", "sensor-peer-mvp", *(
+    f"{resource_id}-mvp" for resource_id in MVP_RESOURCE_IDS
+)))
 FAULT_DEFAULTS = {"seed": 0, "loss": 0.0, "delay": {}, "drop": [], "duplicate": [],
                   "unavailable_agents": [], "occupied_after_proposal": []}
 
@@ -44,7 +50,15 @@ def fault_settings(faults):
     for key in ("drop", "duplicate", "unavailable_agents", "occupied_after_proposal"):
         if not isinstance(settings[key], list) or any(not isinstance(v, str) for v in settings[key]):
             raise ValueError(f"faults.{key} deve ser uma lista de nomes.")
-    return settings
+    message_types = {kind.value for kind in MessageType}
+    for key, supported in (
+        ("delay", message_types), ("drop", message_types), ("duplicate", message_types),
+        ("unavailable_agents", MVP_AGENT_IDS), ("occupied_after_proposal", MVP_RESOURCE_IDS),
+    ):
+        if any(value not in supported for value in settings[key]):
+            raise ValueError(f"faults.{key} aceita apenas {', '.join(sorted(supported))}.")
+    # Os parâmetros fornecidos e os defaults têm o mesmo isolamento por execução.
+    return deepcopy(settings)
 
 
 MVP_RESOURCES = {"drone": Position(0, 2), "vehicle": Position(0, 0), "ranger": Position(5, 5)}
@@ -78,9 +92,9 @@ def scenario_settings(scenario):
 
 
 async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None,
-                  interrupt_resource=None, max_seconds=10.0,
+                  interrupt_resource=None, max_seconds=None,
                   response_settings=None, reputation=None, faults=None,
-                  scenario=None, corroborate=True, selection_weights=None):
+                  scenario=None, corroborate=True, selection_weights=None, run_id=None):
     """O runner só fornece ambiente, relógio e transporte; agentes decidem.
 
     inspection_outcomes e interrupt_resource permitem testes determinísticos.
@@ -93,13 +107,26 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     faults injeta perda, atraso, duplicação e indisponibilidade só no transporte
     local; não altera nem valida o servidor XMPP.
     scenario (Etapa 9) substitui semente, fontes, eventos e recursos do MVP.
-    corroborate=False ignora a resposta do par (ablação); selection_weights
+    corroborate=False ignora a resposta do par; selection_weights
     passa pesos a select_best_proposal, ex. só ETA para "mais próximo".
+    Sem max_seconds, o limite global cobre a verificação e as tentativas das
+    duas fases de missão. Um limite explícito mantém o watchdog do chamador.
+    A identidade de scenario é também o âmbito da adjudicação. run_id opcional
+    tem de coincidir com essa identidade quando ambos são fornecidos.
+    Sem cenário, repetir a mesma semente é replay para aprendizagem; uma nova
+    amostra exige run_id explícito, que não prova independência estatística.
     """
     faults = fault_settings(faults)
     if faults is not None and xmpp:
         raise ValueError("A injeção de falhas só existe no transporte local.")
     seed, sources, events, resource_settings, prefix = scenario_settings(scenario)
+    scenario_run_id = scenario["run_id"] if scenario is not None else None
+    if run_id is None:
+        run_id = scenario_run_id if scenario_run_id is not None else f"mvp-seed-{seed}"
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise ValueError("run_id deve identificar a execução de avaliação.")
+    if scenario_run_id is not None and run_id != scenario_run_id:
+        raise ValueError("run_id deve coincidir com scenario.run_id.")
     world = World(8, 8, {"sensor-1": Position(2, 2), "sensor-2": Position(4, 2)})
     scenario = Scenario(world, sources, events, seed=seed, observation_prefix=prefix)
     sensor = IncidentSensorAgent("sensor-mvp@localhost", password, "sensor-peer-mvp@localhost")
@@ -139,6 +166,12 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                          {str(mobiles[2].jid): "ranger"}, receive_timeout=0.5 if not xmpp else 2.0,
                          selection_weights=selection_weights)
     initial_resources = [model_to_dict(agent.resource) for agent in mobiles]
+    if max_seconds is None:
+        # Cada tentativa espera propostas, STATUS e até 10 prazos pelo resultado.
+        # Há, no máximo, verificação móvel e intervenção do guarda, mais margem
+        # para o regresso e o encerramento depois dos timeouts operacionais.
+        max_seconds = (sensor_module.RESPONSE_TIMEOUT_SECONDS
+                       + 2 * sensor.max_attempts * sensor.receive_timeout * 12 + 1.0)
     agents = [*mobiles, peer, sensor]
     tasks, started, transcript, fault_log = [], [], [], []
     rng = random.Random(faults["seed"] if faults else 0)
@@ -238,13 +271,15 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
             incident_id = sensor.incident_state.incident_id
             # Avaliador: o sensor já terminou; nenhuma atualização volta à decisão desta execução.
             updates = [reputation.update(obs, incident_id,
-                                         result_from_mission(result, obs, incident_id, **adjudication))
+                                         result_from_mission(result, obs, incident_id, **adjudication),
+                                         run_id=run_id)
                        for result in sensor.results for obs in sensor.incident_observations]
         timeline = sorted([
             *sensor.timeline,
             *(entry for agent in mobiles for execution in agent.executions for entry in execution.timeline),
         ], key=lambda entry: entry["time"])
         return {"transport": "xmpp" if xmpp else "local",
+                "run_id": run_id,
                 "response_settings": response_settings,
                 "scenario_seed": seed, "faults": faults, "fault_log": fault_log,
                 "corroborate": corroborate, "selection_weights": selection_weights,
@@ -276,6 +311,7 @@ def main():
     parser.add_argument("--xmpp", action="store_true", help="Usar servidor XMPP em localhost")
     parser.add_argument("--policy", metavar="JSON", help="Ativar a política da Etapa 7 com esta configuração")
     parser.add_argument("--faults", metavar="JSON", help="Injetar falhas da Etapa 8 no transporte local")
+    parser.add_argument("--run-id", help="Identificar uma nova amostra de avaliação; repetir o ID é replay")
     args = parser.parse_args()
     settings = faults = None
     if args.policy:
@@ -291,7 +327,7 @@ def main():
         parser.error("Defina XMPP_PASSWORD para as cinco contas locais do MVP.")
     async def demo():
         print(json.dumps(await run_mvp(xmpp=args.xmpp, password=password,
-                                      response_settings=settings, faults=faults),
+                                      response_settings=settings, faults=faults, run_id=args.run_id),
                          ensure_ascii=False, indent=2))
     if args.xmpp:
         import spade
