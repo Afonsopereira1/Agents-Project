@@ -22,6 +22,7 @@ from isia.domain.models import (
     ResourceState,
     ResourceStatus,
 )
+from isia.domain.validation import is_finite_number
 
 
 MOBILE_VERIFICATION_DECISION = "request_mobile_verification"
@@ -40,6 +41,16 @@ def _validate_contract_net_message(message: Message, message_type: MessageType) 
             raise ValueError(f"{name} deve estar presente.")
 
 
+def _validate_accept_chronology(
+    cfp: Message, proposal: Message, accepted_at: float
+) -> None:
+    """O prazo do CFP limita a proposta; a aceitação só exige ordem temporal."""
+    if not cfp.created_at <= proposal.created_at <= cfp.payload["deadline"]:
+        raise ValueError("A proposta deve ser emitida entre o CFP e o seu deadline.")
+    if accepted_at < proposal.created_at:
+        raise ValueError("A aceitação não pode ser anterior à proposta.")
+
+
 def build_accept_message(
     cfp: Message,
     proposal: Message,
@@ -52,7 +63,9 @@ def build_accept_message(
 
     ``created_at`` é um instante absoluto em segundos simulados. A mensagem
     referencia explicitamente os IDs do CFP e da proposta, permitindo ao
-    recurso rejeitar ACCEPTs de outra ronda sem reservar nada.
+    recurso rejeitar ACCEPTs de outra ronda sem reservar nada. A proposta tem
+    de respeitar o prazo inclusivo do CFP e a aceitação não pode antecedê-la;
+    o prazo do CFP não limita a emissão da aceitação.
     """
     _validate_contract_net_message(cfp, MessageType.CFP)
     _validate_contract_net_message(proposal, MessageType.PROPOSAL)
@@ -68,6 +81,7 @@ def build_accept_message(
     if bid.mission_id != cfp.mission_id or bid.resource_id != proposal.source_id:
         raise ValueError("A proposta contém uma Bid incoerente.")
     created = _validate_simulated_time(created_at, "created_at")
+    _validate_accept_chronology(cfp, proposal, created)
     return Message(
         message_id or f"accept-{uuid4()}",
         MessageType.ACCEPT,
@@ -113,11 +127,12 @@ def accept_matches_proposal(
     proposal: Message,
     resource_id: str,
 ) -> bool:
-    """Validar todos os identificadores de uma aceitação para um recurso."""
+    """Validar os identificadores e a cronologia da aceitação para um recurso."""
     try:
         _validate_contract_net_message(accept, MessageType.ACCEPT)
         _validate_contract_net_message(cfp, MessageType.CFP)
         _validate_contract_net_message(proposal, MessageType.PROPOSAL)
+        _validate_accept_chronology(cfp, proposal, accept.created_at)
         bid = model_from_dict(proposal.payload.get("bid"), Bid)
     except (TypeError, ValueError):
         return False
@@ -385,7 +400,7 @@ def _validate_simulated_time(value: object, name: str) -> float:
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))
-        or not isfinite(value)
+        or not is_finite_number(value)
         or value < 0
     ):
         raise ValueError(
@@ -401,6 +416,7 @@ def build_cfp_message(
     *,
     message_id: str | None = None,
     conversation_id: str | None = None,
+    round_number: int | None = None,
 ) -> Message:
     """Construir um ``CFP`` para uma missão existente.
 
@@ -408,7 +424,9 @@ def build_cfp_message(
     simulado, usando a mesma referência temporal do relógio da simulação. O
     prazo tem de ser igual ou posterior à emissão. IDs omitidos são gerados
     localmente; IDs fornecidos pelo iniciador são mantidos para correlacionar
-    futuras ``PROPOSAL``/respostas com este CFP.
+    futuras ``PROPOSAL``/respostas com este CFP. ``round_number`` é opcional;
+    quando fornecido, é um inteiro positivo que ordena rondas do mesmo
+    iniciador e missão sem alterar o relógio simulado.
     """
     if not isinstance(mission, Mission):
         raise TypeError("mission deve ser Mission.")
@@ -424,6 +442,8 @@ def build_cfp_message(
         for field in ("task", "target", "required_capability", "priority")
     }
     payload["deadline"] = deadline_value
+    if round_number is not None:
+        payload["round_number"] = round_number
 
     return Message(
         message_id if message_id is not None else f"message-{uuid4()}",
@@ -488,6 +508,8 @@ def evaluate_cfp(
         raise TypeError("resource deve ser ResourceState.")
 
     now = _validate_simulated_time(current_time, "current_time")
+    if now < cfp.created_at:
+        raise ValueError("current_time não pode ser anterior à emissão do CFP.")
     minimum = _validate_simulated_time(
         minimum_autonomy_percent, "minimum_autonomy_percent"
     )
@@ -555,7 +577,7 @@ def _validate_cost_parameter(value: object, name: str, *, positive: bool) -> flo
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))
-        or not isfinite(value)
+        or not is_finite_number(value)
         or (value <= 0 if positive else value < 0)
     ):
         qualifier = "positivo" if positive else "não negativo"
@@ -574,11 +596,17 @@ def _proposal_cost(
     load_scale: float,
 ) -> float:
     """Normalizar as três dimensões antes de aplicar os pesos."""
-    return (
-        eta_weight * (bid.eta / eta_scale_seconds)
-        + energy_weight * (bid.energy_cost / energy_scale_percent)
-        + load_weight * (bid.load / load_scale)
-    )
+    cost = 0.0
+    for weight, value, scale in (
+        (eta_weight, bid.eta, eta_scale_seconds),
+        (energy_weight, bid.energy_cost, energy_scale_percent),
+        (load_weight, bid.load, load_scale),
+    ):
+        if weight != 0:
+            cost += weight * (value / scale)
+    if not isfinite(cost):
+        raise ValueError("O custo da proposta deve ser finito.")
+    return cost
 
 
 def select_best_proposal(

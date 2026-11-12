@@ -618,7 +618,7 @@ class TestMissionRegistry(unittest.TestCase):
             created_at=23.0,
             deadline=35.0,
         )
-        second_proposal = self._proposal(second_cfp, "drone-b")
+        second_proposal = self._proposal(second_cfp, "drone-b", created_at=23.0)
         second_accept = build_accept_message(second_cfp, second_proposal, 24.0)
         confirmed_result = LocalResourceReservation(
             ResourceState("drone-b", "drone", Position(1, 2), True, 80.0)

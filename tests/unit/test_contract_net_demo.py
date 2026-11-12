@@ -438,6 +438,9 @@ class TestContractNetInitiatorTimeout(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(cfps), 4)  # dois recursos, duas rondas
         self.assertEqual(len(accepts), 2)
         self.assertEqual(len(agent.round_history), 2)
+        self.assertEqual(
+            [cfp.payload["round_number"] for cfp in agent.round_history], [1, 2],
+        )
         self.assertNotEqual(cfps[0].message_id, cfps[2].message_id)
         self.assertNotEqual(cfps[0].conversation_id, cfps[2].conversation_id)
         self.assertEqual(agent.mission.status.value, "reserved")

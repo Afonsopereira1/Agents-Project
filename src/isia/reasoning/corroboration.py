@@ -5,11 +5,12 @@ configured limits. It does not inspect simulator ground truth or real events.
 """
 
 from collections.abc import Mapping
-from math import hypot, isfinite
+from math import hypot
 
 from isia.communication.messages import Message, MessageType, model_from_dict
 from isia.domain.models import Observation
 from isia.domain.models import Position
+from isia.domain.validation import is_finite_number
 from isia.simulation.scenario import SIGNALS, Source
 
 
@@ -59,13 +60,21 @@ def are_observations_compatible(
     if first.event_id == second.event_id:
         return False
 
-    distance = hypot(
-        first.position.x - second.position.x,
-        first.position.y - second.position.y,
-    )
     time_difference = abs(first.observed_at - second.observed_at)
 
-    return distance <= max_distance and time_difference <= max_time_difference
+    return positions_within_distance(first.position, second.position, max_distance) and (
+        time_difference <= max_time_difference
+    )
+
+
+def positions_within_distance(first: Position, second: Position, max_distance: float) -> bool:
+    """Comparar posições sem deixar escapar overflow na conversão de inteiros."""
+    _validate_limit(max_distance, "max_distance")
+    try:
+        distance = hypot(first.x - second.x, first.y - second.y)
+    except OverflowError as error:
+        raise ValueError("Position distance exceeds the supported numeric range.") from error
+    return distance <= max_distance
 
 
 def select_eligible_sources(
@@ -105,11 +114,7 @@ def select_eligible_sources(
         if not isinstance(profile, Source):
             raise TypeError("Each source profile must be a Source.")
 
-        distance = hypot(
-            observation.position.x - position.x,
-            observation.position.y - position.y,
-        )
-        if distance <= profile.detection_range:
+        if positions_within_distance(observation.position, position, profile.detection_range):
             eligible.append(sensor_id)
 
     return tuple(eligible)
@@ -582,13 +587,21 @@ def _observations_from_response(response: Message) -> tuple[tuple[Observation, .
         raise ValueError("A no_data response cannot contain observations.")
     if status == "observations_available" and not raw_observations:
         raise ValueError("An observations_available response must contain observations.")
+    if status == "informative_absence":
+        absence = payload.get("absence")
+        observed_until = absence.get("observed_until") if isinstance(absence, Mapping) else None
+        if is_finite_number(observed_until) and observed_until > response.created_at:
+            raise ValueError("VERIFY_RESPONSE cannot claim a future observation interval.")
 
     observations = []
     for raw_observation in raw_observations:
         try:
-            observations.append(model_from_dict(raw_observation, Observation))
+            observation = model_from_dict(raw_observation, Observation)
         except (TypeError, ValueError, KeyError) as error:
             raise ValueError("VERIFY_RESPONSE contains an invalid observation.") from error
+        if observation.observed_at > response.created_at:
+            raise ValueError("VERIFY_RESPONSE cannot contain a future observation.")
+        observations.append(observation)
     return tuple(observations), status
 
 
@@ -664,10 +677,8 @@ def _hypothesis_is_correlated(
         and bool(hypothesis_id.strip())
         and event_type == initial_observation.event_type
         and position == initial_observation.position
-        and type(valid_from) in (int, float)
-        and type(valid_until) in (int, float)
-        and isfinite(valid_from)
-        and isfinite(valid_until)
+        and is_finite_number(valid_from)
+        and is_finite_number(valid_until)
         and valid_from <= initial_observation.observed_at <= valid_until
         and valid_from <= valid_until
     )
@@ -710,23 +721,16 @@ def _informative_absence_is_valid(
         or capability_validated is not True
         or opportunity_confirmed is not True
         or not capability_supports_signal(capability, hypothesis.get("event_type"))
-        or type(radius) not in (int, float)
-        or not isfinite(radius)
+        or not is_finite_number(radius)
         or radius < 0
-        or type(observed_from) not in (int, float)
-        or type(observed_until) not in (int, float)
-        or not isfinite(observed_from)
-        or not isfinite(observed_until)
+        or not is_finite_number(observed_from)
+        or not is_finite_number(observed_until)
         or observed_from > observed_until
         or observed_from > hypothesis_from
         or observed_until < hypothesis_until
     ):
         return False
-    distance = hypot(
-        coverage_position.x - hypothesis_position.x,
-        coverage_position.y - hypothesis_position.y,
-    )
-    return distance <= radius
+    return positions_within_distance(coverage_position, hypothesis_position, radius)
 
 
 def _validate_reference(value: str, name: str) -> None:
@@ -764,5 +768,5 @@ def _validate_observation(observation: Observation, name: str) -> None:
 def _validate_limit(value: float, name: str) -> None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{name} must be a finite non-negative number.")
-    if not isfinite(value) or value < 0:
+    if not is_finite_number(value) or value < 0:
         raise ValueError(f"{name} must be a finite non-negative number.")

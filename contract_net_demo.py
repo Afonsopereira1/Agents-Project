@@ -10,6 +10,7 @@ import logging
 import os
 import time
 from collections.abc import Mapping
+from math import isfinite
 
 import spade
 from spade.agent import Agent
@@ -17,7 +18,7 @@ from spade.behaviour import OneShotBehaviour
 from spade.template import Template
 
 from isia.agents.mobile import MobileResourceAgent
-from isia.communication.messages import Message, MessageType
+from isia.communication.messages import Message, MessageType, model_from_dict
 from isia.communication.transport import (
     CONTRACT_NET_PROTOCOL,
     ONTOLOGY,
@@ -29,7 +30,7 @@ from isia.communication.transport import (
     build_spade_message,
     parse_spade_message,
 )
-from isia.domain.models import Mission, MissionStatus, Position, ResourceState
+from isia.domain.models import Bid, Mission, MissionStatus, Position, ResourceState
 from isia.reasoning.allocation import (
     AllocationOutcome,
     ContractNetResult,
@@ -52,14 +53,13 @@ def required_env(name: str) -> str:
 
 def configurable_float(name: str, default: float, *, positive: bool = False) -> float:
     value = os.environ.get(name)
-    if value is None:
-        return default
     try:
-        parsed = float(value)
-    except ValueError as error:
+        parsed = float(default if value is None else value)
+    except (TypeError, ValueError, OverflowError) as error:
         raise SystemExit(f"A variável {name} deve ser numérica.") from error
-    if parsed < 0 or (positive and parsed <= 0):
-        raise SystemExit(f"A variável {name} deve ser válida e não negativa.")
+    if not isfinite(parsed) or parsed < 0 or (positive and parsed <= 0):
+        constraint = "positiva" if positive else "não negativa"
+        raise SystemExit(f"A variável {name} deve ser finita e {constraint}.")
     return parsed
 
 
@@ -99,7 +99,7 @@ def response_matches_cfp(
         if response.message_type is MessageType.PROPOSAL
         else PERFORMATIVE_REJECT_PROPOSAL
     )
-    return (
+    if not (
         response.mission_id == cfp.mission_id
         and response.incident_id == cfp.incident_id
         and response.conversation_id == cfp.conversation_id
@@ -110,7 +110,17 @@ def response_matches_cfp(
         and incoming.get_metadata("performative") == expected_performative
         and incoming.get_metadata("conversation-id") == cfp.conversation_id
         and incoming.get_metadata("in-reply-to") == cfp.message_id
-    )
+    ):
+        return False
+    if response.message_type is MessageType.PROPOSAL:
+        if not cfp.created_at <= response.created_at <= cfp.payload["deadline"]:
+            return False
+        try:
+            bid = model_from_dict(response.payload.get("bid"), Bid)
+        except (TypeError, ValueError):
+            return False
+        return bid.mission_id == cfp.mission_id and bid.resource_id == resource_id
+    return True
 
 
 def confirmation_matches_accept(
@@ -178,6 +188,7 @@ class ContractNetInitiatorAgent(Agent):
                     agent.mission,
                     created_at=agent.simulated_time,
                     deadline=agent.deadline,
+                    round_number=round_number,
                 )
                 cfp = agent.cfp
                 agent.round_history.append(cfp)
@@ -194,13 +205,13 @@ class ContractNetInitiatorAgent(Agent):
                     ))
                     logger.info("Ronda %d: CFP enviado para %s (%s)", round_number, recipient, cfp.message_id)
 
-                started_at = time.monotonic()
+                response_deadline = time.monotonic() + agent.receive_timeout
                 while len(agent.responses) < len(expected_resources):
-                    remaining = agent.receive_timeout - (time.monotonic() - started_at)
+                    remaining = response_deadline - time.monotonic()
                     if remaining <= 0:
                         break
                     incoming = await self.receive(timeout=remaining)
-                    if incoming is None:
+                    if incoming is None or time.monotonic() >= response_deadline:
                         break
                     try:
                         response = parse_spade_message(incoming, expected_protocol=CONTRACT_NET_PROTOCOL)
@@ -229,7 +240,11 @@ class ContractNetInitiatorAgent(Agent):
                 winner = selection.winner
                 winner_sender = next(sender for sender, response in agent.responses.items()
                                      if response.message_id == winner.message_id)
-                accept = build_accept_message(cfp, winner, agent.simulated_time,
+                decision_time = max(
+                    agent.simulated_time,
+                    *(proposal.created_at for proposal in selection.valid_proposals),
+                )
+                accept = build_accept_message(cfp, winner, decision_time,
                                               source_id=bare_jid(agent.jid))
                 agent.accept = accept
                 await self.send(build_spade_message(
@@ -243,16 +258,16 @@ class ContractNetInitiatorAgent(Agent):
                         continue
                     sender = next(candidate for candidate, response in agent.responses.items()
                                   if response.message_id == proposal.message_id)
-                    rejection = build_proposal_rejection_message(cfp, proposal, agent.simulated_time)
+                    rejection = build_proposal_rejection_message(cfp, proposal, decision_time)
                     await self.send(build_spade_message(
                         sender, rejection, performative=PERFORMATIVE_REJECT_PROPOSAL,
                         conversation_id=rejection.conversation_id,
                         in_reply_to=proposal.message_id, protocol=CONTRACT_NET_PROTOCOL,
                     ))
 
-                started_confirmation = time.monotonic()
+                confirmation_deadline = time.monotonic() + agent.receive_timeout
                 while True:
-                    remaining = agent.receive_timeout - (time.monotonic() - started_confirmation)
+                    remaining = confirmation_deadline - time.monotonic()
                     if remaining <= 0:
                         agent.result = ContractNetResult(
                             AllocationOutcome.CONFIRMATION_UNKNOWN, agent.mission,
@@ -260,7 +275,7 @@ class ContractNetInitiatorAgent(Agent):
                         )
                         return
                     incoming = await self.receive(timeout=remaining)
-                    if incoming is None:
+                    if incoming is None or time.monotonic() >= confirmation_deadline:
                         agent.result = ContractNetResult(
                             AllocationOutcome.CONFIRMATION_UNKNOWN, agent.mission,
                             round_number, "confirmation_timeout", selection=selection,

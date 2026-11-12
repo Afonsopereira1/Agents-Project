@@ -62,6 +62,8 @@ class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
             sent.append(message)
 
         async def receive(timeout):
+            if behaviour.receive.await_count > 1:
+                return None
             request = parse_spade_message(sent[0])
             response = response_factory(request)
             incoming = SpadeMessage(
@@ -237,6 +239,8 @@ class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
             sent.append(message)
 
         async def receive(timeout):
+            if behaviour.receive.await_count > 1:
+                return None
             request = parse_spade_message(sent[0])
             incoming = SpadeMessage(
                 to="sensor@localhost",
@@ -377,7 +381,7 @@ class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
         agent = Mock(
             observation_feed=LocalFeed(()),
             source_id="sensor_02",
-            created_at=1.0,
+            created_at=2.0,
             coverage_position=Position(5, 6),
             coverage_radius=2.0,
             coverage_capability="acoustic",

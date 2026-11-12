@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from math import isfinite
 from pathlib import Path
 
 import spade
@@ -26,14 +27,12 @@ def required_env(name: str) -> str:
 
 def configurable_float(name: str, default: float) -> float:
     value = os.environ.get(name)
-    if value is None:
-        return default
     try:
-        parsed = float(value)
-    except ValueError as error:
+        parsed = float(default if value is None else value)
+    except (TypeError, ValueError, OverflowError) as error:
         raise SystemExit(f"A variável {name} deve ser numérica.") from error
-    if parsed < 0:
-        raise SystemExit(f"A variável {name} deve ser não negativa.")
+    if not isfinite(parsed) or parsed < 0:
+        raise SystemExit(f"A variável {name} deve ser finita e não negativa.")
     return parsed
 
 
@@ -50,11 +49,15 @@ def configurable_positive_int(name: str, default: int) -> int:
     return parsed
 
 
-def load_observable_scenario() -> tuple[Scenario, str, str]:
+def load_observable_scenario(max_steps: int = 60) -> tuple[Scenario, str, str]:
+    if type(max_steps) is not int or max_steps < 0:
+        raise ValueError("max_steps deve ser um inteiro não negativo.")
     scenario = Scenario.from_config(ROOT / "config" / "environment.json")
     sensor_id, informant_id = "sensor_01", "sensor_02"
 
-    while not scenario.source(sensor_id).recent():
+    for _ in range(max_steps):
+        if scenario.source(sensor_id).recent():
+            break
         scenario.advance(1.0)
 
     # The agents receive only these local feeds, never the Scenario object.
@@ -62,9 +65,12 @@ def load_observable_scenario() -> tuple[Scenario, str, str]:
     sensor_observations = scenario.source(sensor_id).recent()
     informant_observations = scenario.source(informant_id).recent()
     if not sensor_observations:
-        raise RuntimeError("O sensor iniciador não tem observações locais.")
+        raise RuntimeError(
+            f"O sensor iniciador {sensor_id} não tem observações locais "
+            f"após o limite de {max_steps} avanços de 1 segundo."
+        )
     if not informant_observations:
-        raise RuntimeError("O informador não tem observações locais.")
+        raise RuntimeError(f"O informador {informant_id} não tem observações locais.")
     return scenario, sensor_id, informant_id
 
 

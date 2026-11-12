@@ -33,6 +33,7 @@ class TestInformativeAbsenceAgent(unittest.TestCase):
 
     def agent(self, **kwargs):
         data = {
+            "created_at": 13.0,
             "coverage_position": Position(5, 5),
             "coverage_radius": 5.0,
             "coverage_capability": "acoustic",

@@ -272,6 +272,15 @@ sequenceDiagram
 7. A nova ronda só é permitida após recusa explícita, usa novos IDs e está limitada a duas rondas (`CONTRACT_MAX_ROUNDS`); ausência de propostas produz `no_eligible_proposals`.
 8. O encerramento deve ser idempotente: mensagens repetidas não criam novas missões nem reservas incompatíveis. A perda do iniciador continua sem política de recuperação distribuída.
 
+O CFP pode incluir `payload.round_number`, inteiro estrito positivo, sem alterar
+`schema_version`; a sua omissão mantém o contrato anterior. O ordinal ordena
+rondas do mesmo iniciador (JID sem recurso) e `mission_id`: tem de crescer sem
+regredir `created_at`. Um ordinal repetido com outro CFP é um conflito; os IDs
+são arbitrários e não estabelecem ordem. Nos CFPs antigos ou mistos, apenas um
+`created_at` estritamente maior estabelece sucessão; perante empate sem ordem
+explícita, preservam-se os contextos existentes sem os invalidar nem presumir a
+ordem de emissão pela chegada das mensagens.
+
 ### Resultados da ronda
 
 O iniciador expõe quatro resultados distintos, sem os converter
