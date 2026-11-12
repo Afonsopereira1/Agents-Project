@@ -304,8 +304,10 @@ class TestResourceState(unittest.TestCase):
             (ResourceStatus.MOVING, ResourceStatus.VERIFYING),
             (ResourceStatus.VERIFYING, ResourceStatus.RETURNING),
             (ResourceStatus.RETURNING, ResourceStatus.AVAILABLE),
+            (ResourceStatus.RETURNING, ResourceStatus.UNAVAILABLE),
             (ResourceStatus.RESERVED, ResourceStatus.AVAILABLE),
             (ResourceStatus.MOVING, ResourceStatus.UNAVAILABLE),
+            (ResourceStatus.MOVING, ResourceStatus.RETURNING),
             (ResourceStatus.VERIFYING, ResourceStatus.UNAVAILABLE),
             (ResourceStatus.UNAVAILABLE, ResourceStatus.AVAILABLE),
         )
@@ -334,9 +336,11 @@ class TestResourceState(unittest.TestCase):
                     (ResourceStatus.RESERVED, ResourceStatus.AVAILABLE),
                     (ResourceStatus.MOVING, ResourceStatus.VERIFYING),
                     (ResourceStatus.MOVING, ResourceStatus.UNAVAILABLE),
+                    (ResourceStatus.MOVING, ResourceStatus.RETURNING),
                     (ResourceStatus.VERIFYING, ResourceStatus.RETURNING),
                     (ResourceStatus.VERIFYING, ResourceStatus.UNAVAILABLE),
                     (ResourceStatus.RETURNING, ResourceStatus.AVAILABLE),
+                    (ResourceStatus.RETURNING, ResourceStatus.UNAVAILABLE),
                     (ResourceStatus.UNAVAILABLE, ResourceStatus.AVAILABLE),
                 }
                 if (origem, destino) in permitida:

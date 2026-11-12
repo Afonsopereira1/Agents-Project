@@ -1,8 +1,11 @@
-"""Agente móvel mínimo para a ronda inicial de Contract Net."""
+"""Negociação, reserva e execução local de um recurso móvel."""
 
 from __future__ import annotations
 
 import logging
+import asyncio
+
+from isia.simulation.movement import MissionExecution, distance, nonnegative
 
 from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
@@ -20,7 +23,7 @@ from isia.communication.transport import (
     build_spade_message,
     parse_spade_message,
 )
-from isia.domain.models import ResourceState
+from isia.domain.models import Mission, Position, ResourceState
 from isia.reasoning.allocation import (
     LocalResourceReservation,
     ReservationResult,
@@ -44,9 +47,9 @@ def _bare_jid(value: object) -> str:
 class MobileResourceAgent(Agent):
     """Recurso móvel reutilizável por drones, veículos ou outros agentes.
 
-    ETA, custo energético e carga são parâmetros do cenário. O relógio é
-    sempre simulado e deve ser atualizado pelo chamador através de
-    ``set_simulated_time``.
+    Com configure_execution, ETA e energia vêm do percurso de ida e volta.
+    Sem essa configuração, mantém a demonstração de reserva da Etapa 5.
+    O relógio simulado é atualizado através de ``set_simulated_time``.
     """
 
     def __init__(
@@ -77,9 +80,100 @@ class MobileResourceAgent(Agent):
         self._latest_cfp_times: dict[tuple[str, str], float] = {}
         self._latest_cfp_rounds: dict[tuple[str, str], tuple[int, str]] = {}
         self._accepted_proposal_ids: set[str] = set()
+        self.execution_options = None
+        self.execution = None
+        self.executions = []
+        self._execution_context = None
+        self._result_sent = False
+        self._result_message = None
+        self._completed_accepts = set()
+
+    def configure_execution(self, world, inspect, *, speed=1.0, energy_per_cell=1.0,
+                            service_seconds=1.0):
+        for name, value in (("speed", speed), ("energy_per_cell", energy_per_cell),
+                            ("service_seconds", service_seconds)):
+            nonnegative(value, name)
+        if speed == 0 or not callable(inspect):
+            raise ValueError("Velocidade positiva e inspetor são obrigatórios.")
+        world.validate_position(self.resource.position)
+        self.execution_options = dict(world=world, inspect=inspect, speed=speed,
+                                      energy_per_cell=energy_per_cell, service_seconds=service_seconds,
+                                      minimum_energy=self.minimum_autonomy_percent)
+
+    def evaluate_request(self, cfp):
+        eta, energy = self.eta_seconds, self.energy_cost_percent
+        if self.execution_options is not None:
+            target = Position(**cfp.payload["target"])
+            if not self.execution_options["world"].contains(target):
+                return Message(
+                    f"reject-{cfp.message_id}-{self.resource.resource_id}", MessageType.REJECT,
+                    self.simulated_time, {"cfp_message_id": cfp.message_id, "reason": "target_outside_map"},
+                    mission_id=cfp.mission_id, incident_id=cfp.incident_id,
+                    conversation_id=cfp.conversation_id, source_id=self.resource.resource_id)
+            cells = distance(self.reservation.resource_state.position, target)
+            eta = cells / self.execution_options["speed"]
+            energy = 2 * cells * self.execution_options["energy_per_cell"]
+        return evaluate_cfp(
+            cfp, self.reservation.resource_state, self.capabilities,
+            current_time=self.simulated_time, minimum_autonomy_percent=self.minimum_autonomy_percent,
+            eta_seconds=eta, energy_cost_percent=energy, load=self.load)
+
+    def start_execution(self, cfp, accept, initiator):
+        if self.execution_options is None or accept.message_id in self._completed_accepts:
+            return
+        if self.execution is not None and not self.execution.finished:
+            return
+        mission = Mission(cfp.mission_id, cfp.incident_id, cfp.payload["task"],
+                          Position(**cfp.payload["target"]), cfp.payload["required_capability"],
+                          cfp.payload["priority"])
+        self.execution = MissionExecution(self.reservation, mission, now=self.simulated_time,
+                                          **self.execution_options)
+        self.executions.append(self.execution)
+        self._execution_context = (accept, initiator)
+        self._completed_accepts.add(accept.message_id)
+        self._result_sent = False
+        self._result_message = None
+
+    class ExecutionBehaviour(CyclicBehaviour):
+        async def run(self):
+            agent = self.agent
+            await asyncio.sleep(0.001)
+            execution = agent.execution
+            if execution is None:
+                return
+            execution.advance(agent.simulated_time)
+            agent.resource = execution.resource
+            if execution.finished:
+                accept, _ = agent._execution_context
+                proposal_id = accept.payload["proposal_message_id"]
+                agent._accepted_proposal_ids.discard(proposal_id)
+                agent._invalidate_proposal(proposal_id)
+            if execution.result is not None and not agent._result_sent:
+                accept, initiator = agent._execution_context
+                if agent._result_message is None:
+                    agent._result_message = Message(
+                        f"result-{accept.message_id}", MessageType.MISSION_RESULT,
+                        agent.simulated_time,
+                        {**execution.result, "accept_message_id": accept.message_id,
+                         "resource_id": agent.resource.resource_id, "task": execution.mission.task},
+                        incident_id=accept.incident_id, mission_id=accept.mission_id,
+                        source_id=agent.resource.resource_id, conversation_id=accept.conversation_id)
+                result = agent._result_message
+                try:
+                    await self.send(build_spade_message(
+                        initiator, result, performative=PERFORMATIVE_INFORM,
+                        conversation_id=result.conversation_id, in_reply_to=accept.message_id,
+                        protocol=CONTRACT_NET_PROTOCOL))
+                except Exception as error:
+                    logger.warning("Resultado não enviado; o regresso continua: %s", error)
+                    return
+                agent._result_sent = True
 
     def set_simulated_time(self, simulated_time: float) -> None:
-        self.simulated_time = _validate_simulated_time(simulated_time, "simulated_time")
+        value = _validate_simulated_time(simulated_time, "simulated_time")
+        if value < self.simulated_time:
+            raise ValueError("O relógio do recurso não pode recuar.")
+        self.simulated_time = value
         self._expire_proposals()
 
     def _invalidate_proposal(self, proposal_id: str) -> None:
@@ -135,14 +229,7 @@ class MobileResourceAgent(Agent):
                         round_number == latest_number and cfp.message_id != latest_cfp_id
                     ):
                         return
-                response = existing[1] if existing is not None else evaluate_cfp(
-                    cfp, agent.reservation.resource_state, agent.capabilities,
-                    current_time=agent.simulated_time,
-                    minimum_autonomy_percent=agent.minimum_autonomy_percent,
-                    eta_seconds=agent.eta_seconds,
-                    energy_cost_percent=agent.energy_cost_percent,
-                    load=agent.load,
-                )
+                response = existing[1] if existing is not None else agent.evaluate_request(cfp)
                 agent._latest_cfp_times[negotiation] = cfp.created_at
                 if round_number is not None:
                     agent._latest_cfp_rounds[negotiation] = (round_number, cfp.message_id)
@@ -237,6 +324,8 @@ class MobileResourceAgent(Agent):
                         ):
                             agent._invalidate_proposal(proposal.message_id)
                     return
+                if accept.message_id in agent._completed_accepts:
+                    return  # Uma missão terminada nunca volta a reservar por replay.
                 if context is None:
                     result = ReservationResult(
                         ReservationStatus.INVALID_REQUEST,
@@ -283,11 +372,19 @@ class MobileResourceAgent(Agent):
                     in_reply_to=accept.message_id,
                     protocol=CONTRACT_NET_PROTOCOL,
                 )
-                await self.send(reply)
+                try:
+                    await self.send(reply)
+                except Exception as error:
+                    logger.warning("Confirmação não enviada: %s", error)
+                finally:
+                    if result.confirmed and context is not None:
+                        agent.start_execution(cfp, accept, initiator)
             except (TypeError, ValueError) as error:
                 logger.warning("ACCEPT rejeitado: %s", error)
 
     async def setup(self):
+        if self.execution_options is not None:
+            self.add_behaviour(self.ExecutionBehaviour(), Template(metadata={"protocol": "mission-clock"}))
         template = Template(
             metadata={
                 "performative": PERFORMATIVE_CFP,

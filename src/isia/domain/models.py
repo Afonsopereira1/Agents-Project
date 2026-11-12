@@ -143,12 +143,12 @@ class ResourceState:
                 ResourceStatus.MOVING,
                 ResourceStatus.AVAILABLE,
             },
-            ResourceStatus.MOVING: {ResourceStatus.VERIFYING, ResourceStatus.UNAVAILABLE},
+            ResourceStatus.MOVING: {ResourceStatus.VERIFYING, ResourceStatus.RETURNING, ResourceStatus.UNAVAILABLE},
             ResourceStatus.VERIFYING: {
                 ResourceStatus.RETURNING,
                 ResourceStatus.UNAVAILABLE,
             },
-            ResourceStatus.RETURNING: {ResourceStatus.AVAILABLE},
+            ResourceStatus.RETURNING: {ResourceStatus.AVAILABLE, ResourceStatus.UNAVAILABLE},
             ResourceStatus.UNAVAILABLE: {ResourceStatus.AVAILABLE},
         }
 
