@@ -1,6 +1,6 @@
 # Comunicação, mensagens e protocolos — proposta
 
-> **Estado revisto (11-11-2026):** as Etapas 1–5 estão integradas na `main` (PRs #7, #8 e #9). A última execução local no Ubuntu teve **249 testes, OK**; a verificação e o Contract Net foram demonstrados separadamente por SPADE/XMPP real, incluindo a reserva confirmada no fluxo normal. As correções recentes de ausência informativa e deduplicação foram validadas localmente nesta branch, aguardando integração final no PR. Falhas, timeouts, mensagens tardias e rondas limitadas têm testes unitários/mocks, não validação XMPP real em todos os cenários. A integração automática de missões e a execução pertencem à Etapa 6; as aprovações formais do grupo continuam pendentes.
+> **Estado revisto (12-11-2026):** Etapa 6 implementada: o sensor iniciador integra corroboração, Contract Net, execução e resultados, incluindo intervenção do guarda. Validada em testes locais dos comportamentos e numa demonstração ligada a XMPP com agentes no mesmo processo; esta última pode usar entrega interna do SPADE. As aprovações formais do grupo e as Etapas 7–10 permanecem pendentes.
 
 [README](../README.md) · [Arquitetura](architecture.md) · [Plano](development-plan.md) · [Decisões](architecture.md#decisões-pendentes)
 
@@ -299,6 +299,65 @@ w_load * load/load_scale`. O desempate é determinístico por `resource_id` e
 `message_id`. Uma proposta não reserva o recurso; a reserva ocorre apenas ao
 processar `ACCEPT` no agente móvel através de `LocalResourceReservation`.
 
+### Missões e intervenção — Etapa 6
+
+O `IncidentSensorAgent` herda a verificação do sensor e cria a missão através de
+`MissionRegistry`. Cada recurso decide se propõe e reserva localmente; o runner
+fornece ambiente, tempo e transporte, sem escolher vencedores nem fechar incidentes.
+
+Após `STATUS(reserved)`, o recurso executa `RESERVED → MOVING → VERIFYING →
+RETURNING → AVAILABLE`. A missão passa por `RESERVED → RUNNING → DONE/FAILED`.
+A verificação termina antes do regresso: o resultado pode fechar o incidente,
+mas o recurso só fica disponível quando regressa. A reserva inclui energia de
+ida e volta mais o mínimo configurado; não há recarga automática. Interrupção
+permite `MOVING → RETURNING`; perda de energia permite `MOVING/VERIFYING/
+RETURNING → UNAVAILABLE`, com libertação explícita da reserva.
+
+`MISSION_RESULT` usa `protocol=contract-net`, `performative=inform` e
+`in-reply-to=<ACCEPT.message_id>`, incluindo quando `outcome=failed`.
+O corpo exige `mission_id`, `incident_id`, `conversation_id` e `source_id`.
+O payload exige:
+
+| Campo | Valor |
+|---|---|
+| `accept_message_id` | ACCEPT que autorizou esta execução |
+| `resource_id` | Recurso emissor; igual a `source_id` |
+| `task` | `verify_incident` ou `respond_incident` no MVP |
+| `outcome` | `confirmed`, `not_confirmed`, `inconclusive` ou `failed` |
+| `reason` | Motivo textual, incluindo falha de inspeção/interrupção |
+| `completed_at` | Segundos simulados, entre a aceitação e a emissão |
+
+O iniciador verifica remetente, destinatário, conversa, missão, incidente,
+ACCEPT, tarefa e cronologia. Replays de aceitações terminadas não voltam a
+reservar recursos. O envio de resultado preserva ID e corpo se uma chamada de
+envio falhar; não implementa confirmação de entrega nem recuperação distribuída.
+
+- `not_confirmed`: fecha o incidente com esse resultado, sem pedir um guarda.
+- `confirmed` na verificação: cria **nova missão** `respond_incident`, capacidade
+  `incident_response`, para os `RangerAgent` conhecidos. Usa o mesmo protocolo
+  CFP → PROPOSAL → ACCEPT → STATUS → MISSION_RESULT. Só o resultado da resposta
+  permite fechar o incidente confirmado.
+- `inconclusive` ou `failed`: `RESPONDING → ALLOCATING`, exclui o recurso já
+  tentado e negoceia outra missão. O MVP permite até duas tentativas por tarefa;
+  sem alternativa ou com tentativas esgotadas termina `UNRESOLVED`.
+- Sem confirmação/resultados dentro do timeout real: não deduz falha física,
+  termina `UNRESOLVED` e não atribui novamente a mesma tarefa. O recurso continua
+  o ciclo local se estiver operacional. A recuperação fica na Etapa 8.
+
+`ALERT` e `INCIDENT_CLOSED` ficam registados na linha temporal local do sensor;
+não há difusão de encerramento aos pares nesta etapa. Sem corroboração suficiente,
+a demonstração de uma única janela passa por `WATCHING → EXPIRED`.
+
+O movimento usa segundos simulados e distância Manhattan, primeiro x e depois y.
+No exemplo, velocidade 1 célula/s, custo 1 ponto percentual/célula e inspeção de 1 s
+sem consumo adicional. A tolerância numérica de energia é de `1e-10` pontos
+percentuais. O relógio do exemplo avança enquanto há missões em execução; os
+prazos de receção usam segundos reais e não avançam esse relógio.
+A inspeção é local e idealizada, consultada apenas na célula visitada; o agente
+recebe a classificação, sem acesso aos eventos de referência. A intervenção
+simulada do guarda não remove eventos globais. Estes limites antecedem os
+cenários e a política de resposta das Etapas 7–9.
+
 ## 6. Estado e ordenação
 
 - `Observation`: identificada por `event_id`; permanece imutável após emissão.
@@ -326,7 +385,7 @@ processar `ACCEPT` no agente móvel através de `LocalResourceReservation`.
 
 Na Etapa 3 foram verificados com SPADE 4.1.4: `spade.agent.Agent`, `OneShotBehaviour`, `CyclicBehaviour`, `spade.message.Message`, `Template`, `send`/`receive` e metadados, com demonstração real XMPP. Na Etapa 5, `MobileResourceAgent` reutiliza `CyclicBehaviour` e `Template` para `CFP` e `accept-proposal`; `contract_net_demo.py` usa `OneShotBehaviour` no iniciador. `PeriodicBehaviour` não foi necessário. O suporte de mensagens com metadados não implica validação integral de conformidade FIPA-ACL, que exigiria teste específico.
 
-Os contratos atuais estão implementados em `src/isia/communication/messages.py`, o adaptador SPADE/XMPP em `src/isia/communication/transport.py`, a lógica de alocação em `src/isia/reasoning/allocation.py`, e a correlação nos comportamentos dos agentes e no demo. Não existe atualmente `communication/protocols.py` separado, nem módulos específicos `drone.py`, `vehicle.py` ou `ranger.py`; o recurso móvel comum está em `src/isia/agents/mobile.py`. A injeção parametrizada de perda/latência permanece proposta para etapas posteriores. Os testes de serialização e mocks não substituem testes de entrega real XMPP; na Etapa 5 o cenário normal foi executado com XMPP e os cenários de falha foram testados localmente com mocks/determinismo.
+Os contratos atuais estão implementados em `src/isia/communication/messages.py`, o adaptador SPADE/XMPP em `src/isia/communication/transport.py`, a lógica de alocação em `src/isia/reasoning/allocation.py`, e a correlação nos comportamentos dos agentes e no demo. Não existe `communication/protocols.py` separado. `DroneAgent`, `VehicleAgent` e `RangerAgent` reutilizam o ciclo comum de `src/isia/agents/mobile.py`; `IncidentSensorAgent` integra o ciclo do incidente. A injeção parametrizada de perda/latência permanece proposta para etapas posteriores. Os testes de serialização e mocks não substituem testes de entrega real XMPP; na Etapa 5 o cenário normal foi executado com XMPP e os cenários de falha foram testados localmente com mocks/determinismo.
 
 ## 9. Checklist de aprovação
 

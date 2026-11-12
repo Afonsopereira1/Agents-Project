@@ -3,7 +3,7 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado (11-11-2026):** Etapas 1–5 estão integradas na `main` (PR #7, Contract Net; PR #8, classificação de evidências; PR #9, correções de validação). A última execução local no Ubuntu comunicada foi de **249 testes, OK**; `verification_demo.py` e `contract_net_demo.py` também foram aprovados com SPADE/XMPP real no fluxo normal. As correções recentes de ausência informativa e deduplicação foram validadas localmente nesta branch, aguardando a integração final no PR. Os cenários de falha da Etapa 5 continuam cobertos por testes unitários/mocks, não todos por XMPP real. A integração automática de missões pertence à Etapa 6; as Etapas 7–10 e as aprovações formais do grupo permanecem pendentes.
+> **Estado (12-11-2026):** Etapa 6 implementada e validada localmente: deteção, corroboração, negociação, missão, intervenção de guarda e encerramento. O MVP usa dois sensores e duas patrulhas candidatas, com regresso e libertação dos recursos. Os testes locais executam os comportamentos SPADE com transporte em memória; o demonstrador também completou o ciclo ligado a um servidor XMPP temporário, com todos os agentes no mesmo processo. Isto não prova transporte pela rede em cada mensagem. Etapas 7–10 e aprovações formais do grupo continuam pendentes.
 
 ## O projeto
 
@@ -21,9 +21,10 @@ O simulador mantém a verdade dos acontecimentos apenas para avaliação; os age
 | Mensagens e protocolos de comunicação | [docs/protocols.md](docs/protocols.md) |
 | Testes, métricas e três cenários | [docs/evaluation.md](docs/evaluation.md) |
 | Demonstração Contract Net da Etapa 5 | [contract_net_demo.py](contract_net_demo.py) |
+| MVP completo da Etapa 6 | [runner.py](src/isia/simulation/runner.py) |
 | Organização flexível dos colegas | [docs/team-tasks.md](docs/team-tasks.md) e [Issues](https://github.com/Afonsopereira1/Agents-Project/issues) |
 
-**MVP previsto:** ocorrência → observação → evidências → avaliação → propostas de recursos → missão → resultado. O MVP não substitui os requisitos da entrega final.
+**MVP implementado:** ocorrência → observação → evidências → avaliação → propostas de recursos → missão → resultado. O MVP não substitui os requisitos da entrega final.
 
 ## Requisitos e fontes
 
@@ -42,6 +43,46 @@ O simulador mantém a verdade dos acontecimentos apenas para avaliação; os age
 **Nota:** as fórmulas, os limiares de confiança, o mapa 2D e o protocolo Contract Net simplificado são **propostas de engenharia**, não exigências literais do enunciado.
 
 ## Executar o projeto
+
+### MVP da Etapa 6
+
+Com as dependências instaladas, executar sem servidor:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m isia.simulation.runner > /tmp/isia-mvp.json
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests/scenarios -v
+```
+
+O JSON contém mensagens, linha temporal, missões, resultados e recursos finais.
+Esperado: `incident_status: "closed"`, resultados de `drone` e `ranger`, todas
+as reservas `null` e todos os recursos `available`. O drone regressa a `(0, 2)`
+com 94% de energia; o guarda regressa a `(5, 5)` com 90%. O veículo apresentou
+uma proposta, mas não foi escolhido e conserva 100%.
+
+Para executar os mesmos agentes ligados ao XMPP, iniciar num terminal:
+
+```bash
+.venv/bin/spade run --host localhost --memory
+```
+
+Noutro terminal, definir `XMPP_PASSWORD` e executar:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m isia.simulation.runner --xmpp
+```
+
+São criadas cinco contas de demonstração no servidor local: `sensor-mvp`,
+`sensor-peer-mvp`, `drone-mvp`, `vehicle-mvp` e `ranger-mvp`, todas em `localhost`.
+O processo encerra os agentes quando a ocorrência termina e os recursos regressam.
+O SPADE pode otimizar a entrega entre agentes no mesmo processo; este comando
+não substitui uma verificação de rede com agentes em processos separados.
+
+O mapa não tem obstáculos: percorre primeiro x e depois y, a uma célula por
+segundo simulado. Cada célula gasta um ponto percentual de energia; a inspeção
+leva um segundo e não tem consumo adicional. A inspeção local é idealizada e a
+intervenção do guarda é uma ação simulada bem-sucedida, sem remover o evento do
+ambiente. Reputação, falhas sistemáticas e avaliação experimental ficam para
+as etapas seguintes. Ver o [protocolo da missão](docs/protocols.md#missões-e-intervenção--etapa-6).
 
 ### Requisitos
 - Python 3.12

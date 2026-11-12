@@ -24,7 +24,8 @@ def _unique_keys(pairs):
 class World:
     """Mapa inicial: 0 <= x < width e 0 <= y < height, em células inteiras.
 
-    As posições dos participantes são fixas. Vários participantes podem ocupar
+    Os sensores são fixos; patrols conserva as posições iniciais. O movimento
+    atual pertence a cada agente móvel. Vários participantes podem ocupar
     a mesma célula. O relógio pertence a esta execução e avança explicitamente.
     """
 

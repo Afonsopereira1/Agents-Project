@@ -1,6 +1,6 @@
 # Plano de desenvolvimento incremental — Etapas 0 a 10
 
-> **Roteiro de acompanhamento (revisto em 2026-11-11).** Este roteiro deriva da [estratégia](architecture.md#estratégia-técnica-e-algoritmos) e dos [requisitos](../README.md#requisitos-e-fontes). `- [x]` indica uma tarefa com implementação/evidência verificada; `- [ ]` indica trabalho pendente, parcialmente demonstrado ou aprovação ainda não comprovada. As listas de ficheiros são orientadoras e não implicam que todos existam.
+> **Roteiro de acompanhamento (revisto em 2026-11-12).** Este roteiro deriva da [estratégia](architecture.md#estratégia-técnica-e-algoritmos) e dos [requisitos](../README.md#requisitos-e-fontes). `- [x]` indica uma tarefa com implementação/evidência verificada; `- [ ]` indica trabalho pendente, parcialmente demonstrado ou aprovação ainda não comprovada. As listas de ficheiros são orientadoras e não implicam que todos existam.
 
 [README](../README.md) · [Arquitetura](architecture.md) · [Protocolos](protocols.md) · [Equipa](team-tasks.md) · [Avaliação](evaluation.md) · [Decisões](architecture.md#decisões-pendentes)
 
@@ -250,15 +250,10 @@ de missões continuam nas Etapas 4 e 6.
 
 **Resultado esperado:** uma missão atribuída por mensagens SPADE a um agente móvel autónomo. Validado no cenário normal através de `contract_net_demo.py`; os cenários de falha foram validados por testes determinísticos/mocks.
 
-**Auditoria da etapa:** as oito tarefas acima têm implementação e evidência de
-teste no escopo da etapa. O iniciador é atualmente um agente local temporário
-do demonstrador (`ContractNetInitiatorAgent`), e a ponte idempotente da decisão
-`request_mobile_verification` é `MissionRegistry`; a integração automática desta
-ponte no fluxo de produção do `SensorAgent`/`main.py` ainda não existe e deve ser
-feita quando o MVP for integrado. Isto não cria um centralizador permanente.
-Antes da Etapa 6 continuam necessárias a aprovação formal dos contratos pelo
-grupo e a integração ponta a ponta deteção → corroboração → missão; movimento,
-execução, `MISSION_RESULT` e fecho do incidente pertencem à própria Etapa 6.
+**Auditoria da etapa:** a demonstração isolada continua em `contract_net_demo.py`.
+A Etapa 6 integra `MissionRegistry` no `IncidentSensorAgent`, que herda a
+corroboração do `SensorAgent` e inicia a negociação da própria ocorrência.
+A aprovação formal dos contratos pelo grupo permanece pendente.
 
 **Erros prováveis/diagnóstico:** escolha antes do prazo, custo com unidades incompatíveis e corrida entre duas aceitações; usar testes de concorrência e logs de conversação.
 
@@ -270,26 +265,51 @@ execução, `MISSION_RESULT` e fecho do incidente pertencem à própria Etapa 6.
 
 **Pré-requisitos:** contratos, simulação, corroboração e atribuição implementados.
 
-**Ficheiros envolvidos:** `simulation/movement.py`, `agents/drone.py`, `vehicle.py`, `ranger.py`, `domain/incident_state.py`, `simulation/runner.py`, `tests/scenarios/test_mvp.py`.
+**Ficheiros envolvidos:** `src/isia/simulation/movement.py`, `scenario.py`, `runner.py`, `src/isia/agents/mobile.py`, `incident.py`, `drone.py`, `vehicle.py`, `ranger.py`, `src/isia/reasoning/allocation.py`, `src/isia/communication/messages.py`, `src/isia/domain/models.py` e `tests/scenarios/test_mvp.py`. As transições existentes de `domain/incident_state.py` são reutilizadas.
 
 **Tarefas concretas:**
 
-- [ ] Definir movimento simplificado no mapa, custo de tempo e gasto energético.
-- [ ] Implementar reserva → deslocação → verificação → comunicação → regresso/libertação.
-- [ ] Validar que recursos não se deslocam para locais impossíveis nem esgotam energia sem tratamento.
-- [ ] Produzir `MISSION_RESULT` (confirmado, não confirmado, inconclusivo ou falha).
-- [ ] Quando necessário, desencadear pedido de resposta aos `RangerAgent` por protocolo documentado.
-- [ ] Atualizar estado do incidente, encerrar ou voltar a negociar se a missão falhar.
-- [ ] Registar linha temporal da execução e os principais estados.
-- [ ] Executar o caso mínimo com **dois sensores e pelo menos duas patrulhas candidatas**.
+- [x] Definir movimento simplificado no mapa, custo de tempo e gasto energético.
+- [x] Implementar reserva → deslocação → verificação → comunicação → regresso/libertação.
+- [x] Validar que recursos não se deslocam para locais impossíveis nem esgotam energia sem tratamento.
+- [x] Produzir `MISSION_RESULT` (confirmado, não confirmado, inconclusivo ou falha).
+- [x] Quando necessário, desencadear pedido de resposta aos `RangerAgent` por protocolo documentado.
+- [x] Atualizar estado do incidente, encerrar ou voltar a negociar se a missão falhar.
+- [x] Registar linha temporal da execução e os principais estados.
+- [x] Executar o caso mínimo com **dois sensores e pelo menos duas patrulhas candidatas**.
 
 **Dependências:** Etapas 2–5. Marco prévio às Etapas 7–10.
 
-**Testes a realizar:** trajetória válida; gasto energético; missão interrompida; resposta inconclusiva; percurso de ponta a ponta desde alerta a encerramento.
+**Testes realizados:** 19 testes em `tests/scenarios/test_mvp.py`: trajetória,
+energia e regresso; passos fracionários/grandes; destino impossível; energia
+insuficiente ou perdida; interrupção; exceção na inspeção; resultados confirmado,
+não confirmado e inconclusivo; nova negociação; limite de tentativas; falha do
+guarda; correlação e validação de resultados; replay de ACCEPT após libertação;
+falha de envio sem impedir o regresso. A suite completa passou 358 testes.
+
+```bash
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
+PYTHONPATH=src .venv/bin/python -m isia.simulation.runner
+```
+
+**Evidência de execução (12-11-2026):** no MVP local, os dois sensores corroboram,
+drone e veículo propõem, o drone verifica e o guarda responde. Incidente `closed`,
+reservas libertadas, recursos nas posições iniciais, energia final 94%/100%/90%.
+O mesmo ciclo passou ligado a um servidor XMPP temporário, com os cinco agentes
+no mesmo processo; a otimização de entrega do SPADE impede atribuir a esse teste
+prova de transporte de todas as mensagens pela rede.
 
 **Critérios de conclusão (MVP):** um alerta suscita corroboração; uma patrulha é escolhida por negociação, executa a missão e comunica resultado; a ocorrência chega a estado terminal sem despachante central.
 
-**Resultado esperado:** **MVP funcional demonstrável**. Ainda não é entrega final: reputação, falhas sistemáticas, cenários e visualização permanecem por completar.
+**Resultado obtido:** **MVP funcional demonstrável**. Ainda não é entrega final: reputação, falhas sistemáticas, cenários e visualização permanecem por completar.
+
+**Limites:** grelha sem obstáculos, inspeção local idealizada e intervenção do
+guarda simulada sem alterar os eventos globais. Até duas tentativas por tarefa;
+falha/inconclusivo permite outra patrulha. Silêncio após ACCEPT ou durante a
+missão termina como `unresolved`, sem nova atribuição automática. O regresso
+continua localmente; falha energética imobiliza e liberta a reserva com estado
+`unavailable`. A perda do iniciador e a recuperação distribuída ficam na Etapa 8.
+As alterações estão verificadas localmente; integração em PR ainda não realizada.
 
 **Erros prováveis/diagnóstico:** relógios incompatíveis, missão não encerrada, estado do recurso ocupado indefinidamente e regresso omitido.
 
@@ -435,7 +455,7 @@ execução, `MISSION_RESULT` e fecho do incidente pertencem à própria Etapa 6.
 - [ ] Etapas 0–1: ambiente e contratos aceites pela equipa.
 - [x] Etapas 2–3: simulador mínimo e comunicação real entre agentes.
 - [ ] Etapas 4–5: corroboração e negociação funcionais.
-- [ ] **Etapa 6: MVP validado em teste de integração.**
+- [x] **Etapa 6: MVP validado em integração local dos comportamentos SPADE; demonstração ligada a XMPP também executada (agentes no mesmo processo).**
 - [ ] Etapas 7–8: reputação, política de resposta e falhas validadas.
 - [ ] Etapa 9: três cenários contrastantes medidos e analisados.
 - [ ] Etapa 10: documentação e demonstração finais revistas.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from math import isfinite
+from math import isfinite, isclose
 from threading import Lock
 from uuid import uuid4
 
@@ -350,6 +350,19 @@ class LocalResourceReservation:
         with self._lock:
             return self._result_locked(status, mission_id, reason)
 
+    def update_execution(self, mission_id: str, state: ResourceState, *, release=False) -> None:
+        """Atualizar apenas a missão reservada; libertar mesmo se ficar indisponível."""
+        with self._lock:
+            if self._reserved_mission_id != mission_id:
+                raise ValueError("A execução não pertence à reserva ativa.")
+            if state.resource_id != self._resource_state.resource_id:
+                raise ValueError("O recurso da execução não corresponde à reserva.")
+            if release and state.status not in (ResourceStatus.AVAILABLE, ResourceStatus.UNAVAILABLE):
+                raise ValueError("Só se liberta após regresso ou indisponibilidade explícita.")
+            self._resource_state = state
+            if release:
+                self._reserved_mission_id = None
+
     def _result_locked(
         self,
         status: str,
@@ -545,7 +558,8 @@ def evaluate_cfp(
         reason = "autonomy_unknown"
     else:
         energy = _validate_simulated_time(energy_cost_percent, "energy_cost_percent")
-        if resource.autonomy_percent - energy < minimum:
+        if resource.autonomy_percent - energy < minimum and not isclose(
+                resource.autonomy_percent, energy + minimum, rel_tol=0, abs_tol=1e-10):
             reason = "autonomy_insufficient"
 
     if reason is not None:

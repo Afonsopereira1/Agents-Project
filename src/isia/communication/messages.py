@@ -218,6 +218,19 @@ class Message:
                 },
                 payload,
             )
+        if message_type is MessageType.MISSION_RESULT:
+            for name, value in (("mission_id", mission_id), ("incident_id", incident_id),
+                                ("conversation_id", conversation_id), ("source_id", source_id)):
+                _require_identifier(value, name)
+            for name in ("accept_message_id", "resource_id", "reason", "task"):
+                _require_identifier(payload.get(name), name)
+            if payload.get("outcome") not in ("confirmed", "not_confirmed", "inconclusive", "failed"):
+                raise ValueError("Resultado de missão desconhecido.")
+            completed = payload.get("completed_at")
+            if not is_finite_number(completed) or not 0 <= completed <= created_at:
+                raise ValueError("completed_at deve anteceder ou coincidir com a emissão.")
+            if payload["resource_id"] != source_id:
+                raise ValueError("O resultado deve identificar o recurso emissor.")
         self.message_type = message_type
         self.created_at = created_at
         self.payload = payload
