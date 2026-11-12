@@ -78,6 +78,15 @@ class Event:
         return position_at(self.position, self.destination or self.position, self.speed, elapsed)
 
 
+def event_from_dict(item) -> Event:
+    """Converter um evento JSON (posições como objetos {x, y}) em Event."""
+    values = dict(item)
+    values["position"] = model_from_dict(values["position"], Position)
+    if values.get("destination") is not None:
+        values["destination"] = model_from_dict(values["destination"], Position)
+    return Event(**values)
+
+
 class ObservationFeed:
     """API entregue a uma fonte: apenas as suas observações, sem eventos reais."""
 
@@ -96,7 +105,7 @@ class Scenario:
     """O avaliador conserva este objeto; agentes recebem apenas source(id)."""
 
     def __init__(self, world: World, sources: dict[str, Source], events: tuple[Event, ...],
-                 seed: int, corroboration_window: float = 5.0):
+                 seed: int, corroboration_window: float = 5.0, observation_prefix: str = "obs"):
         if not isinstance(world, World):
             raise TypeError("world deve ser World.")
         if world.clock.now != 0:
@@ -123,6 +132,8 @@ class Scenario:
         self._sources = dict(sorted(sources.items()))
         self._events = tuple(sorted(events, key=lambda event: event.event_id))
         self._rng = random.Random(seed)
+        # IDs únicos entre execuções permitem à reputação aprender sem colisões.
+        self._observation_prefix = observation_prefix
         self._feeds = {key: ObservationFeed(world.clock, corroboration_window)
                        for key in self._sources}
         self._attributions: dict[str, str] = {}
@@ -152,14 +163,8 @@ class Scenario:
             if not isinstance(config["sources"], dict) or not isinstance(config["events"], list):
                 raise ValueError("sources deve ser um objeto e events uma lista.")
             sources = {key: Source(**value) for key, value in config["sources"].items()}
-            events = []
-            for item in config["events"]:
-                values = dict(item)
-                values["position"] = model_from_dict(values["position"], Position)
-                if values.get("destination") is not None:
-                    values["destination"] = model_from_dict(values["destination"], Position)
-                events.append(Event(**values))
-            return cls(world, sources, tuple(events), config["seed"], config["corroboration_window"])
+            events = tuple(event_from_dict(item) for item in config["events"])
+            return cls(world, sources, events, config["seed"], config["corroboration_window"])
         except (KeyError, TypeError) as error:
             raise ValueError("Configuração de cenário inválida ou incompleta.") from error
 
@@ -218,7 +223,7 @@ class Scenario:
                     min(self.world.width - 1, max(0, real.x + self._rng.randint(-error, error))),
                     min(self.world.height - 1, max(0, real.y + self._rng.randint(-error, error))),
                 )
-                obs_id = f"obs-{len(self._attributions) + 1:06d}"
+                obs_id = f"{self._observation_prefix}-{len(self._attributions) + 1:06d}"
                 observation = Observation(obs_id, source_id, SIGNALS[source.kind], position,
                                           now, source.confidence)
                 self._feeds[source_id]._history.append(observation)

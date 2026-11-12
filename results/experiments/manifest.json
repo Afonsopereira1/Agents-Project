@@ -1,0 +1,30 @@
+{
+  "commit": "667cba2d07ea5c6e5ae4d077f7146f90f6f27d26",
+  "dirty": false,
+  "scenarios": [
+    "config/scenarios/A.json",
+    "config/scenarios/B.json",
+    "config/scenarios/C.json"
+  ],
+  "variants": {
+    "full": {},
+    "no_reputation": {
+      "learn": false
+    },
+    "no_corroboration": {
+      "corroborate": false,
+      "policy": {
+        "patrol_threshold": 0.01,
+        "severe_patrol_threshold": 0.01
+      }
+    },
+    "nearest": {
+      "selection_weights": {
+        "energy_weight": 0.0,
+        "load_weight": 0.0
+      }
+    }
+  },
+  "repetitions_override": null,
+  "runs": 560
+}

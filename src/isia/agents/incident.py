@@ -30,7 +30,8 @@ def bare(value):
 class IncidentSensorAgent(SensorAgent):
     """O sensor corrobora, negoceia, recebe resultados e encerra a ocorrência."""
 
-    def configure_mvp(self, patrols, rangers, *, receive_timeout=2.0, max_attempts=2):
+    def configure_mvp(self, patrols, rangers, *, receive_timeout=2.0, max_attempts=2,
+                      selection_weights=None):
         if type(max_attempts) is not int or max_attempts < 1:
             raise ValueError("max_attempts deve ser positivo.")
         from isia.simulation.movement import nonnegative
@@ -39,6 +40,7 @@ class IncidentSensorAgent(SensorAgent):
             raise ValueError("receive_timeout deve ser positivo.")
         self.patrols, self.rangers = dict(patrols), dict(rangers)
         self.receive_timeout, self.max_attempts = receive_timeout, max_attempts
+        self.selection_weights = dict(selection_weights or {})
         self.simulated_time = self.created_at or 0.0
         self.incident_state = None
         self.timeline = []
@@ -113,7 +115,7 @@ class IncidentSensorAgent(SensorAgent):
                     if bid.mission_id != cfp.mission_id or bid.resource_id != candidates[sender]:
                         continue
                 responses[sender] = body
-            selection = select_best_proposal(cfp, responses.values())
+            selection = select_best_proposal(cfp, responses.values(), **agent.selection_weights)
             winner = selection.winner
             if winner is None:
                 return None, "no_eligible_proposals"

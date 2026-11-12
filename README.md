@@ -20,6 +20,7 @@ O simulador mantém a verdade dos acontecimentos apenas para avaliação; os age
 | Arquitetura, agentes, algoritmos e decisões pendentes | [docs/architecture.md](docs/architecture.md) |
 | Mensagens e protocolos de comunicação | [docs/protocols.md](docs/protocols.md) |
 | Testes, métricas e três cenários | [docs/evaluation.md](docs/evaluation.md) |
+| Resultados medidos (Etapa 9) | [docs/experiments.md](docs/experiments.md) |
 | Demonstração Contract Net da Etapa 5 | [contract_net_demo.py](contract_net_demo.py) |
 | MVP completo da Etapa 6 | [runner.py](src/isia/simulation/runner.py) |
 | Política da Etapa 7 e limites da aprendizagem | [docs/reputation-policy.md](docs/reputation-policy.md) |

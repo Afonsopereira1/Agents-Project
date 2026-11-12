@@ -25,3 +25,6 @@ temp/
 
 # Execuções locais da simulação
 results/simulation/
+
+# Relatórios completos por execução (Etapa 9); summary/runs/manifest são versionados
+results/experiments/runs/

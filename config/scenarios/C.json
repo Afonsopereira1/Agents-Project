@@ -1,0 +1,94 @@
+{
+  "scenario_id": "C",
+  "description": "Falhas e escassez: perda/atraso/duplicação de mensagens e drone com pouca autonomia.",
+  "repetitions": 20,
+  "base_seed": 1000,
+  "episodes": [
+    {
+      "label": "threat",
+      "events": [
+        {
+          "event_id": "threat-01",
+          "kind": "threat",
+          "position": {
+            "x": 3,
+            "y": 2
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        }
+      ]
+    },
+    {
+      "label": "empty",
+      "events": []
+    }
+  ],
+  "sources": {
+    "sensor-1": {
+      "kind": "acoustic",
+      "detection_range": 5.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-2": {
+      "kind": "visual",
+      "detection_range": 5.0,
+      "sensitivity": 0.9,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.1,
+      "confidence": 0.8
+    }
+  },
+  "resources": {
+    "drone": {
+      "autonomy_percent": 15.0
+    }
+  },
+  "faults": {
+    "loss": 0.1,
+    "delay": {
+      "PROPOSAL": 0.05,
+      "MISSION_RESULT": 0.05
+    },
+    "duplicate": [
+      "MISSION_RESULT"
+    ]
+  },
+  "response_settings": {
+    "reputation": {
+      "alpha": 2.0,
+      "beta": 2.0
+    },
+    "policy": {
+      "patrol_threshold": 0.25,
+      "ranger_threshold": 0.65,
+      "severe_threshold": 0.8,
+      "severe_patrol_threshold": 0.08,
+      "ranger_min_groups": 2,
+      "ranger_min_modalities": 2
+    },
+    "severity": 0.5,
+    "sources": {
+      "sensor-1": {
+        "modality": "acoustic",
+        "correlation_group": "local_acoustic"
+      },
+      "sensor-2": {
+        "modality": "visual",
+        "correlation_group": "camera_trap"
+      }
+    },
+    "adjudication": {
+      "max_distance": 1,
+      "max_delay_seconds": 30.0
+    },
+    "compatibility_rules": {
+      "gunshot_like_sound": [
+        "suspicious_movement"
+      ]
+    }
+  }
+}

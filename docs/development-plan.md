@@ -426,15 +426,29 @@ de falhas repetidos três vezes passaram. A injeção não se aplica ao XMPP.
 
 **Tarefas concretas:**
 
-- [ ] Definir unidade de avaliação: observação, incidente ou zona/intervalo temporal.
-- [ ] Implementar contagem TP, FP, TN e FN, com tratamento explícito de denominadores zero.
-- [ ] Medir latências, missões concluídas, energia, mensagens, duplicação e incidentes não resolvidos.
-- [ ] Definir cenário A: operação normal; B: ruído e falsos positivos; C: falhas e escassez.
-- [ ] Fixar parâmetros de cenário e condições iniciais em ficheiros versionados.
-- [ ] Executar diferentes sementes quando há aleatoriedade; registar o número de repetições.
-- [ ] Comparar políticas simples: sem corroboração, sem reputação e seleção da patrulha mais próxima.
-- [ ] Produzir tabelas/gráficos e discutir compromissos entre precisão, rapidez e custo.
-- [ ] Registar falhas observadas, limitações e incerteza — **sem inventar resultados**.
+- [x] Definir unidade de avaliação: observação, incidente ou zona/intervalo temporal.
+- [x] Implementar contagem TP, FP, TN e FN, com tratamento explícito de denominadores zero.
+- [x] Medir latências, missões concluídas, energia, mensagens, duplicação e incidentes não resolvidos.
+- [x] Definir cenário A: operação normal; B: ruído e falsos positivos; C: falhas e escassez.
+- [x] Fixar parâmetros de cenário e condições iniciais em ficheiros versionados.
+- [x] Executar diferentes sementes quando há aleatoriedade; registar o número de repetições.
+- [x] Comparar políticas simples: sem corroboração, sem reputação e seleção da patrulha mais próxima.
+- [x] Produzir tabelas/gráficos e discutir compromissos entre precisão, rapidez e custo.
+- [x] Registar falhas observadas, limitações e incerteza — **sem inventar resultados**.
+
+**Implementação (12-11-2026):** a unidade é a execução (zona 8×8 numa janela
+única). Positivo previsto = mobilização de recursos. `evaluation/metrics.py`
+devolve `None` para denominadores zero; `evaluation/collector.py` corre
+cenários × variantes × sementes e escreve `runs.csv`, `summary.csv` e
+`manifest.json` em `results/experiments/`. `run_mvp` aceita `scenario`,
+`corroborate` e `selection_weights`. Os cenários A, B e C ficam em
+`config/scenarios/`, com 20 repetições cada. Só há tabelas, sem gráficos.
+Resultados e limitações: [experiências](experiments.md).
+
+**Verificação (12-11-2026):** a suite completa passou **419 testes, OK**.
+Foram feitas 560 execuções no commit `667cba2` (`dirty: false`). Depois das correções
+de validação e proveniência, a suite passou **420 testes, OK**. A nova recolha
+deu as mesmas decisões em todas as execuções.
 
 **Dependências:** Etapas 7 e 8; a infraestrutura de métricas pode ser iniciada durante a Etapa 2. Permite fechar a Etapa 10.
 
@@ -497,5 +511,5 @@ de falhas repetidos três vezes passaram. A injeção não se aplica ao XMPP.
 - [x] **Etapa 6: MVP validado em integração local dos comportamentos SPADE; demonstração ligada a XMPP também executada (agentes no mesmo processo).**
 - [ ] Etapa 7: implementação local testada, com adjudicação automática; aprovação dos parâmetros pendente.
 - [x] Etapa 8: falhas injetadas no transporte local com estados explícitos; queda de processo e XMPP não validados.
-- [ ] Etapa 9: três cenários contrastantes medidos e analisados.
+- [x] Etapa 9: três cenários contrastantes medidos e analisados (transporte local; amostra pequena).
 - [ ] Etapa 10: documentação e demonstração finais revistas.

@@ -14,12 +14,12 @@ from isia.agents.vehicle import VehicleAgent
 from isia.agents.ranger import RangerAgent
 from isia.agents.incident import IncidentSensorAgent
 from isia.agents.informant import InformantAgent
-from isia.communication.messages import model_to_dict
+from isia.communication.messages import model_from_dict, model_to_dict
 from isia.domain.models import Position, ResourceState
 from isia.reasoning.policy import ResponsePolicy
 from isia.reasoning.reputation import ReputationBook, result_from_mission
 from isia.simulation.world import World
-from isia.simulation.scenario import Scenario, Source, Event
+from isia.simulation.scenario import Scenario, Source, Event, event_from_dict
 
 
 SCENARIO_SEED = 6
@@ -47,9 +47,40 @@ def fault_settings(faults):
     return settings
 
 
+MVP_RESOURCES = {"drone": Position(0, 2), "vehicle": Position(0, 0), "ranger": Position(5, 5)}
+RESOURCE_KEYS = {"position", "autonomy_percent", "load"}
+
+
+def scenario_settings(scenario):
+    """Fontes, eventos e recursos de um cenário da Etapa 9 sobre o mundo 8x8 do MVP."""
+    if scenario is None:
+        return (SCENARIO_SEED, {key: Source("acoustic", 5) for key in ("sensor-1", "sensor-2")},
+                (Event("event-mvp", "threat", Position(3, 2), 0, 1000),), {}, "obs")
+    if not isinstance(scenario, dict) or set(scenario) != {"run_id", "seed", "sources", "events", "resources"}:
+        raise ValueError("scenario exige run_id, seed, sources, events e resources.")
+    if not isinstance(scenario["run_id"], str) or not scenario["run_id"].strip():
+        raise ValueError("scenario.run_id deve identificar a execução.")
+    if type(scenario["seed"]) is not int:
+        raise ValueError("scenario.seed deve ser inteiro.")
+    resources = scenario["resources"]
+    if not isinstance(resources, dict) or set(resources) - set(MVP_RESOURCES) or any(
+            not isinstance(v, dict) or set(v) - RESOURCE_KEYS for v in resources.values()):
+        raise ValueError(f"scenario.resources aceita {sorted(MVP_RESOURCES)} com {sorted(RESOURCE_KEYS)}.")
+    try:
+        sources = {key: Source(**value) for key, value in scenario["sources"].items()}
+        events = tuple(event_from_dict(item) for item in scenario["events"])
+    except (AttributeError, KeyError, TypeError) as error:
+        raise ValueError("Fontes ou eventos do cenário inválidos.") from error
+    if any(event.starts_at != 0 for event in events):
+        # O sensor só lê o feed em t=0 (janela única); um evento posterior seria um FN falso.
+        raise ValueError("Nesta janela única os eventos têm de começar em t=0.")
+    return scenario["seed"], sources, events, resources, f"{scenario['run_id']}-obs"
+
+
 async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None,
                   interrupt_resource=None, max_seconds=10.0,
-                  response_settings=None, reputation=None, faults=None):
+                  response_settings=None, reputation=None, faults=None,
+                  scenario=None, corroborate=True, selection_weights=None):
     """O runner só fornece ambiente, relógio e transporte; agentes decidem.
 
     inspection_outcomes e interrupt_resource permitem testes determinísticos.
@@ -61,17 +92,21 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     após a execução a partir dos MISSION_RESULT com cobertura suficiente.
     faults injeta perda, atraso, duplicação e indisponibilidade só no transporte
     local; não altera nem valida o servidor XMPP.
+    scenario (Etapa 9) substitui semente, fontes, eventos e recursos do MVP.
+    corroborate=False ignora a resposta do par (ablação); selection_weights
+    passa pesos a select_best_proposal, ex. só ETA para "mais próximo".
     """
     faults = fault_settings(faults)
     if faults is not None and xmpp:
         raise ValueError("A injeção de falhas só existe no transporte local.")
+    seed, sources, events, resource_settings, prefix = scenario_settings(scenario)
     world = World(8, 8, {"sensor-1": Position(2, 2), "sensor-2": Position(4, 2)})
-    scenario = Scenario(world, {key: Source("acoustic", 5) for key in world.sensors},
-                        (Event("event-mvp", "threat", Position(3, 2), 0, 1000),), seed=SCENARIO_SEED)
+    scenario = Scenario(world, sources, events, seed=seed, observation_prefix=prefix)
     sensor = IncidentSensorAgent("sensor-mvp@localhost", password, "sensor-peer-mvp@localhost")
     peer = InformantAgent("sensor-peer-mvp@localhost", password)
     sensor.set_local_observation_feed(scenario.source("sensor-1"), 0.0)
-    sensor.set_corroboration_context(("sensor-2",), 3.0, 2.0, 1)
+    sensor.set_corroboration_context(("sensor-2",) if corroborate else (), 3.0, 2.0, 1,
+                                     compatibility_rules=(response_settings or {}).get("compatibility_rules"))
     if response_settings is not None:
         if reputation is None:
             reputation = ReputationBook(**response_settings["reputation"])
@@ -83,21 +118,27 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         )
     peer.set_local_observation_feed(scenario.source("sensor-2"), "sensor-2", 0.0)
     mobiles = []
-    for agent_class, name, origin, capability in (
-        (DroneAgent, "drone", Position(0, 2), "mobile_verification"),
-        (VehicleAgent, "vehicle", Position(0, 0), "mobile_verification"),
-        (RangerAgent, "ranger", Position(5, 5), "incident_response"),
+    for agent_class, name, capability in (
+        (DroneAgent, "drone", "mobile_verification"),
+        (VehicleAgent, "vehicle", "mobile_verification"),
+        (RangerAgent, "ranger", "incident_response"),
     ):
+        options = resource_settings.get(name, {})
+        origin = (model_from_dict(options["position"], Position) if "position" in options
+                  else MVP_RESOURCES[name])
+        world.validate_position(origin)
         agent = agent_class(f"{name}-mvp@localhost", password,
-                            ResourceState(name, name, origin, True, 100.0), (capability,),
-                            minimum_autonomy_percent=10.0, eta_seconds=0.0,
-                            energy_cost_percent=0.0, load=0.0)
+                            ResourceState(name, name, origin, True, options.get("autonomy_percent", 100.0)),
+                            (capability,), minimum_autonomy_percent=10.0, eta_seconds=0.0,
+                            energy_cost_percent=0.0, load=options.get("load", 0.0))
         outcome = (inspection_outcomes or {}).get(name)
         inspect = scenario.inspect if outcome is None else lambda position, now, task, value=outcome: value
         agent.configure_execution(world, inspect)
         mobiles.append(agent)
     sensor.configure_mvp({str(a.jid): a.resource.resource_id for a in mobiles[:2]},
-                         {str(mobiles[2].jid): "ranger"}, receive_timeout=0.5 if not xmpp else 2.0)
+                         {str(mobiles[2].jid): "ranger"}, receive_timeout=0.5 if not xmpp else 2.0,
+                         selection_weights=selection_weights)
+    initial_resources = [model_to_dict(agent.resource) for agent in mobiles]
     agents = [*mobiles, peer, sensor]
     tasks, started, transcript, fault_log = [], [], [], []
     rng = random.Random(faults["seed"] if faults else 0)
@@ -205,7 +246,11 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         ], key=lambda entry: entry["time"])
         return {"transport": "xmpp" if xmpp else "local",
                 "response_settings": response_settings,
-                "scenario_seed": SCENARIO_SEED, "faults": faults, "fault_log": fault_log,
+                "scenario_seed": seed, "faults": faults, "fault_log": fault_log,
+                "corroborate": corroborate, "selection_weights": selection_weights,
+                # Só para o avaliador, depois de a execução terminar.
+                "ground_truth": scenario.ground_truth,
+                "initial_resources": initial_resources,
                 "reputation_scores": sensor.reputation_scores,
                 "reputation_updates": updates,
                 "decision": sensor.decision, "verification": sensor.verification_history,

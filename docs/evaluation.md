@@ -1,6 +1,6 @@
 # Plano de testes, cenários e avaliação experimental
 
-> **Estado:** testes e experiências **planeados**. Este documento não contém resultados empíricos. O enunciado exige **pelo menos três cenários contrastantes** e discussão de métricas, trade-offs e limitações.
+> **Estado:** este documento é o plano. Os resultados medidos na Etapa 9 estão em [experiências](experiments.md). O enunciado exige **pelo menos três cenários contrastantes** e discussão de métricas, trade-offs e limitações.
 
 [README](../README.md) · [Plano](development-plan.md) · [Estratégia](architecture.md#estratégia-técnica-e-algoritmos) · [Requisitos e fontes](../README.md#requisitos-e-fontes)
 

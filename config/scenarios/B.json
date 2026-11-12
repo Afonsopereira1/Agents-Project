@@ -1,0 +1,123 @@
+{
+  "scenario_id": "B",
+  "description": "Ruído e falsos positivos: trovão e turistas no mesmo local, sensores menos fiáveis e erro de posição.",
+  "repetitions": 20,
+  "base_seed": 1000,
+  "episodes": [
+    {
+      "label": "threat",
+      "events": [
+        {
+          "event_id": "threat-01",
+          "kind": "threat",
+          "position": {
+            "x": 3,
+            "y": 2
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        }
+      ]
+    },
+    {
+      "label": "thunder",
+      "events": [
+        {
+          "event_id": "thunder-01",
+          "kind": "thunder",
+          "position": {
+            "x": 3,
+            "y": 2
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        }
+      ]
+    },
+    {
+      "label": "thunder+tourist",
+      "events": [
+        {
+          "event_id": "thunder-01",
+          "kind": "thunder",
+          "position": {
+            "x": 3,
+            "y": 2
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "tourist-01",
+          "kind": "tourist",
+          "position": {
+            "x": 3,
+            "y": 2
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        }
+      ]
+    }
+  ],
+  "sources": {
+    "sensor-1": {
+      "kind": "acoustic",
+      "detection_range": 5.0,
+      "sensitivity": 0.9,
+      "false_positive_rate": 0.6,
+      "false_negative_rate": 0.2,
+      "position_error": 1,
+      "confidence": 0.7
+    },
+    "sensor-2": {
+      "kind": "visual",
+      "detection_range": 5.0,
+      "sensitivity": 0.85,
+      "false_positive_rate": 0.5,
+      "false_negative_rate": 0.25,
+      "position_error": 1,
+      "confidence": 0.7
+    }
+  },
+  "resources": {
+    "drone": {
+      "load": 0.5
+    }
+  },
+  "faults": null,
+  "response_settings": {
+    "reputation": {
+      "alpha": 2.0,
+      "beta": 2.0
+    },
+    "policy": {
+      "patrol_threshold": 0.25,
+      "ranger_threshold": 0.65,
+      "severe_threshold": 0.8,
+      "severe_patrol_threshold": 0.08,
+      "ranger_min_groups": 2,
+      "ranger_min_modalities": 2
+    },
+    "severity": 0.5,
+    "sources": {
+      "sensor-1": {
+        "modality": "acoustic",
+        "correlation_group": "local_acoustic"
+      },
+      "sensor-2": {
+        "modality": "visual",
+        "correlation_group": "camera_trap"
+      }
+    },
+    "adjudication": {
+      "max_distance": 1,
+      "max_delay_seconds": 30.0
+    },
+    "compatibility_rules": {
+      "gunshot_like_sound": [
+        "suspicious_movement"
+      ]
+    }
+  }
+}
