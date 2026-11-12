@@ -229,7 +229,7 @@ de missões continuam nas Etapas 4 e 6.
 
 **Pré-requisitos:** ocorrência avaliada, recurso com posição/capacidade e mensagens correlacionadas.
 
-**Ficheiros envolvidos (implementação atual):** `src/isia/reasoning/allocation.py`, `src/isia/communication/messages.py`, `src/isia/communication/transport.py`, `src/isia/agents/mobile.py`, `contract_net_demo.py`, `tests/unit/test_allocation.py`, `tests/unit/test_contract_net_demo.py` e `tests/unit/test_mobile_agent.py`. Os nomes `communication/protocols.py`, `agents/drone.py`, `vehicle.py`, `ranger.py` e `tests/integration/test_allocation.py` eram referências de planeamento e ainda não existem como módulos específicos.
+**Ficheiros envolvidos (implementação atual):** `src/isia/reasoning/allocation.py`, `src/isia/communication/messages.py`, `src/isia/communication/transport.py`, `src/isia/agents/mobile.py`, `contract_net_demo.py`, `tests/unit/test_allocation.py`, `tests/unit/test_contract_net_demo.py` e `tests/unit/test_mobile_agent.py`. Os nomes `communication/protocols.py` e `tests/integration/test_allocation.py` eram referências de planeamento e ainda não existem como módulos específicos. `agents/drone.py`, `vehicle.py` e `ranger.py` foram acrescentados na Etapa 6.
 
 **Tarefas concretas:**
 
@@ -280,16 +280,19 @@ A aprovação formal dos contratos pelo grupo permanece pendente.
 
 **Dependências:** Etapas 2–5. Marco prévio às Etapas 7–10.
 
-**Testes realizados:** 19 testes em `tests/scenarios/test_mvp.py`: trajetória,
+**Testes realizados na implementação do PR #12:** 19 testes em `tests/scenarios/test_mvp.py`: trajetória,
 energia e regresso; passos fracionários/grandes; destino impossível; energia
 insuficiente ou perdida; interrupção; exceção na inspeção; resultados confirmado,
 não confirmado e inconclusivo; nova negociação; limite de tentativas; falha do
 guarda; correlação e validação de resultados; replay de ACCEPT após libertação;
 falha de envio sem impedir o regresso. A suite completa passou 358 testes.
 
+Com o ambiente Python e as dependências de `requirements.txt` ativos, conforme
+as instruções do README:
+
 ```bash
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
-PYTHONPATH=src .venv/bin/python -m isia.simulation.runner
+PYTHONPATH=src python -m unittest discover -s tests -v
+PYTHONPATH=src python -m isia.simulation.runner
 ```
 
 **Evidência de execução (12-11-2026):** no MVP local, os dois sensores corroboram,
@@ -309,7 +312,7 @@ falha/inconclusivo permite outra patrulha. Silêncio após ACCEPT ou durante a
 missão termina como `unresolved`, sem nova atribuição automática. O regresso
 continua localmente; falha energética imobiliza e liberta a reserva com estado
 `unavailable`. A perda do iniciador e a recuperação distribuída ficam na Etapa 8.
-As alterações estão verificadas localmente; integração em PR ainda não realizada.
+O MVP foi integrado na `main` pelo PR #12 em 12-11-2026.
 
 **Erros prováveis/diagnóstico:** relógios incompatíveis, missão não encerrada, estado do recurso ocupado indefinidamente e regresso omitido.
 

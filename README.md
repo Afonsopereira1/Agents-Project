@@ -3,7 +3,7 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado (12-11-2026):** Etapa 6 implementada e validada localmente: deteção, corroboração, negociação, missão, intervenção de guarda e encerramento. O MVP usa dois sensores e duas patrulhas candidatas, com regresso e libertação dos recursos. Os testes locais executam os comportamentos SPADE com transporte em memória; o demonstrador também completou o ciclo ligado a um servidor XMPP temporário, com todos os agentes no mesmo processo. Isto não prova transporte pela rede em cada mensagem. Etapas 7–10 e aprovações formais do grupo continuam pendentes.
+> **Estado (12-11-2026):** Etapa 6 integrada na `main` pelo [PR #12](https://github.com/Afonsopereira1/Agents-Project/pull/12): deteção, corroboração, negociação, missão, intervenção de guarda e encerramento. O MVP usa dois sensores e duas patrulhas candidatas, com regresso e libertação dos recursos. Os testes locais executam os comportamentos SPADE com transporte em memória; o demonstrador também completou o ciclo ligado a um servidor XMPP temporário, com todos os agentes no mesmo processo. Isto não prova transporte pela rede em cada mensagem. Etapas 7–10 e aprovações formais do grupo continuam pendentes.
 
 ## O projeto
 
@@ -46,11 +46,14 @@ O simulador mantém a verdade dos acontecimentos apenas para avaliação; os age
 
 ### MVP da Etapa 6
 
-Com as dependências instaladas, executar sem servidor:
+Depois de preparar e ativar o ambiente Python indicado abaixo, executar sem
+servidor. Pode ser usado outro ambiente existente com Python 3.12 e as
+dependências de `requirements.txt`; `python` e `spade` devem pertencer a esse
+mesmo ambiente ativo.
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m isia.simulation.runner > /tmp/isia-mvp.json
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests/scenarios -v
+PYTHONPATH=src python -m isia.simulation.runner > /tmp/isia-mvp.json
+PYTHONPATH=src python -m unittest discover -s tests/scenarios -v
 ```
 
 O JSON contém mensagens, linha temporal, missões, resultados e recursos finais.
@@ -62,13 +65,13 @@ uma proposta, mas não foi escolhido e conserva 100%.
 Para executar os mesmos agentes ligados ao XMPP, iniciar num terminal:
 
 ```bash
-.venv/bin/spade run --host localhost --memory
+spade run --host localhost --memory
 ```
 
-Noutro terminal, definir `XMPP_PASSWORD` e executar:
+Noutro terminal, ativar o mesmo ambiente Python, definir `XMPP_PASSWORD` e executar:
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m isia.simulation.runner --xmpp
+PYTHONPATH=src python -m isia.simulation.runner --xmpp
 ```
 
 São criadas cinco contas de demonstração no servidor local: `sensor-mvp`,
@@ -131,7 +134,7 @@ no terminal em que foi iniciado.
 
 ### Mapa 2D e relógio da simulação
 
-**Estado atual:** as Etapas 1–5 estão integradas na `main`. O demonstrador `verification_demo.py` utiliza observações do simulador e mostra classificação, fontes distintas, pontuação descritiva, cobertura e decisão preliminar. A demonstração Contract Net funciona separadamente; a ligação automática entre decisão e negociação pertence à Etapa 6.
+**Estado atual:** as Etapas 1–6 estão integradas na `main`. O demonstrador `verification_demo.py` utiliza observações do simulador e mostra classificação, fontes distintas, pontuação descritiva, cobertura e decisão preliminar. As demonstrações de verificação e Contract Net continuam disponíveis separadamente; `isia.simulation.runner` liga automaticamente decisão, negociação e execução no MVP da Etapa 6.
 
 ### Demonstração da Etapa 4 — observações reais e decisão preliminar
 
@@ -151,7 +154,7 @@ Para repetir os testes locais:
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-Última execução local comunicada (11-11-2026): **249 testes, OK**. Isto é distinto das demonstrações reais XMPP acima; os cenários de falha continuam validados por testes/mocks.
+Referência histórica de 11-11-2026: **249 testes, OK**; a implementação do PR #12 acrescentou os testes do MVP e comunicou **358 testes, OK**. Isto é distinto das demonstrações reais XMPP acima; os cenários de falha continuam validados por testes/mocks.
 
 ### Demonstração da comunicação entre agentes
 

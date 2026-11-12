@@ -1,22 +1,26 @@
 """Ciclo local de um incidente iniciado pelo próprio sensor, sem despachante."""
 
 from dataclasses import replace
+import logging
 from time import monotonic
 
 from spade.template import Template
 
 from isia.agents.sensor import SensorAgent
-from isia.communication.messages import Message, MessageType
+from isia.communication.messages import Message, MessageType, model_from_dict
 from isia.communication.transport import (
     ONTOLOGY, CONTRACT_NET_PROTOCOL, build_spade_message, parse_spade_message,
 )
 from isia.domain.incident_state import IncidentState, IncidentStatus
-from isia.domain.models import Incident, Mission, MissionStatus
+from isia.domain.models import Bid, Incident, Mission, MissionStatus
 from isia.reasoning.allocation import (
     MissionRegistry, build_cfp_message, build_accept_message,
     build_proposal_rejection_message, select_best_proposal,
     reservation_status_matches_accept,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def bare(value):
@@ -100,6 +104,13 @@ class IncidentSensorAgent(SensorAgent):
                             "propose" if body.message_type is MessageType.PROPOSAL else "reject-proposal")
                         and cfp.created_at <= body.created_at <= cfp.payload["deadline"]):
                     continue
+                if body.message_type is MessageType.PROPOSAL:
+                    try:
+                        bid = model_from_dict(body.payload.get("bid"), Bid)
+                    except (TypeError, ValueError):
+                        continue
+                    if bid.mission_id != cfp.mission_id or bid.resource_id != candidates[sender]:
+                        continue
                 responses[sender] = body
             selection = select_best_proposal(cfp, responses.values())
             winner = selection.winner
@@ -111,7 +122,11 @@ class IncidentSensorAgent(SensorAgent):
             for jid, proposal in responses.items():
                 if proposal.message_type is MessageType.PROPOSAL and jid != winner_jid:
                     rejection = build_proposal_rejection_message(cfp, proposal, agent.simulated_time)
-                    await self.send_body(jid, rejection, "reject-proposal", proposal.message_id)
+                    try:
+                        await self.send_body(jid, rejection, "reject-proposal", proposal.message_id)
+                    except Exception as error:
+                        logger.warning("REJECT não enviado a %s para a missão %s: %s",
+                                       jid, mission.mission_id, error)
             deadline = monotonic() + agent.receive_timeout
             while True:
                 received = await self.receive_until(deadline)
