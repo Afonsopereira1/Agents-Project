@@ -5,7 +5,10 @@ import unittest
 from dataclasses import replace
 
 from isia.domain.models import Observation, Position
-from isia.reasoning.reputation import EvaluationResult, ReputationBook, result_from_ground_truth
+from isia.communication.messages import Message, MessageType
+from isia.reasoning.reputation import (
+    EvaluationResult, ReputationBook, result_from_ground_truth, result_from_mission,
+)
 from isia.simulation.scenario import Event, Scenario, Source
 from isia.simulation.world import World
 
@@ -113,6 +116,56 @@ class TestReputation(unittest.TestCase):
                                           evaluated_at=12, run_id="run-1")
         self.assertEqual(missing.outcome, "inconclusive")
         self.assertFalse(hasattr(scenario.source("s"), "ground_truth"))
+
+
+
+def mission_result(**payload):
+    values = {"outcome": "confirmed", "reason": "local_inspection", "completed_at": 14.0,
+              "position": {"x": 5, "y": 6}, "task": "verify_incident", "resource_id": "drone",
+              "accept_message_id": "accept-1"}
+    values |= payload
+    return Message("result-1", MessageType.MISSION_RESULT, max(15.0, values["completed_at"]), values,
+                   incident_id="incident-1", mission_id="mission-1", source_id="drone",
+                   conversation_id="conversation-1")
+
+
+class TestMissionAdjudication(unittest.TestCase):
+    limits = {"max_distance": 1, "max_delay_seconds": 30.0}
+
+    def update(self, message, book=None):
+        book = book or ReputationBook()
+        return book.update(observation(), "incident-1",
+                           result_from_mission(message, observation(), "incident-1", **self.limits))
+
+    def test_covered_confirmation_updates_once(self):
+        book = ReputationBook()
+        self.assertEqual(self.update(mission_result(), book)["reason"], "grounded_result")
+        self.assertEqual(book.score("sensor-1"), 0.6)
+        self.assertEqual(self.update(mission_result(), book)["reason"], "already_evaluated")
+
+    def test_non_detection_ranger_and_missing_coverage_do_not_learn(self):
+        for payload, reason in (
+            ({"outcome": "not_confirmed"}, "unresolved_result"),
+            ({"outcome": "failed"}, "unresolved_result"),
+            ({"task": "respond_incident"}, "unresolved_result"),
+            ({"position": {"x": 9, "y": 9}}, "insufficient_reference"),
+            ({"completed_at": 100.0}, "insufficient_reference"),
+            ({"completed_at": 5.0}, "insufficient_reference"),
+            ({"position": None}, "insufficient_reference"),
+        ):
+            with self.subTest(payload=payload):
+                record = self.update(mission_result(**payload))
+                self.assertEqual((record["updated"], record["reason"]), (False, reason))
+
+    def test_patrol_cannot_validate_itself(self):
+        own = Observation("obs-1", "drone", "gunshot_like_sound", Position(5, 5), 10.0, 0.8)
+        evaluation = result_from_mission(mission_result(), own, "incident-1", **self.limits)
+        self.assertEqual(evaluation.rejection_reason(own, "incident-1"), "non_independent_reference")
+
+    def test_invalid_limits_are_rejected(self):
+        with self.assertRaises(ValueError):
+            result_from_mission(mission_result(), observation(), "incident-1",
+                                max_distance=-1, max_delay_seconds=1)
 
 
 if __name__ == "__main__":

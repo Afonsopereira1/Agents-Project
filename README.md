@@ -63,6 +63,9 @@ as reservas `null` e todos os recursos `available`. O drone regressa a `(0, 2)`
 com 94% de energia; o guarda regressa a `(5, 5)` com 90%. O veículo apresentou
 uma proposta, mas não foi escolhido e conserva 100%.
 
+Para injetar perdas, atrasos, duplicações e indisponibilidade (Etapa 8), juntar
+`--faults config/faults.json`; ver [falhas](docs/faults.md).
+
 Para executar os mesmos agentes ligados ao XMPP, iniciar num terminal:
 
 ```bash

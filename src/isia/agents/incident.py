@@ -44,6 +44,7 @@ class IncidentSensorAgent(SensorAgent):
         self.timeline = []
         self.results = []
         self.missions = []
+        self.incident_observations = ()
         self.cycle_done = False
         self.close_reason = None
 
@@ -207,6 +208,7 @@ class IncidentSensorAgent(SensorAgent):
                 return
             initial = observations[0]
             incident_id = f"incident-{initial.event_id}"
+            agent.incident_observations = observations
             agent.incident_state = IncidentState(incident_id)
             agent.record("ALERT", observation_id=initial.event_id)
             agent.transition(IncidentStatus.VERIFYING)

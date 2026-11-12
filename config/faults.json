@@ -1,0 +1,9 @@
+{
+  "seed": 8,
+  "loss": 0.0,
+  "delay": {"PROPOSAL": 0.05},
+  "drop": [],
+  "duplicate": ["MISSION_RESULT"],
+  "unavailable_agents": ["drone-mvp"],
+  "occupied_after_proposal": []
+}
