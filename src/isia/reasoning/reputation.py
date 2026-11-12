@@ -2,7 +2,7 @@
 
 from dataclasses import asdict, dataclass
 
-from isia.domain.models import Observation
+from isia.domain.models import Observation, Position
 from isia.domain.validation import is_finite_number
 
 
@@ -71,6 +71,8 @@ class ReputationBook:
 
     Mede utilidade do sinal como alerta de ameaça, não exatidão física do sensor.
     Um som real de trovão pode, portanto, ser um alerta de ameaça incorreto.
+    ``run_id`` distingue amostras de execuções identificadas pelo avaliador;
+    repetir o mesmo âmbito conserva a idempotência, sem presumir independência.
     """
 
     def __init__(self, alpha: float = 2.0, beta: float = 2.0):
@@ -80,8 +82,8 @@ class ReputationBook:
             raise ValueError("A soma do prior deve ser finita.")
         self.alpha, self.beta = alpha, beta
         self._counts: dict[str, tuple[int, int]] = {}
-        self._evaluated_events: set[str] = set()
-        self._evaluated_incidents: set[tuple[str, str]] = set()
+        self._evaluated_events: set[tuple[str | None, str]] = set()
+        self._evaluated_incidents: set[tuple[str | None, str, str]] = set()
         self.history: list[dict] = []
 
     def score(self, source_id: str) -> float:
@@ -91,13 +93,19 @@ class ReputationBook:
     def snapshot(self, source_ids) -> dict[str, float]:
         return {source_id: self.score(source_id) for source_id in sorted(set(source_ids))}
 
-    def update(self, observation: Observation, incident_id: str, result: EvaluationResult) -> dict:
+    def update(
+        self, observation: Observation, incident_id: str, result: EvaluationResult,
+        *, run_id: str | None = None,
+    ) -> dict:
         if not isinstance(observation, Observation) or not isinstance(result, EvaluationResult):
             raise TypeError("São necessários Observation e EvaluationResult.")
+        if run_id is not None and (not isinstance(run_id, str) or not run_id.strip()):
+            raise ValueError("run_id deve identificar a execução de avaliação.")
         reason = result.rejection_reason(observation, incident_id)
-        key = (observation.source_id, incident_id)
+        event_key = (run_id, observation.event_id)
+        key = (run_id, observation.source_id, incident_id)
         if reason is None and (
-            observation.event_id in self._evaluated_events or key in self._evaluated_incidents
+            event_key in self._evaluated_events or key in self._evaluated_incidents
         ):
             reason = "already_evaluated"
         before = self.score(observation.source_id)
@@ -107,11 +115,11 @@ class ReputationBook:
                 correct + (result.outcome == "confirmed"),
                 incorrect + (result.outcome == "refuted"),
             )
-            self._evaluated_events.add(observation.event_id)
+            self._evaluated_events.add(event_key)
             self._evaluated_incidents.add(key)
         record = {
             "event_id": observation.event_id, "source_id": observation.source_id,
-            "incident_id": incident_id, "result": asdict(result),
+            "incident_id": incident_id, "run_id": run_id, "result": asdict(result),
             "updated": reason is None, "reason": reason or "grounded_result",
             "before": before, "after": self.score(observation.source_id),
             "counts": self._counts.get(observation.source_id, (0, 0)),
@@ -164,14 +172,14 @@ def result_from_mission(
         if not is_finite_number(value) or value < 0:
             raise ValueError("Limites de cobertura devem ser finitos e não negativos.")
     payload = result.payload
-    position = payload.get("position")
     try:
-        gap = abs(position["x"] - observation.position.x) + abs(position["y"] - observation.position.y)
+        position = Position(**payload["position"])
+        gap = abs(position.x - observation.position.x) + abs(position.y - observation.position.y)
         delay = payload["completed_at"] - observation.observed_at
         covered = (payload.get("task") == "verify_incident"
                    and gap <= max_distance and 0 <= delay <= max_delay_seconds)
-    except (KeyError, TypeError):
-        covered = False  # Resultado sem posição/instante não comprova cobertura.
+    except (KeyError, TypeError, ValueError):
+        covered = False  # Posição inválida/ausente não comprova cobertura.
     confirmed = payload.get("outcome") == "confirmed" and payload.get("task") == "verify_incident"
     return EvaluationResult(
         result_id=f"{result.message_id}:evaluation:{observation.event_id}",

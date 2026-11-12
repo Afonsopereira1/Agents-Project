@@ -20,6 +20,7 @@ _ALLOWED_TRANSITIONS = {
     IncidentStatus.ASSESSING: {
         IncidentStatus.WATCHING,
         IncidentStatus.ALLOCATING,
+        IncidentStatus.CLOSED,
     },
     IncidentStatus.WATCHING: {
         IncidentStatus.VERIFYING,
