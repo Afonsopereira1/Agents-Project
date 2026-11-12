@@ -20,7 +20,9 @@ O avaliador verifica a proveniência; os campos do resultado apenas a registam.
 `result_from_ground_truth()` serve apenas o avaliador: exige ligação explícita a
 um evento terminado. O sensor recebe pesos históricos através de
 `book.snapshot(source_ids)`, nunca `ground_truth`. Contagens e `book.history`
-vivem no processo; IDs devem ser únicos nesse âmbito.
+vivem no processo. `book.update(..., run_id=...)` separa os IDs locais de
+amostras distintas; repetir o mesmo âmbito mantém a deduplicação por observação
+e fonte/incidente. As chamadas anteriores sem `run_id` mantêm o âmbito comum.
 
 ## Score e decisão
 
@@ -71,8 +73,16 @@ para `0.8` pede verificação móvel e usa o ciclo existente até à resposta do
 O JSON regista configuração, pesos, decisão, evidências e linha temporal.
 
 `run_mvp(response_settings=settings, reputation=book)` aceita histórico já
-avaliado. Sem `book`, começa com o prior da configuração. Não persiste nem treina
-reputações automaticamente entre execuções. As fontes da configuração usam os
+avaliado. Sem `book`, começa com o prior da configuração. Com o mesmo livro,
+`run_id="amostra-a"` e `run_id="amostra-b"` distinguem novas amostras; repetir
+um ID não volta a contabilizar a mesma observação. Nos cenários parametrizados,
+o âmbito é o `scenario["run_id"]` já usado no prefixo das observações; um
+`run_id` adicional tem de coincidir com ele. Sem cenário nem ID explícito, o
+âmbito é `mvp-seed-<semente>`, pelo que repetir a simulação não aumenta
+automaticamente a reputação. A identidade é registada no relatório e no histórico, sem mudar
+os IDs internos de observações, incidentes ou mensagens. Um ID diferente não
+prova independência estatística. A CLI aceita `--run-id`, e o livro continua
+sem persistência entre processos. As fontes da configuração usam os
 IDs `sensor-1` e `sensor-2` deste MVP; a demonstração isolada da Etapa 4 mantém-se.
 
 `request_rangers` cria `respond_incident` com a capacidade existente

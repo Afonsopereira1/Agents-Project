@@ -1,6 +1,6 @@
 # Comunicação, mensagens e protocolos — proposta
 
-> **Estado revisto (12-11-2026):** Etapa 6 implementada: o sensor iniciador integra corroboração, Contract Net, execução e resultados, incluindo intervenção do guarda. Validada em testes locais dos comportamentos e numa demonstração ligada a XMPP com agentes no mesmo processo; esta última pode usar entrega interna do SPADE. As aprovações formais do grupo e as Etapas 7–10 permanecem pendentes.
+> **Estado revisto (12-11-2026):** Etapa 6 implementada: o sensor iniciador integra corroboração, Contract Net, execução e resultados, incluindo intervenção do guarda. Validada em testes locais dos comportamentos e numa demonstração ligada a XMPP com agentes no mesmo processo; esta última pode usar entrega interna do SPADE. A Etapa 7 acrescenta reputação e adjudicação posterior à execução, sujeita aos critérios de independência e cobertura. As aprovações formais do grupo e a avaliação final permanecem pendentes.
 
 [README](../README.md) · [Arquitetura](architecture.md) · [Plano](development-plan.md) · [Decisões](architecture.md#decisões-pendentes)
 
@@ -364,8 +364,15 @@ cenários e a política de resposta das Etapas 7–9.
 
 A política opcional da Etapa 7 reutiliza este contrato e o mesmo ciclo. Pode
 pedir diretamente `respond_incident`, com capacidade `incident_response`, sem
-uma verificação móvel prévia. Os resultados atuais não incluem prova de
-cobertura nem referências independentes para aprendizagem automática;
+uma verificação móvel prévia. O avaliador distingue o resultado operacional de
+uma referência suficiente para aprendizagem: só uma verificação confirmada,
+independente da fonte avaliada, com `position` válida e instante dentro dos
+limites experimentais de cobertura, pode atualizar a reputação. Posição ausente
+ou inválida não invalida a mensagem operacional, mas não comprova cobertura.
+`not_confirmed`, falhas, resultados inconclusivos e a intervenção do guarda
+não fundamentam essa atualização. A adjudicação ocorre depois de o sensor
+terminar; a decisão dessa execução conserva os pesos históricos anteriores.
+Os parâmetros experimentais continuam sujeitos a aprovação formal;
 ver [reputação e política](reputation-policy.md).
 
 ## 6. Estado e ordenação

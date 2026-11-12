@@ -19,6 +19,11 @@ Com `--xmpp`, `--faults` é recusado.
 
 O relatório JSON regista `faults` (já validado e completo), `scenario_seed` e
 `fault_log`, com cada mensagem perdida, atrasada, duplicada ou recurso ocupado.
+Os seletores são exatos e sensíveis a maiúsculas: os tipos seguem `MessageType`,
+os agentes usam a parte local do JID (por exemplo `drone-mvp`) e a ocupação usa
+o ID do recurso (`drone`). Nomes desconhecidos ou vazios são recusados. Cada
+configuração normalizada tem coleções próprias, incluindo as fornecidas pelo
+chamador, e não altera os defaults das execuções seguintes.
 
 ## Estados resultantes
 
@@ -34,6 +39,14 @@ O relatório JSON regista `faults` (já validado e completo), `scenario_seed` e
 **Retransmissões:** os agentes não retransmitem mensagens; uma perda leva ao
 timeout e a um estado explícito. As rondas de negociação estão limitadas por
 `max_attempts` (2 no MVP).
+
+O limite global por omissão inclui os prazos reais da verificação e das
+tentativas de negociação e resultado das duas fases de missão, com margem
+para terminar. Não compete com o timeout de verificação. `max_seconds` explícito
+continua a impor o watchdog do chamador. O movimento usa tempo simulado;
+atrasos de entrega e esperas usam tempo real. Um resultado antecipado válido
+fica retido apenas para o ACCEPT ativo e só é aplicado depois de STATUS válido;
+timeout, rejeição ou cancelamento limpam essa retenção.
 
 **Recuperação quando falha o iniciador:** não há despachante nem tomada de
 controlo por outro sensor. Depois de um `ACCEPT` confirmado, o recurso executa,

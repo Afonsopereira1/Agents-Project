@@ -18,6 +18,8 @@ from isia.reasoning.allocation import (
     build_proposal_rejection_message, select_best_proposal,
     reservation_status_matches_accept, RANGER_TASK, RANGER_CAPABILITY,
 )
+from isia.reasoning.policy import ResponsePolicy, decide_response
+from isia.reasoning.reputation import EvaluationResult
 
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,42 @@ class IncidentSensorAgent(SensorAgent):
         self.record(status.value)
 
     class IncidentBehaviour(SensorAgent.VerificationBehaviour):
+        def validated_close_decision(self, initial_observation, incident_id):
+            """Revalidar o fundamento antes de executar a ação de encerramento."""
+            agent = self.agent
+            decision = agent.decision
+            try:
+                if not isinstance(agent.response_policy, ResponsePolicy):
+                    raise ValueError("O encerramento exige uma política configurada.")
+                reference = EvaluationResult(**decision["mission_result"])
+                checked = decide_response(
+                    decision, agent.response_policy, severity=agent.severity,
+                    initial_observation=initial_observation, incident_id=incident_id,
+                    mission_result=reference,
+                )
+                if checked["decision"] == "close":
+                    return checked
+            except (KeyError, TypeError, ValueError):
+                pass
+            return {**decision, "decision": "observe", "reason": "unsubstantiated_close"}
+
+        def result_matches_assignment(self, incoming, result, assignment, mission):
+            """A mesma validação aplica-se a resultados normais e antecipados."""
+            jid, accept, resource_id = assignment
+            return (result is not None and result.message_type is MessageType.MISSION_RESULT
+                    and bare(incoming.sender) == jid and bare(incoming.to) == bare(self.agent.jid)
+                    and incoming.get_metadata("performative") == "inform"
+                    and incoming.get_metadata("in-reply-to") == accept.message_id
+                    and result.mission_id == accept.mission_id
+                    and result.incident_id == accept.incident_id
+                    and result.conversation_id == accept.conversation_id
+                    and result.source_id == resource_id
+                    and result.payload.get("resource_id") == resource_id
+                    and result.payload.get("accept_message_id") == accept.message_id
+                    and result.payload["task"] == mission.task
+                    and accept.created_at <= result.payload["completed_at"] <= result.created_at
+                    and result.created_at <= self.agent.simulated_time)
+
         async def send_body(self, recipient, body, performative, reply_to=None):
             self.agent.record(body.message_type.value, recipient=recipient,
                               mission_id=body.mission_id, payload=body.payload)
@@ -83,6 +121,8 @@ class IncidentSensorAgent(SensorAgent):
 
         async def allocate(self, mission, candidates, attempt):
             agent = self.agent
+            # Um único resultado, apenas durante a confirmação deste ACCEPT.
+            self._pending_mission_result = None
             cfp = build_cfp_message(mission, agent.simulated_time,
                                     agent.simulated_time + 100, round_number=attempt)
             for jid in candidates:
@@ -130,43 +170,46 @@ class IncidentSensorAgent(SensorAgent):
                     except Exception as error:
                         logger.warning("REJECT não enviado a %s para a missão %s: %s",
                                        jid, mission.mission_id, error)
+            assignment = (winner_jid, accept, winner.source_id)
             deadline = monotonic() + agent.receive_timeout
-            while True:
-                received = await self.receive_until(deadline)
-                if received is None:
-                    return None, "confirmation_unknown"
-                incoming, status = received
-                if (status is not None and bare(incoming.sender) == winner_jid
-                        and incoming.get_metadata("in-reply-to") == accept.message_id
-                        and incoming.get_metadata("performative") == "inform"
-                        and reservation_status_matches_accept(status, accept, winner.source_id)):
-                    if status.payload["status"] != "reserved":
-                        return None, "reservation_rejected"
-                    agent.record("reserved", resource_id=winner.source_id, mission_id=mission.mission_id)
-                    return (winner_jid, accept, winner.source_id), None
+            confirmed = False
+            try:
+                while True:
+                    received = await self.receive_until(deadline)
+                    if received is None:
+                        return None, "confirmation_unknown"
+                    incoming, status = received
+                    if self.result_matches_assignment(incoming, status, assignment, mission):
+                        if self._pending_mission_result is None:
+                            self._pending_mission_result = received
+                        continue
+                    if (status is not None and bare(incoming.sender) == winner_jid
+                            and incoming.get_metadata("in-reply-to") == accept.message_id
+                            and incoming.get_metadata("performative") == "inform"
+                            and reservation_status_matches_accept(status, accept, winner.source_id)):
+                        if status.payload["status"] != "reserved":
+                            return None, "reservation_rejected"
+                        confirmed = True
+                        agent.record("reserved", resource_id=winner.source_id, mission_id=mission.mission_id)
+                        return assignment, None
+            finally:
+                if not confirmed:
+                    self._pending_mission_result = None
 
         async def mission_result(self, assignment, mission):
             agent = self.agent
-            jid, accept, resource_id = assignment
+            _, _, resource_id = assignment
+            pending = getattr(self, "_pending_mission_result", None)
+            self._pending_mission_result = None
             # O prazo real limita falhas de transporte; o movimento usa só tempo simulado.
             deadline = monotonic() + agent.receive_timeout * 10
             while True:
-                received = await self.receive_until(deadline)
+                received = pending if pending is not None else await self.receive_until(deadline)
+                pending = None
                 if received is None:
                     return None
                 incoming, result = received
-                if (result is not None and result.message_type is MessageType.MISSION_RESULT
-                        and bare(incoming.sender) == jid and bare(incoming.to) == bare(agent.jid)
-                        and incoming.get_metadata("performative") == "inform"
-                        and incoming.get_metadata("in-reply-to") == accept.message_id
-                        and result.mission_id == accept.mission_id
-                        and result.incident_id == accept.incident_id
-                        and result.conversation_id == accept.conversation_id
-                        and result.source_id == resource_id
-                        and result.payload.get("resource_id") == resource_id
-                        and result.payload.get("accept_message_id") == accept.message_id
-                        and result.payload["task"] == mission.task
-                        and accept.created_at <= result.payload["completed_at"] <= result.created_at):
+                if self.result_matches_assignment(incoming, result, assignment, mission):
                     agent.results.append(result)
                     agent.record("MISSION_RESULT", resource_id=resource_id, payload=result.payload)
                     return result
@@ -215,10 +258,15 @@ class IncidentSensorAgent(SensorAgent):
             agent.record("ALERT", observation_id=initial.event_id)
             agent.transition(IncidentStatus.VERIFYING)
             await super().run()
+            if agent.decision.get("decision") == "close":
+                agent.decision = self.validated_close_decision(initial, incident_id)
             agent.record("corroboration", decision=agent.decision)
             agent.transition(IncidentStatus.ASSESSING)
             mission = MissionRegistry().create_from_decision(Incident(incident_id, observations), agent.decision)
-            if mission is None:
+            if agent.decision.get("decision") == "close":
+                agent.close_reason = agent.decision["reason"]
+                agent.transition(IncidentStatus.CLOSED)
+            elif mission is None:
                 agent.transition(IncidentStatus.WATCHING)
                 # MVP de uma janela: sem nova evidência, termina como expirado.
                 agent.transition(IncidentStatus.EXPIRED)

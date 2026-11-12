@@ -68,6 +68,7 @@ class TestIncidentState(unittest.TestCase):
             (IncidentStatus.VERIFYING, IncidentStatus.ASSESSING),
             (IncidentStatus.ASSESSING, IncidentStatus.WATCHING),
             (IncidentStatus.ASSESSING, IncidentStatus.ALLOCATING),
+            (IncidentStatus.ASSESSING, IncidentStatus.CLOSED),
             (IncidentStatus.WATCHING, IncidentStatus.VERIFYING),
             (IncidentStatus.WATCHING, IncidentStatus.EXPIRED),
             (IncidentStatus.ALLOCATING, IncidentStatus.RESPONDING),
