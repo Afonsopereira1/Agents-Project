@@ -1,6 +1,6 @@
 # Arquitetura do sistema multiagente — proposta
 
-> **Estado revisto (11-11-2026):** arquitetura ainda sujeita a revisão formal pelos três elementos. As Etapas 1–5 estão integradas na `main`, incluindo a corroboração (PR #8), as correções de validação (PR #9) e o Contract Net simplificado com reserva confirmada (PR #7). A última execução local no Ubuntu teve **249 testes, OK** e os dois fluxos foram demonstrados separadamente por SPADE/XMPP real no cenário normal. As correções recentes de ausência informativa e deduplicação foram validadas localmente nesta branch, aguardando integração final no PR. A integração automática deteção → missão → negociação e a execução/movimento pertencem à Etapa 6. Reputação, robustez avançada, avaliação final e as aprovações formais do grupo permanecem pendentes.
+> **Estado revisto (12-11-2026):** arquitetura ainda sujeita a revisão formal pelos três elementos. As Etapas 1–6 estão integradas na `main`, incluindo as correções das Etapas 0–5 (PR #11) e o MVP (PR #12). O `IncidentSensorAgent` liga corroboração, negociação, execução e resultados; drones, veículos e guardas reutilizam `MobileResourceAgent`. O PR #12 comunicou **358 testes, OK** e uma demonstração ligada a XMPP com agentes no mesmo processo, que pode utilizar entrega interna do SPADE. Reputação, robustez avançada, avaliação final e as aprovações formais do grupo permanecem pendentes.
 
 [README](../README.md) · [Plano](development-plan.md) · [Protocolos](protocols.md) · [Decisões pendentes](#decisões-pendentes)
 
