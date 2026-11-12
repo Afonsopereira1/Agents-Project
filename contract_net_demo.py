@@ -10,6 +10,7 @@ import logging
 import os
 import time
 from collections.abc import Mapping
+from math import isfinite
 
 import spade
 from spade.agent import Agent
@@ -52,14 +53,13 @@ def required_env(name: str) -> str:
 
 def configurable_float(name: str, default: float, *, positive: bool = False) -> float:
     value = os.environ.get(name)
-    if value is None:
-        return default
     try:
-        parsed = float(value)
-    except ValueError as error:
+        parsed = float(default if value is None else value)
+    except (TypeError, ValueError, OverflowError) as error:
         raise SystemExit(f"A variável {name} deve ser numérica.") from error
-    if parsed < 0 or (positive and parsed <= 0):
-        raise SystemExit(f"A variável {name} deve ser válida e não negativa.")
+    if not isfinite(parsed) or parsed < 0 or (positive and parsed <= 0):
+        constraint = "positiva" if positive else "não negativa"
+        raise SystemExit(f"A variável {name} deve ser finita e {constraint}.")
     return parsed
 
 
@@ -178,6 +178,7 @@ class ContractNetInitiatorAgent(Agent):
                     agent.mission,
                     created_at=agent.simulated_time,
                     deadline=agent.deadline,
+                    round_number=round_number,
                 )
                 cfp = agent.cfp
                 agent.round_history.append(cfp)
@@ -229,7 +230,11 @@ class ContractNetInitiatorAgent(Agent):
                 winner = selection.winner
                 winner_sender = next(sender for sender, response in agent.responses.items()
                                      if response.message_id == winner.message_id)
-                accept = build_accept_message(cfp, winner, agent.simulated_time,
+                decision_time = max(
+                    agent.simulated_time,
+                    *(proposal.created_at for proposal in selection.valid_proposals),
+                )
+                accept = build_accept_message(cfp, winner, decision_time,
                                               source_id=bare_jid(agent.jid))
                 agent.accept = accept
                 await self.send(build_spade_message(
@@ -243,7 +248,7 @@ class ContractNetInitiatorAgent(Agent):
                         continue
                     sender = next(candidate for candidate, response in agent.responses.items()
                                   if response.message_id == proposal.message_id)
-                    rejection = build_proposal_rejection_message(cfp, proposal, agent.simulated_time)
+                    rejection = build_proposal_rejection_message(cfp, proposal, decision_time)
                     await self.send(build_spade_message(
                         sender, rejection, performative=PERFORMATIVE_REJECT_PROPOSAL,
                         conversation_id=rejection.conversation_id,

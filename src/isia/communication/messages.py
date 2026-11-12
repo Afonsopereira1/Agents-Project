@@ -80,6 +80,10 @@ def _validate_cfp(message_ids: dict[str, str | None], payload: dict[str, Any]) -
     deadline = payload["deadline"]
     if type(deadline) not in (int, float) or not isfinite(deadline) or deadline < 0:
         raise ValueError("deadline deve ser finito e não negativo.")
+    if "round_number" in payload:
+        round_number = payload["round_number"]
+        if type(round_number) is not int or round_number < 1:
+            raise ValueError("round_number deve ser um inteiro positivo.")
     target = payload["target"]
     if not isinstance(target, dict) or type(target.get("x")) is not int or type(target.get("y")) is not int:
         raise ValueError("target deve conter coordenadas inteiras.")

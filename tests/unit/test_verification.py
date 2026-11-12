@@ -62,6 +62,8 @@ class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
             sent.append(message)
 
         async def receive(timeout):
+            if behaviour.receive.await_count > 1:
+                return None
             request = parse_spade_message(sent[0])
             response = response_factory(request)
             incoming = SpadeMessage(
@@ -237,6 +239,8 @@ class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
             sent.append(message)
 
         async def receive(timeout):
+            if behaviour.receive.await_count > 1:
+                return None
             request = parse_spade_message(sent[0])
             incoming = SpadeMessage(
                 to="sensor@localhost",

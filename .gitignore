@@ -3,7 +3,7 @@
 .venv/
 venv/
 spade_venv/
-agents
+/agents/
 
 # Python
 __pycache__/

@@ -6,8 +6,12 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from isia.communication.messages import Message, MessageType, model_to_dict
 from isia.communication.transport import parse_spade_message
-from isia.agents.sensor import SensorAgent
 from isia.domain.models import Observation, Position
+
+try:
+    from isia.agents.sensor import SensorAgent
+except ImportError:
+    SensorAgent = None
 
 
 class LocalFeed:
@@ -18,6 +22,7 @@ class LocalFeed:
         return self.observations
 
 
+@unittest.skipUnless(SensorAgent is not None, "SPADE não está instalado")
 class TestSensorTimeout(unittest.IsolatedAsyncioTestCase):
     async def test_termina_sem_resposta_e_regista_timeout(self):
         agent_mock = Mock(

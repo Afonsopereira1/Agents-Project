@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from time import monotonic
 from typing import Any
 
 from spade.agent import Agent
@@ -154,29 +155,33 @@ class SensorAgent(Agent):
             await self.send(outgoing)
             logger.info("VERIFY_REQUEST enviada para %s", agent.informant_jid)
 
-            incoming = await self.receive(timeout=RESPONSE_TIMEOUT_SECONDS)
-            if incoming is None:
-                logger.warning("Timeout à espera de VERIFY_RESPONSE")
-                _record_safe_observe(
-                    agent, observation if observations else None, "timeout", request
-                )
-                return
-            try:
-                response = parse_spade_message(incoming)
-            except (TypeError, ValueError) as error:
-                logger.warning("Resposta rejeitada: %s", error)
-                _record_safe_observe(
-                    agent,
-                    observation if observations else None,
-                    _rejected_response_reason(incoming, request),
-                    request,
-                )
-                return
-            if response_matches_request(
-                incoming, response, request, agent.informant_jid
-            ):
-                agent.response = response
-                logger.info("VERIFY_RESPONSE recebida de %s", incoming.sender)
+            response_deadline = monotonic() + RESPONSE_TIMEOUT_SECONDS
+            rejected_responses: list[dict[str, object]] = []
+            while True:
+                remaining = response_deadline - monotonic()
+                if remaining <= 0:
+                    break
+                incoming = await self.receive(timeout=remaining)
+                if incoming is None or monotonic() >= response_deadline:
+                    break
+                try:
+                    response = parse_spade_message(incoming)
+                except (TypeError, ValueError) as error:
+                    logger.warning("Resposta rejeitada: %s", error)
+                    rejected_responses.append({
+                        "reason": _rejected_response_reason(incoming, request),
+                        "message_id": None,
+                    })
+                    continue
+                if not response_matches_request(
+                    incoming, response, request, agent.informant_jid
+                ):
+                    logger.warning("VERIFY_RESPONSE rejeitada: correlação ou remetente inválido")
+                    rejected_responses.append({
+                        "reason": "invalid_correlation",
+                        "message_id": response.message_id,
+                    })
+                    continue
                 if observations:
                     try:
                         aggregate = aggregate_verification_responses(
@@ -196,26 +201,39 @@ class SensorAgent(Agent):
                         decision = decide_preliminary_verification(
                             evaluation, agent.minimum_compatible_sources
                         )
-                        agent.aggregate_summary = aggregate
-                        agent.evaluation_summary = evaluation
-                        agent.decision = decision
-                        _record_verification_history(
-                            agent, request, observation, aggregate, evaluation, decision
-                        )
-                        _log_corroboration_result(observation, aggregate, evaluation, decision)
                     except (TypeError, ValueError) as error:
                         logger.warning("Corroboração não avaliada: %s", error)
-                        _record_safe_observe(agent, observation, "invalid_response", request)
+                        rejected_responses.append({
+                            "reason": "invalid_response",
+                            "message_id": response.message_id,
+                        })
+                        continue
+                    agent.aggregate_summary = aggregate
+                    agent.evaluation_summary = evaluation
+                    agent.decision = decision
+                    _record_verification_history(
+                        agent, request, observation, aggregate, evaluation, decision
+                    )
+                    _log_corroboration_result(observation, aggregate, evaluation, decision)
                 else:
                     _record_safe_observe(agent, None, "no_initial_observation", request)
-            else:
-                logger.warning("VERIFY_RESPONSE rejeitada: correlação ou remetente inválido")
-                _record_safe_observe(
-                    agent,
-                    observation if observations else None,
-                    "invalid_correlation",
-                    request,
+                agent.response = response
+                logger.info("VERIFY_RESPONSE recebida de %s", incoming.sender)
+                _record_response_wait_diagnostics(
+                    agent, request, rejected_responses, timed_out=False
                 )
+                return
+
+            logger.warning("Timeout à espera de VERIFY_RESPONSE")
+            # Preserve the previous diagnostic reason when no valid reply follows
+            # a rejection, while recording that the global wait did expire.
+            reason = rejected_responses[-1]["reason"] if rejected_responses else "timeout"
+            _record_safe_observe(
+                agent, observation if observations else None, reason, request
+            )
+            _record_response_wait_diagnostics(
+                agent, request, rejected_responses, timed_out=True
+            )
 
     async def setup(self):
         template = Template(
@@ -254,6 +272,18 @@ def _rejected_response_reason(incoming: Any, request: Message) -> str:
     ):
         return "invalid_correlation"
     return "invalid_response"
+
+
+def _record_response_wait_diagnostics(
+    agent,
+    request: Message,
+    rejected_responses: list[dict[str, object]],
+    *,
+    timed_out: bool,
+) -> None:
+    record = agent.verification_history[request.conversation_id][request.message_id]
+    record["rejected_responses"] = tuple(rejected_responses)
+    record["response_wait_timed_out"] = timed_out
 
 
 def _record_safe_observe(agent, observation, reason: str, request: Message) -> None:
