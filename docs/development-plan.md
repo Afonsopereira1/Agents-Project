@@ -1,6 +1,6 @@
 # Plano de desenvolvimento incremental — Etapas 0 a 10
 
-> **Roteiro de acompanhamento (revisto em 2026-11-12).** Este roteiro deriva da [estratégia](architecture.md#estratégia-técnica-e-algoritmos) e dos [requisitos](../README.md#requisitos-e-fontes). `- [x]` indica uma tarefa com implementação/evidência verificada; `- [ ]` indica trabalho pendente, parcialmente demonstrado ou aprovação ainda não comprovada. As listas de ficheiros são orientadoras e não implicam que todos existam.
+> **Roteiro de acompanhamento (revisto em 2026-11-13).** Este roteiro deriva da [estratégia](architecture.md#estratégia-técnica-e-algoritmos) e dos [requisitos](../README.md#requisitos-e-fontes). `- [x]` indica uma tarefa com implementação/evidência verificada; `- [ ]` indica trabalho pendente, parcialmente demonstrado ou aprovação ainda não comprovada. As listas de ficheiros são orientadoras e não implicam que todos existam.
 
 [README](../README.md) · [Arquitetura](architecture.md) · [Protocolos](protocols.md) · [Equipa](team-tasks.md) · [Avaliação](evaluation.md) · [Decisões](architecture.md#decisões-pendentes)
 
@@ -28,7 +28,8 @@ flowchart LR
   E6 --> E8[8 Robustez]
   E7 --> E9[9 Experiências]
   E8 --> E9
-  E9 --> E10[10 Entrega]
+  E9 --> E9A[9A Escalabilidade]
+  E9A --> E10[10 Entrega]
 ```
 
 Alguma documentação e infraestrutura de testes da Etapa 10 podem começar antes; o seu fecho depende das experiências.
@@ -450,7 +451,7 @@ Foram feitas 560 execuções no commit `667cba2` (`dirty: false`). Depois das co
 de validação e proveniência, a suite passou **420 testes, OK**. A nova recolha
 deu as mesmas decisões em todas as execuções.
 
-**Dependências:** Etapas 7 e 8; a infraestrutura de métricas pode ser iniciada durante a Etapa 2. Permite fechar a Etapa 10.
+**Dependências:** Etapas 7 e 8; a infraestrutura de métricas pode ser iniciada durante a Etapa 2. Alimenta a Etapa 9A antes do fecho da Etapa 10.
 
 **Testes a realizar:** métricas sobre dados sintéticos com contagens conhecidas; armazenamento; repetição controlada de cenário; execução sem eventos para verificar casos de denominador zero.
 
@@ -459,6 +460,56 @@ deu as mesmas decisões em todas as execuções.
 **Resultado esperado:** relatório de desempenho baseado em execuções efetivas, não em expectativas.
 
 **Erros prováveis/diagnóstico:** métricas entre unidades diferentes, comparação injusta entre políticas, amostras pequenas e mistura de resultados previstos com medidos.
+
+---
+
+## Etapa 9A — Escalabilidade computacional e situacional
+
+**Objetivo:** identificar os limites de escala, medir o seu efeito e avaliar as correções mais simples antes da apresentação.
+
+**Origem e estado:** observações de «P3. Escalabilidade: computacional e situacional», em `temp/perguntas-defesa.md`, com medições relatadas em 13-11-2026. Esse ficheiro e os scripts `temp/scale.py` e `temp/dist.py` são locais, não versionados. Os resultados abaixo são transcritos dessa análise; não foram repetidos nesta atualização. As correções continuam propostas.
+
+**Pré-requisitos:** Etapa 9; cenários, métricas e registos de referência disponíveis.
+
+**Ficheiros envolvidos:** `src/isia/agents/incident.py`, `sensor.py`, `src/isia/simulation/runner.py`, `scenario.py`, `src/isia/reasoning/allocation.py`, `reputation.py`, `src/isia/evaluation/`, `config/scenarios/`, `results/` e `docs/experiments.md`.
+
+**Limites computacionais e ações a avaliar:**
+
+| Ref. | Observação de P3 | Ação proposta |
+|---|---|---|
+| C1 | CFP enviado a todos os candidatos: O(N) por missão e O(I·N) para I ocorrências; até `3N + 2` mensagens por missão no fluxo descrito. | Comparar com envio aos K mais próximos ou dentro de um raio, mantendo pelo menos dois candidatos quando disponíveis. A posição base pode excluir um recurso atualmente próximo. |
+| C2 | Um candidato silencioso obriga a esperar o prazo inteiro. | Registar quem não respondeu e avaliar a sua exclusão na ronda seguinte, sem tratar silêncio como indisponibilidade definitiva. |
+| C3 | Prazos reais coexistem com tempo simulado; a carga da máquina pode afetar os resultados. | Documentar a limitação e planear prazos no relógio simulado, que deverá avançar durante a negociação. Mudança maior, prevista como trabalho futuro. |
+| C4 | Recursos, sensores e mapa estão fixos no runner; o cenário não permite acrescentar drones. | Ler a lista de recursos e sensores e as dimensões do mapa da configuração. |
+| C5 | `ObservationFeed.recent()` percorre todo o histórico em cada leitura, O(H), e este cresce sem limite. | Avaliar uma janela limitada com `deque` ou um índice temporal para pesquisa binária, preservando o registo necessário à reprodução. |
+| C6 | A corroboração depende de um único par fixo. | Selecionar vizinhos com alcance e capacidade para observar o evento e usar as respostas recebidas até ao prazo. |
+| C7 | Uma única ocorrência por janela, com missão dirigida à primeira observação, deixa outras ameaças sem atendimento. | Agrupar observações por proximidade espacial e temporal e criar uma ocorrência por grupo. É a principal limitação situacional. |
+| C8 | Os agentes partilham um processo; a reputação mantém histórico crescente em memória, perdido no fim. | Avaliar contagens em memória e histórico em JSONL. Separar agentes em processos fica como trabalho futuro; a entrega interna do SPADE não comprova transporte XMPP pela rede. |
+
+**Observações situacionais relatadas em P3:** cenário A, variante `full`, sementes 1000–1009; casos com perdas usam 20 repetições. «Caçadores atendidos» conta ameaças reais confirmadas por uma patrulha, não intervenções concluídas pelo guarda.
+
+- **Cobertura e iniciador:** em (7,0), o sensor-2 tem alcance, mas o sensor-1, único iniciador, não; houve 0/10 alertas. Em (6,6), ambos ficam fora de alcance. Qualquer sensor poder iniciar e existir cobertura sobreposta são problemas distintos.
+- **Várias ameaças:** foram atendidos 8/10, 8/20 e 8/30 caçadores nos casos com uma, duas e três ameaças. A contagem por execução esconde as ameaças sem resposta; é necessária uma métrica por ameaça/ocorrência.
+- **Distância dos recursos:** no ensaio com carga 0,5 no drone, deslocar as bases para (7,7) aumentou a verificação de 6 para 9 s simulados, a resposta do guarda de 12 para 19 s e o consumo de 16 para 27 pontos percentuais de autonomia, sem alterar as confirmações nesses casos. Afastar apenas o guarda elevou a sua resposta para 15 s.
+- **Escassez e redundância:** sem perdas, uma patrulha elegível obteve as mesmas confirmações que duas; com nenhuma, houve oito casos não resolvidos e nenhuma confirmação. Com 10% de perda injetada no transporte local, duas patrulhas atenderam 13/20 ameaças e uma atendeu 9/20. Isto não valida falhas de rede XMPP.
+- **Custo de comunicação e espera:** cada execução completa usou 15 mensagens; a média de 12,4 inclui duas execuções terminadas na corroboração. Dez execuções com drone silencioso passaram de cerca de 1,6 para 5,5 s reais (3,4 vezes mais lentas).
+
+**Tarefas concretas:**
+
+- [ ] Preservar scripts, configurações e resultados de P3 em caminhos versionados ou com proveniência registada; repetir a referência antes de comparar alterações.
+- [ ] Medir mensagens, tempo real, tempo simulado e crescimento dos históricos ao variar sensores, recursos e ocorrências; C4 é necessário para testar mais drones por configuração.
+- [ ] Começar pela avaliação de C1, C5 e da persistência da reputação em C8, comparando custo e decisões antes/depois; medir também a espera de C2.
+- [ ] Avaliar C6, C7 e a possibilidade de qualquer sensor iniciar, evitando ocorrências duplicadas para a mesma ameaça.
+- [ ] Acrescentar métricas por ameaça/ocorrência: cobertura, confirmações, atendimento e casos não resolvidos, mantendo a comparação com a métrica por execução.
+- [ ] Depois de suportar várias ocorrências, avaliar uma fila por gravidade e a proporção recursos/ameaças, preservando a reserva exclusiva. A contenção entre várias ocorrências é uma hipótese a testar, não um resultado destes ensaios.
+- [ ] Repetir as comparações de cobertura, distância, autonomia e perdas com sementes comuns, número de repetições explícito e incerteza reportada.
+- [ ] Registar quais correções foram implementadas e medidas e quais ficaram adiadas, incluindo C3 e a separação de processos de C8.
+
+**Limites da evidência:** amostras de 10–20 repetições, sem intervalos de confiança. O drone com 15% de autonomia continua a receber CFP, embora não seja elegível para verificar. Não se testou aumentar o número de drones. Os resultados não demonstram escalabilidade geral nem permitem concluir que menos recursos só prejudicam o sistema quando existem perdas.
+
+**Dependências:** Etapa 9. A Etapa 10 deve incorporar estas limitações e apenas os resultados efetivamente verificados.
+
+**Critérios de conclusão:** referência reproduzível, efeitos medidos e decisões justificadas para C1–C8 e para os limites situacionais. As propostas adiadas ficam explícitas; não é necessário implementar todas para concluir a análise.
 
 ---
 
@@ -483,7 +534,7 @@ deu as mesmas decisões em todas as execuções.
 - [ ] Rever autorias, licenças e não publicar credenciais, dados privados nem materiais docentes sem autorização.
 - [ ] Preparar demo interativa **ou** gravada e pacote de entrega segundo Moodle/docentes.
 
-**Dependências:** Etapas 0–9, embora documentação e protótipo de visualização possam avançar em paralelo.
+**Dependências:** Etapas 0–9 e análise da Etapa 9A, embora documentação e protótipo de visualização possam avançar em paralelo.
 
 **Testes a realizar:** instalação limpa; execução integral; confirmação de dados exportados; gravação/GUI estável; revisão da apresentação.
 
@@ -512,4 +563,5 @@ deu as mesmas decisões em todas as execuções.
 - [ ] Etapa 7: implementação local testada, com adjudicação automática; aprovação dos parâmetros pendente.
 - [x] Etapa 8: falhas injetadas no transporte local com estados explícitos; queda de processo e XMPP não validados.
 - [x] Etapa 9: três cenários contrastantes medidos e analisados (transporte local; amostra pequena).
+- [ ] Etapa 9A: escalabilidade computacional e situacional analisada, com medições reproduzíveis e correções ou adiamentos justificados.
 - [ ] Etapa 10: documentação e demonstração finais revistas.
