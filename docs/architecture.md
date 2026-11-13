@@ -1,6 +1,6 @@
 # Arquitetura do sistema multiagente — proposta
 
-> **Estado revisto (12-11-2026):** arquitetura ainda sujeita a revisão formal pelos três elementos. As Etapas 1–6 estão integradas na `main`, incluindo o MVP e as correções dos PRs #12 e #13. Esta branch acrescenta reputação e política ao `SensorAgent`; o `IncidentSensorAgent` continua a negociar e executar o ciclo existente com os recursos móveis. A aprendizagem automática a partir das missões, a robustez avançada e a avaliação final permanecem pendentes. Ver [implementação e limites da Etapa 7](reputation-policy.md).
+> **Estado revisto (12-11-2026):** arquitetura ainda sujeita a revisão formal pelos três elementos. As Etapas 1–6 estão integradas na `main`, incluindo o MVP e as correções dos PRs #12 e #13. A Etapa 7 acrescenta reputação e política ao `SensorAgent`; o `IncidentSensorAgent` continua a negociar e executar o ciclo existente com os recursos móveis. Após a execução, o avaliador já pode atualizar reputações a partir de resultados de missão independentes com cobertura espacial e temporal suficiente; um resultado operacional, por si só, não fundamenta aprendizagem. A robustez avançada e a avaliação final permanecem pendentes. Ver [implementação e limites da Etapa 7](reputation-policy.md).
 
 [README](../README.md) · [Plano](development-plan.md) · [Protocolos](protocols.md) · [Decisões pendentes](#decisões-pendentes)
 

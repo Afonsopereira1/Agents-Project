@@ -362,11 +362,18 @@ aplica-a depois da decisão; `not_confirmed` e o guarda continuam sem atualizar.
 
 **Testes locais:** fonte nova, histórico incorreto, referências insuficientes, correlação, gravidade e limiares; ligação da decisão às patrulhas e aos guardas do MVP, com regresso e libertação. O teste de envio direto ao guarda injeta a decisão para isolar a ligação; os cálculos da política são testados separadamente.
 
-**Verificação desta integração (12-11-2026):** a base `96fd866` passou 365 testes;
-após adaptação, a suite completa passou **393 testes, OK**. O runner normal
-terminou `closed`, com drone e guarda, reservas libertadas e energia 94%/100%/90%.
-Com a configuração da Etapa 7, terminou `expired`, decisão `observe`, sem missões.
-`git diff --check` passou. Não foi repetida a demonstração XMPP nesta integração.
+**Correções das auditorias (12-11-2026, base `400161b`):** na branch independente
+`fix/etapa7-etapa8-audit-corrections`, `close` é revalidado pela política e termina
+`closed` sem missão; decisões sem fundamento conservam `observe`. A adjudicação
+valida `Position`, e `run_id` distingue amostras sem alterar os IDs internos.
+Repetir o mesmo âmbito mantém a idempotência e não implica independência estatística.
+
+**Validação das correções:** a suite completa executou **455 testes, todos
+aprovados**, incluindo 45 regressões novas das Etapas 7 e 8 e os 34 testes
+anteriores específicos da Etapa 7. O MVP normal terminou `closed`, com reservas
+libertadas e energia 94%/100%/90%; a política padrão terminou `expired/observe`
+sem missões, e a gravidade `0.8` mobilizou patrulha e guarda. A aprovação formal
+dos parâmetros continua pendente. Não foi executada comunicação XMPP real.
 
 **Critérios de conclusão:** pontuações são reproduzíveis, explicáveis e têm comportamento sensato nos extremos; atualizações de reputação só ocorrem quando justificadas.
 
@@ -402,8 +409,19 @@ continuam limitadas por `max_attempts`. Recuperação do iniciador: o recurso
 termina, regressa e liberta a reserva; o incidente fica `unresolved`. A
 indisponibilidade dura toda a execução de janela única. Ver [falhas](faults.md).
 
-**Verificação (12-11-2026):** a suite completa passou **410 testes, OK**; os testes
-de falhas repetidos três vezes passaram. A injeção não se aplica ao XMPP.
+**Correções das auditorias (12-11-2026, base `400161b`):** o orçamento global
+cobre os timeouts operacionais, incluindo perda de verificação com defaults
+públicos e saída JSON da CLI. Um resultado antecipado correlacionado fica retido
+até STATUS válido, com contexto limitado e limpeza; atraso de STATUS de `0.1 s`
+já permite concluir ambas as missões. Os seletores são validados e as coleções
+da configuração são independentes entre chamadas.
+
+**Verificação das correções:** a suite completa passou **455 testes**, incluindo
+os 11 testes anteriores de falhas e as 45 regressões novas das duas etapas,
+sem falhas, erros ou ignorados. Foram preservados os cenários de escassez,
+interrupção, regresso e libertação. A perda da ligação ao iniciador depois da
+reserva foi exercitada com mock explícito; não simula queda real do processo.
+A injeção não se aplica ao XMPP, que não foi executado nesta validação.
 
 **Dependências:** Etapa 6; pode decorrer **em paralelo com a Etapa 7**. Necessária aos cenários de robustez da Etapa 9.
 
@@ -451,7 +469,35 @@ Foram feitas 560 execuções no commit `667cba2` (`dirty: false`). Depois das co
 de validação e proveniência, a suite passou **420 testes, OK**. A nova recolha
 deu as mesmas decisões em todas as execuções.
 
-**Dependências:** Etapas 7 e 8; a infraestrutura de métricas pode ser iniciada durante a Etapa 2. Alimenta a Etapa 9A antes do fecho da Etapa 10.
+**Integração controlada das Etapas 7–9 (12-11-2026):** a branch
+`fix/integrate-stages-7-9` parte de `origin/main` em `ee209c3` e incorpora as
+correções de `d420f61` sem criar um commit. O único conflito textual, em
+`simulation/runner.py`, foi resolvido preservando os cenários parametrizados,
+recursos, pesos de seleção e relatórios da Etapa 9. A adjudicação usa o
+`scenario["run_id"]` existente, sem criar uma segunda identidade da execução.
+
+Foram corrigidas as repetições inválidas da API, as identidades duplicadas na
+recolha, a proveniência Git dependente do diretório corrente e a energia com
+autonomia desconhecida. A documentação explicita as missões conhecidas pelo
+coordenador, a alteração conjunta de evidência e limiar em `no_corroboration`
+e a influência das esperas de comunicação e dos relógios no tempo do guarda
+em C. A baseline, os limiares e as configurações experimentais mantêm-se.
+
+A suite combinada passou **489 testes, sem falhas, erros ou ignorados**:
+421 testes da base, as 45 regressões das Etapas 7–8 preservadas e 23 testes novos
+de integração e dos defeitos da Etapa 9. Passaram também os imports dos 30
+módulos, a compilação dos 81 ficheiros Python de `src/` e `tests/` e
+`git diff --check`. Os contratos anteriores permanecem cobertos pela suite.
+
+A reprodução foi feita exclusivamente numa pasta temporária: **560 execuções**
+(A: 160, B: 240, C: 160), com 560 relatórios individuais e 12 agregados.
+`runs.csv` e `summary.csv` ficaram idênticos byte a byte aos publicados.
+O novo manifesto regista `ee209c3` e `dirty: true`, pois o código integrado
+permanece sem commit. Os três ficheiros publicados em `results/experiments/`
+e `revisao_etapa1.txt` mantiveram os seus hashes. Não houve commit, push,
+merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
+
+**Dependências:** Etapas 7 e 8; a infraestrutura de métricas pode ser iniciada durante a Etapa 2. Permite fechar a Etapa 10.
 
 **Testes a realizar:** métricas sobre dados sintéticos com contagens conhecidas; armazenamento; repetição controlada de cenário; execução sem eventos para verificar casos de denominador zero.
 

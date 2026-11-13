@@ -33,6 +33,11 @@ Comparar quando possível a solução completa com:
 - **Seleção nearest-available:** escolhe-se o recurso elegível mais próximo, sem negociação por custo composto.
 - **Sem injeção de falhas:** isolamos a influência das perturbações de comunicação.
 
+Na recolha implementada, `no_corroboration` ignora a evidência do par e também
+reduz o limiar de patrulha para `0.01`. Esta baseline compara pipelines com duas
+diferenças; não isola o efeito causal da corroboração. As conclusões devem indicar
+essa alteração conjunta, sem a apresentar como ablação de uma única variável.
+
 Comparar sempre sob as **mesmas sequências de incidentes e configurações**, quando tecnicamente possível. O uso de sementes comuns reduz a variabilidade devida ao ambiente, mas não garante determinismo completo de escalonamento assíncrono.
 
 ## 4. Definição de métricas
@@ -57,6 +62,14 @@ Antes de medir, escolher a **unidade de classificação** (sugestão: incidente 
 | Não resolvidos | Incidentes terminados sem decisão/resposta confirmada | Casos pendentes |
 
 **Se o denominador de uma métrica for zero:** marcar `N/A` e explicar, em vez de devolver 0 ou 1 silenciosamente. Os tempos devem indicar unidade e relógio. Registar atrasos e perdas na aplicação separadamente de falhas do XMPP.
+
+Na implementação da Etapa 9, `missions_done` e `missions_failed` contam apenas
+estados terminais conhecidos pelo coordenador. Um resultado perdido pode deixar
+uma missão localmente concluída fora dessas contagens; não equivale a falha da
+execução móvel. `energy_used` soma pontos percentuais de autonomia, e fica
+indisponível quando alguma autonomia inicial ou final é desconhecida. As
+definições concretas da unidade, tempos e restantes campos estão em
+[experiências](experiments.md#unidade-de-avaliação-e-métricas).
 
 ## 5. Protocolo experimental
 

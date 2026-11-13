@@ -19,9 +19,10 @@ PYTHONPATH=src python -m unittest tests.unit.test_metrics tests.scenarios.test_e
 - **Positivo real:** o cenário tem pelo menos um evento `threat`. **Positivo previsto:** a política mobiliza recursos (`request_mobile_verification` ou `request_rangers`). Uma execução sem alerta conta como negativo previsto.
 - `TN` existe porque metade dos episódios (ou dois terços no B) não tem ameaça: `empty`, `thunder` ou `thunder+tourist`.
 - Precision, recall e FPR ficam `N/A` quando o denominador é zero (`metrics.ratio`).
-- **Tempos:** segundos simulados desde `t=0`, que é simultaneamente o início dos eventos e o instante do alerta. O tempo de deteção é sempre 0 nesta janela única, por isso não se reporta. `t verificação` é o `completed_at` do primeiro `MISSION_RESULT` de `verify_incident`; `t resposta guarda` é o do `respond_incident`.
-- **Energia:** soma da autonomia gasta por todos os recursos. **Mensagens:** mensagens enviadas pela aplicação, incluindo as perdidas. **Perdidas** e **duplicadas** vêm do `fault_log`.
-- **Confirmadas:** execuções com `verify_incident` confirmado. **Não resolvidos:** incidentes com estado `unresolved`.
+- **Tempos:** segundos simulados desde `t=0`, que é simultaneamente o início dos eventos e o instante do alerta. O tempo de deteção é sempre 0 nesta janela única, por isso não se reporta. `t verificação` é o `completed_at` do primeiro `MISSION_RESULT` recebido de `verify_incident`; `t resposta guarda` é o do `respond_incident`. Podem incluir resultados falhados. Resultados não recebidos ficam sem tempo e não entram na média; `n` indica os valores utilizados.
+- **Energia:** soma dos pontos percentuais de autonomia gastos pelos recursos, não percentagem da capacidade energética total nem energia física. Se alguma autonomia inicial ou final for desconhecida, `energy_used` fica `N/A` e não entra nas estatísticas dessa métrica. **Mensagens:** tentativas de envio pela aplicação, incluindo as perdidas. **Perdidas** e **duplicadas** vêm do `fault_log`, não de confirmações individuais de entrega.
+- **Missões:** `missions_done` e `missions_failed` contam estados terminais conhecidos pelo coordenador através dos resultados recebidos. Não contam todas as conclusões locais da timeline móvel: uma missão pode terminar e libertar a reserva, mas continuar desconhecida pelo coordenador se o resultado se perder. Os nomes dos campos CSV mantêm este significado.
+- **Confirmadas:** execuções com resultado recebido de `verify_incident` confirmado. **Não resolvidos:** incidentes com estado `unresolved`.
 
 ## Cenários (`config/scenarios/*.json`)
 
@@ -37,7 +38,9 @@ A política e a reputação são as de `config/agents.json`. Os sensores pertenc
 
 ## Variantes comparadas (`collector.VARIANTS`)
 
-Cada variante muda uma só coisa em relação a `full`:
+As variantes comparam as configurações abaixo. `no_corroboration` altera tanto
+a evidência considerada como o limiar de mobilização; por isso, compara dois
+pipelines e não constitui uma ablação estrita de uma única variável.
 
 | Variante | Diferença |
 |---|---|
@@ -67,7 +70,7 @@ Cada variante muda uma só coisa em relação a `full`:
 
 ### Rapidez e custo (média ± desvio-padrão; n = execuções com esse valor)
 
-| Cen. | Variante | t verificação (s) | t resposta guarda (s) | Energia/exec. (%) | Mensagens/exec. | Perdidas/exec. | Duplicadas/exec. |
+| Cen. | Variante | t verificação (s) | t resposta guarda (s) | Autonomia gasta/exec. (p.p.) | Mensagens/exec. | Perdidas/exec. | Duplicadas/exec. |
 |---|---|---|---|---|---|---|---|
 | A | full | 6.00 ± 0.00 (n=17) | 12.00 ± 0.00 (n=17) | 8.5 | 6.5 | 0.00 | 0.00 |
 | A | no_reputation | 6.00 ± 0.00 (n=17) | 12.00 ± 0.00 (n=17) | 8.5 | 6.5 | 0.00 | 0.00 |
@@ -90,18 +93,18 @@ Cada variante muda uma só coisa em relação a `full`:
 
 ## Discussão
 
-- **Corroboração (B):** reduz os falsos alarmes de 30 para 10 em 40 negativos (FPR de 0.75 para 0.25) e eleva a precision de 0.35 para 0.57. O custo é perder 3 ameaças (recall de 0.80 para 0.65), além de menos energia (4.2 contra 7.7 % por execução) e menos mensagens (4.8 contra 7.8). Os 10 FP restantes vêm todos de `thunder+tourist`: dois falsos positivos de origens distintas parecem evidência independente.
-- **Corroboração (A, C):** com fontes fiáveis não há FP a evitar, e a corroboração só custa recall: 0.85 contra 0.95 em A e 0.80 contra 0.95 em C, por falha do segundo sensor ou perda da resposta.
+- **Comparação `full` / `no_corroboration` (B):** `full` apresentou 10 falsos alarmes contra 30 em 40 negativos (FPR de 0.25 contra 0.75) e precision de 0.57 contra 0.35. Mobilizou menos 3 ameaças (recall de 0.65 contra 0.80), com menos autonomia gasta (4.2 contra 7.7 pontos percentuais por execução) e menos mensagens (4.8 contra 7.8). Estes valores medem a diferença conjunta de corroboração e limiar; não isolam o efeito causal da corroboração. Os 10 FP restantes vêm todos de `thunder+tourist`: dois falsos positivos de origens distintas parecem evidência independente.
+- **Comparação `full` / `no_corroboration` (A, C):** o recall foi 0.85 contra 0.95 em A e 0.80 contra 0.95 em C. Em `full`, a falta de apoio do segundo sensor ou a perda da resposta podem impedir a mobilização; a baseline também aceita scores inferiores por usar outro limiar. Os negativos destes cenários são episódios vazios, que não geram falsos alertas neste simulador; FPR zero não demonstra robustez perante ruído.
 - **Reputação:** sobe com cada missão confirmada (`sensor-1` chega a 0.90 em A, 0.86 em C e 0.67 em B), mas só muda **uma** decisão em 560 execuções. Foi em C, repetição 19: com reputação ≈ 0.86, o score isolado (0.86 × 0.8 / 2 × 0.75 ≈ 0.26) passa o limiar de 0.25. Com estes limiares é preciso reputação ≥ 0.84 para isso acontecer. Não aprende com `not_confirmed` (Etapa 7), por isso em B nunca desce. Não há evidência de que a reputação melhore a precisão nesta configuração.
-- **Seleção da patrulha:** o custo composto evita o drone com carga 0.5 e escolhe o veículo, mais distante. `nearest` escolhe o drone e verifica mais cedo: 4.0 contra 6.0 s em A e 4.2 contra 6.0 s em B, com menos energia (6.8 contra 8.5 % em A). O simulador não penaliza a carga, por isso o benefício de a evitar não é mensurável aqui. Em C o drone não tem autonomia e as duas regras coincidem.
-- **Falhas (C contra A):** com a mesma qualidade de fontes, 10 das 20 ameaças em `full` ficaram `unresolved`, e só 6 chegaram à resposta do guarda (contra 17 em A). A resposta do guarda demora 17 s em vez de 12, porque o veículo é o único verificador. A escassez de recursos amplifica a perda de mensagens.
+- **Seleção da patrulha:** o custo composto evita o drone com carga 0.5 e escolhe o veículo, mais distante. `nearest` escolhe o drone e verifica mais cedo: 4.0 contra 6.0 s em A e 4.2 contra 6.0 s em B, com menos autonomia gasta (6.8 contra 8.5 pontos percentuais em A). O simulador não penaliza a carga, por isso o benefício de a evitar não é mensurável aqui. Em C o drone não tem autonomia e as duas regras coincidem.
+- **Falhas (C contra A):** com a mesma qualidade de fontes, 10 das 20 ameaças em `full` ficaram `unresolved`, e só 6 tiveram resultado recebido da resposta do guarda (contra 17 em A). Nas execuções publicadas, o guarda respondeu aos 17 s simulados em vez de 12. A/full também seleciona o veículo: o aumento resulta das esperas de comunicação e da interação dos relógios, pois o tempo simulado pode continuar a avançar durante o regresso do veículo antes da atribuição ao guarda. A experiência combina falhas e escassez; não isola os seus efeitos individuais.
 
 ## Limitações e incerteza
 
 - **Amostra pequena:** 20 repetições por episódio, sem intervalos de confiança. Diferenças de 1–2 execuções (por exemplo C `full` contra `no_reputation`) não devem ser lidas como efeitos.
 - **Simulação simplificada:** janela única, `t=0` para eventos e alerta, mundo 8×8, um iniciador, dois sensores e eventos parados. Os tempos são, por isso, quase determinísticos (desvio-padrão 0 em A e C).
 - **Parâmetros escolhidos pela equipa:** probabilidades, cargas, limiares e a regra de compatibilidade não estão calibrados nem aprovados formalmente (Etapa 7).
-- **Ablação `no_corroboration`:** também baixa o limiar de patrulha. Sem isso, nenhum alerta isolado mobilizaria e o recall seria 0.
+- **Baseline `no_corroboration`:** também baixa o limiar de patrulha. Sem isso, nenhum alerta isolado mobilizaria nestas configurações e o recall seria 0. A comparação permite avaliar os dois pipelines; uma conclusão causal sobre o efeito exclusivo da corroboração exigiria um controlo que separasse a alteração do limiar.
 - **Reputação:** depende da ordem das execuções, porque `full` aprende sequencialmente.
 - **Reprodutibilidade:** os cenários e a perda aleatória usam sementes fixas. A perda depende ainda da ordem de envios no `asyncio`, e os prazos de negociação são reais (0.5 s). `test_experiments` verifica que a mesma semente repete as métricas no cenário A. A injeção de falhas é só local; não valida XMPP.
 - **Gráficos:** não foram produzidos, porque o projeto não depende de uma biblioteca de gráficos. As tabelas acima e `summary.csv` servem de base à Etapa 10.

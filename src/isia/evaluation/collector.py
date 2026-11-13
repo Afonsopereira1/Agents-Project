@@ -17,7 +17,7 @@ from isia.reasoning.reputation import ReputationBook
 from isia.simulation.runner import run_mvp
 
 
-# Cada ablação muda uma só coisa face a "full".
+# Variantes de pipelines; "no_corroboration" também adapta o limiar de patrulha.
 VARIANTS = {
     "full": {},
     # Prior fixo em todas as execuções: sem aprendizagem entre elas.
@@ -30,29 +30,50 @@ VARIANTS = {
 }
 
 
+def validate_scenario(config):
+    """Validar também os campos que identificam relatórios e avaliações."""
+    expected = {"scenario_id", "description", "repetitions", "base_seed", "episodes",
+                "sources", "resources", "faults", "response_settings"}
+    if not isinstance(config, dict) or set(config) != expected:
+        raise ValueError(f"O cenário exige {sorted(expected)}.")
+    if not isinstance(config["scenario_id"], str) or not config["scenario_id"].strip():
+        raise ValueError("scenario_id deve identificar o cenário.")
+    if type(config["repetitions"]) is not int or config["repetitions"] < 1:
+        raise ValueError("repetitions deve ser inteiro positivo.")
+    if not isinstance(config["episodes"], list) or not config["episodes"] or any(
+            not isinstance(e, dict) or set(e) != {"label", "events"} for e in config["episodes"]):
+        raise ValueError("episodes deve ser uma lista não vazia de {label, events}.")
+    labels = [episode["label"] for episode in config["episodes"]]
+    if any(not isinstance(label, str) or not label.strip() for label in labels):
+        raise ValueError("Cada episódio precisa de um label não vazio.")
+    if len(labels) != len(set(labels)):
+        raise ValueError("Os labels dos episódios devem ser únicos no cenário.")
+
+
 def load_scenario(path):
     with open(path, encoding="utf-8") as stream:
         config = json.load(stream)
-    expected = {"scenario_id", "description", "repetitions", "base_seed", "episodes",
-                "sources", "resources", "faults", "response_settings"}
-    if set(config) != expected:
-        raise ValueError(f"{path}: o cenário exige {sorted(expected)}.")
-    if type(config["repetitions"]) is not int or config["repetitions"] < 1:
-        raise ValueError(f"{path}: repetitions deve ser inteiro positivo.")
-    if not isinstance(config["episodes"], list) or not config["episodes"] or any(
-            not isinstance(e, dict) or set(e) != {"label", "events"} for e in config["episodes"]):
-        raise ValueError(f"{path}: episodes deve ser uma lista não vazia de {{label, events}}.")
+    try:
+        validate_scenario(config)
+    except ValueError as error:
+        raise ValueError(f"{path}: {error}") from error
     return config
 
 
 async def run_scenario(config, variant, *, repetitions=None, output=None):
     """Execuções sequenciais; em "full" a reputação aprende ao longo delas."""
+    validate_scenario(config)
+    count = config["repetitions"] if repetitions is None else repetitions
+    if type(count) is not int or count < 1:
+        raise ValueError("repetitions deve ser inteiro positivo.")
+    if not isinstance(variant, str) or variant not in VARIANTS:
+        raise ValueError(f"variant deve ser uma de {sorted(VARIANTS)}.")
     options = VARIANTS[variant]
     settings = deepcopy(config["response_settings"])
     settings["policy"].update(options.get("policy", {}))
     book = ReputationBook(**settings["reputation"])
     rows = []
-    for repetition in range(repetitions or config["repetitions"]):
+    for repetition in range(count):
         seed = config["base_seed"] + repetition
         for episode in config["episodes"]:
             run_id = f"{config['scenario_id']}-{variant}-{repetition:03d}-{episode['label']}"
@@ -96,6 +117,23 @@ def write_csv(path, rows):
         writer.writerows([{k: "N/A" if v is None else v for k, v in row.items()} for row in rows])
 
 
+def git_provenance():
+    """A proveniência pertence ao código carregado, não ao diretório do chamador."""
+    root = Path(__file__).resolve().parents[3]
+
+    def git(*args):
+        return subprocess.run(
+            ["git", *args], cwd=root, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+
+    try:
+        commit = git("rev-parse", "HEAD")
+        dirty = bool(git("status", "--porcelain", "--", "src", "config"))
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise ValueError("Não foi possível determinar a proveniência Git do código.") from error
+    return commit, dirty
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("scenarios", nargs="+", type=Path)
@@ -107,12 +145,15 @@ def main():
         parser.error("--repetitions deve ser positivo.")
     try:
         configs = [load_scenario(path) for path in args.scenarios]
+        scenario_ids = [config["scenario_id"] for config in configs]
+        if len(scenario_ids) != len(set(scenario_ids)):
+            raise ValueError("Os scenario_id selecionados devem ser únicos.")
+        if len(args.variants) != len(set(args.variants)):
+            raise ValueError("As variantes selecionadas não podem repetir-se.")
+        # Lida antes da recolha e da limpeza: uma falha não apaga resultados anteriores.
+        commit, dirty = git_provenance()
     except (OSError, ValueError) as error:
         parser.error(str(error))
-    # Proveniência lida antes de correr: commits ou edições durante a recolha não contam.
-    git = lambda *a: subprocess.run(["git", *a], capture_output=True, text=True).stdout.strip()
-    commit = git("rev-parse", "HEAD") or None
-    dirty = bool(git("status", "--porcelain", "--", "src", "config"))
     # Tudo o que é desta recolha sai junto; se ela falhar, fica sem manifesto (incompleta).
     shutil.rmtree(args.output / "runs", ignore_errors=True)
     for name in ("runs.csv", "summary.csv", "manifest.json"):
