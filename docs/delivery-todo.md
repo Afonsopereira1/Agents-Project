@@ -202,7 +202,7 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 
 - [ ] **Ajuste às Etapas 0, 1 e 7: aprovar parâmetros e contratos numa reunião de 15 minutos** (obrigatório, ~0,25 h) — as caixas das Etapas 0–1, 4–5 e 7 só dependem dessa aprovação. Ver [development-plan.md:49](development-plan.md#L49), [:91](development-plan.md#L91) e [:341](development-plan.md#L341). **Preparado:** ata com os valores atuais em [approvals.md](approvals.md); falta a reunião e o preenchimento.
 - [x] **Ajuste à Etapa 9: corrigir a caixa «tabelas/gráficos»** (obrigatório, ~0,1 h) — está assinalada como feita ([development-plan.md:455](development-plan.md#L455)), mas não há gráficos ([:464](development-plan.md#L464)). **Feito:** dividida em «tabelas» (feita) e «gráficos» (opcional, por fazer).
-- [ ] **Repetir a recolha das 560 execuções na `main`** (opcional, ~0,5 h) — o `manifest.json` cita o commit `667cba2`, anterior ao PR #18.
+- [x] **Repetir a recolha das 560 execuções na `main`** (opcional, ~0,5 h) — o `manifest.json` cita o commit `667cba2`, anterior ao PR #18. **Feito** em `a170c97` (`dirty: false`): `summary.csv` e `runs.csv` idênticos byte a byte; só o `manifest.json` mudou.
 
 **Dependências:** nenhuma.
 

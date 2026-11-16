@@ -4,7 +4,7 @@
 
 Os números abaixo vêm das **560 execuções** registadas em
 [`results/experiments/`](../results/experiments/), feitas no commit
-`667cba2`, sem alterações por fazer commit (ver `commit` e `dirty` em `manifest.json`). Os relatórios completos de cada execução
+`a170c97`, sem alterações por fazer commit (ver `commit` e `dirty` em `manifest.json`). A recolha original, no commit `667cba2` (anterior ao PR #18 e à troca para `refuse`), deu `summary.csv` e `runs.csv` idênticos byte a byte (verificado a 16-11-2026). Os relatórios completos de cada execução
 (`results/experiments/runs/`) não são versionados. Para os regenerar:
 
 ```bash
