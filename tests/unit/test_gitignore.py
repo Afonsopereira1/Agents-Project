@@ -6,6 +6,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@unittest.skipUnless((ROOT / ".git").exists(), "sem .git: a entrega foi copiada sem o repositório (ver README)")
 class TestGitignore(unittest.TestCase):
     def ignored(self, path):
         result = subprocess.run(

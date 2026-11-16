@@ -13,7 +13,7 @@ try:
         CONTRACT_NET_PROTOCOL,
         PERFORMATIVE_INFORM,
         PERFORMATIVE_PROPOSE,
-        PERFORMATIVE_REJECT_PROPOSAL,
+        PERFORMATIVE_REFUSE,
         build_spade_message,
         parse_spade_message,
     )
@@ -84,7 +84,7 @@ class TestContractNetCollectionRegressions(unittest.IsolatedAsyncioTestCase):
     def wire(self, body, *, sender="drone@localhost"):
         performative = {
             MessageType.PROPOSAL: PERFORMATIVE_PROPOSE,
-            MessageType.REJECT: PERFORMATIVE_REJECT_PROPOSAL,
+            MessageType.REJECT: PERFORMATIVE_REFUSE,
             MessageType.STATUS: PERFORMATIVE_INFORM,
         }[body.message_type]
         incoming = build_spade_message(

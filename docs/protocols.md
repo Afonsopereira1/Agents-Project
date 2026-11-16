@@ -14,7 +14,7 @@
 | Protocolo | Ordem de mensagens, prazos, recusa e falhas | `verification`, `contract-net` |
 | Lógica de domínio | Corroboração, reputação e decisões | Funções locais em `reasoning/`, sem gestor global |
 
-**Nota:** `ALERT`, `VERIFY_REQUEST` etc. são **tipos de conteúdo do domínio**. `inform`, `request`, `cfp`, `propose`, `accept-proposal`, `reject-proposal` são *performatives* FIPA. Não devem ser confundidos.
+**Nota:** `ALERT`, `VERIFY_REQUEST` etc. são **tipos de conteúdo do domínio**. `inform`, `request`, `cfp`, `propose`, `refuse`, `accept-proposal`, `reject-proposal` são *performatives* FIPA. Não devem ser confundidos.
 
 ## 2. Modelo base para mensagens
 
@@ -163,12 +163,12 @@ A tabela descreve o que o código envia hoje (verificado em 16-11-2026).
 | `VERIFY_REQUEST` | `request` | Iniciador (`sensor-1`) → uma fonte par (`informant_jid`) | `VERIFY_RESPONSE` ou timeout | [sensor.py:179](../src/isia/agents/sensor.py#L179) |
 | `VERIFY_RESPONSE` | `inform` (nunca `refuse`) | Fonte → iniciador | `status`: `observations_available`, `no_data` ou `informative_absence` | [informant.py:119](../src/isia/agents/informant.py#L119) |
 | `CFP` | `cfp` | Iniciador → recursos candidatos | `PROPOSAL` ou `REJECT` | [incident.py:129](../src/isia/agents/incident.py#L129) |
-| `PROPOSAL` | `propose` | Recurso → iniciador | `ACCEPT` ou `REJECT` | [mobile.py:254](../src/isia/agents/mobile.py#L254) |
-| `REJECT` (recusa do CFP) | `reject-proposal` | Recurso → iniciador | Nenhuma | [mobile.py:256](../src/isia/agents/mobile.py#L256) |
+| `PROPOSAL` | `propose` | Recurso → iniciador | `ACCEPT` ou `REJECT` | [mobile.py:255](../src/isia/agents/mobile.py#L255) |
+| `REJECT` (recusa do CFP) | `refuse` | Recurso → iniciador | Nenhuma | [mobile.py:257](../src/isia/agents/mobile.py#L257) |
 | `ACCEPT` | `accept-proposal` | Iniciador → recurso vencedor | `STATUS` | [incident.py:164](../src/isia/agents/incident.py#L164) |
 | `REJECT` (perdedores) | `reject-proposal` | Iniciador → outros proponentes | Nenhuma | [incident.py:169](../src/isia/agents/incident.py#L169) |
-| `STATUS` | `inform` | Recurso vencedor → iniciador | `reserved` ou `reservation_failed` | [mobile.py:361](../src/isia/agents/mobile.py#L361) |
-| `MISSION_RESULT` | `inform` (também com `outcome=failed`; nunca `failure`) | Recurso → iniciador | Nenhuma | [mobile.py:164](../src/isia/agents/mobile.py#L164) |
+| `STATUS` | `inform` | Recurso vencedor → iniciador | `reserved` ou `reservation_failed` | [mobile.py:362](../src/isia/agents/mobile.py#L362) |
+| `MISSION_RESULT` | `inform` (também com `outcome=failed`; nunca `failure`) | Recurso → iniciador | Nenhuma | [mobile.py:165](../src/isia/agents/mobile.py#L165) |
 | `INCIDENT_CLOSED` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:289](../src/isia/agents/incident.py#L289) |
 
 `ALERT` e `INCIDENT_CLOSED` existem em `MessageType` para quando houver vários iniciadores a avisar vizinhos; nenhuma execução atual os envia.
@@ -244,9 +244,8 @@ sequenceDiagram
   participant V as Veículo
   M->>D: cfp / CFP
   M->>V: cfp / CFP
-  D-->>M: propose / PROPOSAL ou reject-proposal / REJECT
-  V-->>M: propose / PROPOSAL ou reject-proposal / REJECT
-  Note over M,V: Recusa do recurso usa reject-proposal, não refuse (ver secção 9)
+  D-->>M: propose / PROPOSAL ou refuse / REJECT
+  V-->>M: propose / PROPOSAL ou refuse / REJECT
   Note over M: Prazo: ignorar propostas tardias e avaliar elegibilidade
   alt Proposta válida aceite
     M->>D: accept-proposal / ACCEPT
@@ -395,7 +394,7 @@ ver [reputação e política](reputation-policy.md).
 | Mensagem duplicada | Deduplicação por `message_id`/`event_id` | Reenviar mensagem idêntica |
 | Mensagem tardia | Conferir `deadline` e estado da conversa | Atrasar uma proposta após o fecho |
 | Dupla atribuição | Reserva atómica por recurso | Duas conversas concorrentes |
-| Recurso sem energia | `reject-proposal` / `REJECT` com motivo | Bateria inferior à reserva mínima |
+| Recurso sem energia | `refuse` / `REJECT` com motivo | Bateria inferior à reserva mínima |
 | Falha de missão | `inform` / `MISSION_RESULT` com `outcome=failed`, libertação/reavaliação | Interromper recurso em movimento |
 | Falha do iniciador | Política de substituição ainda pendente | Simular desaparecimento do iniciador |
 | Mensagem inválida | Validação + rejeição sem crash | JSON malformado ou campos ausentes |
@@ -444,11 +443,12 @@ No Contract Net clássico, `accept-proposal` vale como compromisso. Entre propor
 
 | Desvio | FIPA | Código | Porquê não alterar |
 |---|---|---|---|
-| Recurso recusa o CFP | `refuse` | `reject-proposal` / `REJECT` ([mobile.py:256](../src/isia/agents/mobile.py#L256)) | O iniciador já valida a performativa ([incident.py:146](../src/isia/agents/incident.py#L146)); trocar obriga a mexer em templates e testes, sem ganho de comportamento |
 | Confirmação de reserva | não existe | `inform` / `STATUS` depois do `ACCEPT` | Evita a condição de corrida descrita acima |
 | Falha de missão | `failure` | `inform` / `MISSION_RESULT` com `outcome=failed` | Um único tipo de resultado com `outcome`; o iniciador valida um só caminho |
 | Fonte sem dados | `refuse` ou `failure` | `inform` com `status=no_data` | «Não vi» é informação, não recusa |
 | Conteúdo | FIPA-SL | JSON validado | Compatível com SPADE e testável sem XMPP; não é conformidade FIPA-ACL integral |
+
+**Corrigido a 16-11-2026:** o recurso recusava o CFP com `reject-proposal`, que no FIPA é a performativa do iniciador para as propostas não escolhidas. Passou a enviar `refuse` ([mobile.py:257](../src/isia/agents/mobile.py#L257)), e o iniciador valida-a ([incident.py:146](../src/isia/agents/incident.py#L146)). O tipo de domínio continua `REJECT` nos dois casos.
 
 ## 10. Checklist de aprovação
 

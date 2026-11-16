@@ -126,7 +126,7 @@ class TestContractNetDemoCorrelation(unittest.TestCase):
             message_type=MessageType.REJECT,
             message_id="reject-1",
         )
-        incoming = self.incoming(response, performative="reject-proposal")
+        incoming = self.incoming(response, performative="refuse")
         self.assertTrue(
             response_matches_cfp(
                 incoming,

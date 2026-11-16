@@ -452,7 +452,8 @@ A injeção não se aplica ao XMPP, que não foi executado nesta validação.
 - [x] Fixar parâmetros de cenário e condições iniciais em ficheiros versionados.
 - [x] Executar diferentes sementes quando há aleatoriedade; registar o número de repetições.
 - [x] Comparar políticas simples: sem corroboração, sem reputação e seleção da patrulha mais próxima.
-- [x] Produzir tabelas/gráficos e discutir compromissos entre precisão, rapidez e custo.
+- [x] Produzir tabelas e discutir compromissos entre precisão, rapidez e custo.
+- [ ] Produzir gráficos a partir de `summary.csv` — **opcional**; ver [delivery-todo.md](delivery-todo.md#bloco-d--entregáveis-oficiais).
 - [x] Registar falhas observadas, limitações e incerteza — **sem inventar resultados**.
 
 **Implementação (12-11-2026):** a unidade é a execução (zona 8×8 numa janela
@@ -468,6 +469,8 @@ Resultados e limitações: [experiências](experiments.md).
 Foram feitas 560 execuções no commit `667cba2` (`dirty: false`). Depois das correções
 de validação e proveniência, a suite passou **420 testes, OK**. A nova recolha
 deu as mesmas decisões em todas as execuções.
+
+**Nova recolha (16-11-2026):** no commit `a170c97` (`dirty: false`), depois do PR #18 e da troca para `refuse`, a recolha completa demorou 3 min 33 s e produziu `summary.csv` e `runs.csv` idênticos byte a byte aos publicados; só o `manifest.json` mudou.
 
 **Integração controlada das Etapas 7–9 (12-11-2026):** a branch
 `fix/integrate-stages-7-9` parte de `origin/main` em `ee209c3` e incorpora as

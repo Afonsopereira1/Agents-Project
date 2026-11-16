@@ -19,6 +19,7 @@ from isia.communication.transport import (
     PERFORMATIVE_ACCEPT_PROPOSAL,
     PERFORMATIVE_INFORM,
     PERFORMATIVE_PROPOSE,
+    PERFORMATIVE_REFUSE,
     PERFORMATIVE_REJECT_PROPOSAL,
     build_spade_message,
     parse_spade_message,
@@ -253,7 +254,7 @@ class MobileResourceAgent(Agent):
                 if response.message_type is MessageType.PROPOSAL:
                     performative = PERFORMATIVE_PROPOSE
                 else:
-                    performative = PERFORMATIVE_REJECT_PROPOSAL
+                    performative = PERFORMATIVE_REFUSE
                 reply = build_spade_message(
                     str(incoming.sender),
                     response,

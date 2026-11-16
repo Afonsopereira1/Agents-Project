@@ -3,7 +3,39 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado (12-11-2026):** Etapa 6 integrada na `main` pelos PRs #12 e #13. Esta branch inclui essa base e adapta a reputação e a política da Etapa 7 ao ciclo existente. A integração foi testada com transporte local dos comportamentos SPADE. A aprendizagem automática a partir das missões, as Etapas 8–10 e as aprovações formais continuam pendentes. Ver [reputação e limites](docs/reputation-policy.md).
+> **Estado (16-11-2026):** Etapas 1–9 e 9A implementadas e medidas (transporte local). As caixas das Etapas 0–1, 4–5 e 7 aguardam só a aprovação formal dos parâmetros (Bloco E). Ver [o que falta para a entrega](docs/delivery-todo.md).
+
+## Comandos por ordem
+
+A partir da raiz, com Python 3.12. Nenhum passo precisa de servidor XMPP.
+
+```bash
+# 1. Ambiente
+python3 -m venv .venv && source .venv/bin/activate
+python -m pip install -r requirements.txt
+
+# 2. Testes: 490, OK, cerca de 1 min (16-11-2026)
+PYTHONPATH=src python -m unittest discover -s tests
+
+# 3. MVP: uma ocorrência completa, relatório JSON
+PYTHONPATH=src python -m isia.simulation.runner > /tmp/isia-mvp.json
+
+# 4. Demonstração: repetição do relatório no terminal (só lê o JSON)
+python scripts/replay.py /tmp/isia-mvp.json --delay 0.5
+#    ou ver a gravação versionada, sem Python:
+scriptreplay --log-timing results/demo/replay.tim --log-out results/demo/replay.log
+
+# 5. Cenários A, B e C (560 execuções, alguns minutos; reescreve results/experiments/)
+PYTHONPATH=src python -m isia.evaluation.collector config/scenarios/*.json --output results/experiments
+
+# 6. P3, escalabilidade (grava results/scalability/*.csv)
+PYTHONPATH=src python scripts/scale.py
+PYTHONPATH=src python scripts/dist.py
+```
+
+**Entregar com `.git`.** O coletor do passo 5 grava o commit em `manifest.json` e recusa correr sem repositório Git. Numa cópia sem `.git` (por exemplo, um ZIP do GitHub), os passos 1–4 e 6 funcionam, o passo 5 falha e a suite passa com 4 testes `skipped`, por dependerem do Git. Os resultados publicados em `results/` continuam válidos. Para entregar com o histórico: `git bundle create isia.bundle --all` ou um ZIP do clone com a pasta `.git`.
+
+Apresentação: [roteiro](docs/presentation/roteiro.md). Resultados: [experiências](docs/experiments.md) e [escalabilidade](docs/scalability.md).
 
 ## O projeto
 
@@ -170,7 +202,7 @@ Para repetir os testes locais:
 PYTHONPATH=src python -m unittest discover -s tests -v
 ```
 
-Referência histórica de 11-11-2026: **249 testes, OK**; a implementação do PR #12 acrescentou os testes do MVP e comunicou **358 testes, OK**. Isto é distinto das demonstrações reais XMPP acima; os cenários de falha continuam validados por testes/mocks.
+Referência histórica de 11-11-2026: **249 testes, OK**; a implementação do PR #12 acrescentou os testes do MVP e comunicou **358 testes, OK**. A contagem atual está em [Comandos por ordem](#comandos-por-ordem). Isto é distinto das demonstrações reais XMPP acima; os cenários de falha continuam validados por testes/mocks.
 
 ### Demonstração da comunicação entre agentes
 
