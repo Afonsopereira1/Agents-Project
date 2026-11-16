@@ -17,6 +17,7 @@ O simulador mantém a verdade dos acontecimentos apenas para avaliação; os age
 |---|---|
 | Objetivos e ideias originais do colega | [requirements.md](requirements.md) |
 | **Tarefas e ordem de implementação (Etapas 0–10)** | [docs/development-plan.md](docs/development-plan.md) |
+| O que falta para a entrega (complemento ao plano) | [docs/delivery-todo.md](docs/delivery-todo.md) |
 | Arquitetura, agentes, algoritmos e decisões pendentes | [docs/architecture.md](docs/architecture.md) |
 | Mensagens e protocolos de comunicação | [docs/protocols.md](docs/protocols.md) |
 | Testes, métricas e três cenários | [docs/evaluation.md](docs/evaluation.md) |
