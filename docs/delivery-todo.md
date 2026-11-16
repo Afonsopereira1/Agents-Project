@@ -164,10 +164,10 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 
 **Tarefas concretas:**
 
-- [ ] **Ajuste à Etapa 10: fazer a visualização como repetição do relatório JSON, em `scripts/replay.py`** (obrigatório, ~3 h) — é a opção mais barata que mostra interações e métricas; o plano previa um módulo ao vivo ([development-plan.md:572](development-plan.md#L572)). Ler a `timeline` e não `messages`, que vem vazio em XMPP.
-- [ ] **Ajuste à Etapa 10: fixar o roteiro da apresentação** (obrigatório, ~2 h) — o plano só diz «inserir dados na apresentação» ([development-plan.md:578](development-plan.md#L578)); sem roteiro, as três questões de análise ficam dispersas entre os resultados.
-- [ ] **Ajuste à Etapa 10: pôr no topo do README os comandos por ordem** (obrigatório, ~1 h) — o estado é de 12-11-2026 e as contagens de testes são antigas ([README.md:172](../README.md#L172)).
-- [ ] **Testar a entrega sem a pasta `.git`** (obrigatório, ~0,5 h) — numa cópia sem Git, o coletor recusa correr e sete testes falham.
+- [x] **Ajuste à Etapa 10: fazer a visualização como repetição do relatório JSON, em `scripts/replay.py`** (obrigatório, ~3 h) — é a opção mais barata que mostra interações e métricas; o plano previa um módulo ao vivo ([development-plan.md:572](development-plan.md#L572)). Ler a `timeline` e não `messages`, que vem vazio em XMPP. **Feito:** [scripts/replay.py](../scripts/replay.py) lê só a `timeline` (aceita também `results/experiments/runs/*.json`); gravação em [results/demo/](../results/demo/) (`script`/`scriptreplay`, sem dependências novas).
+- [x] **Ajuste à Etapa 10: fixar o roteiro da apresentação** (obrigatório, ~2 h) — o plano só diz «inserir dados na apresentação» ([development-plan.md:578](development-plan.md#L578)); sem roteiro, as três questões de análise ficam dispersas entre os resultados. **Feito:** [presentation/roteiro.md](presentation/roteiro.md), 12 diapositivos com a fonte de cada número.
+- [x] **Ajuste à Etapa 10: pôr no topo do README os comandos por ordem** (obrigatório, ~1 h) — o estado é de 12-11-2026 e as contagens de testes são antigas ([README.md:172](../README.md#L172)). **Feito:** secção [Comandos por ordem](../README.md#comandos-por-ordem), com estado de 16-11-2026.
+- [x] **Testar a entrega sem a pasta `.git`** (obrigatório, ~0,5 h) — numa cópia sem Git, o coletor recusa correr e sete testes falham. **Feito:** o coletor continua a exigir Git (proveniência); os 4 testes que dependem dele (as 7 falhas contavam subtestes) passam a `skipped` com a razão, e o README manda entregar com `.git` ou `git bundle`. Verificado a 16-11-2026: com `.git`, 489 testes OK; cópia sem `.git`, 489 OK (`skipped=4`).
 - [ ] **Gerar dois gráficos a partir de `summary.csv`** (opcional, ~2 h) — precision, recall e FPR por cenário leem-se melhor em gráfico do que numa tabela de doze linhas.
 
 **Opções de visualização comparadas:**
@@ -230,7 +230,7 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 - [x] Bloco A: P1 respondida na documentação versionada e num diapositivo.
 - [x] Bloco B: P2 respondida com alternativas, prós e contras, e diagrama igual ao código.
 - [x] Bloco C: P3 reproduzível a partir de `scripts/` e Etapa 9A fechada com adiamentos justificados.
-- [ ] Bloco D: repetição gravada, apresentação e README finais.
+- [ ] Bloco D: repetição gravada, apresentação e README finais. Feito: repetição, roteiro, README e teste sem `.git`. Falta: os diapositivos em si e o teste de um colega a seguir só o README.
 - [ ] Bloco E: aprovações registadas e plano coerente.
 
 ---
@@ -277,3 +277,16 @@ Os parâmetros já existem e estão validados em [runner.py:36](../src/isia/simu
 **Resultado esperado:** um mapa de limites («até X % de perda atende Y de 20; a partir de Z s de atraso, deixa de negociar») para a defesa.
 
 **Erros prováveis/diagnóstico:** varrer valores sem repetições e ler ruído como efeito; aumentar o `receive_timeout` para «passar» o teste em vez de reportar o limite; em F2, ter um despachante escondido no runner a escolher qual iniciador trata cada ameaça.
+
+---
+
+## Pendentes deixados pelo Bloco D
+
+O que ficou por fazer ou por verificar depois das quatro tarefas obrigatórias do Bloco D (16-11-2026).
+
+- [ ] **Fazer os diapositivos a partir do [roteiro](presentation/roteiro.md)** (obrigatório, ~3 h) — só existe o roteiro e o conteúdo de P1–P3; o marco do Bloco D não fecha sem a apresentação.
+- [ ] **Um colega segue só o README, numa máquina limpa** (obrigatório, ~0,5 h) — é o teste de aceitação do Bloco D: instalar, testar, correr o MVP, a repetição, os cenários e P3 sem ajuda.
+- [ ] **Gravar vídeo da demonstração** (opcional, ~0,25 h) — a gravação versionada é de terminal (`scriptreplay`); se a apresentação precisar de vídeo, correr o `scriptreplay` com um gravador de ecrã.
+- [ ] **Gerar dois gráficos a partir de `summary.csv`** (opcional, ~2 h) — a mesma tarefa do [Bloco D](#bloco-d--entregáveis-oficiais); só depois do Bloco E.
+- [ ] **Correr `scripts/replay.py` sobre um relatório `--xmpp`** (opcional, ~0,25 h) — o visualizador foi feito para não depender de `messages`, mas só foi testado com o transporte local.
+- [ ] **Ler o mapa e os sensores do relatório em `scripts/replay.py`** (opcional, ~0,5 h) — hoje estão fixos (8×8, sensores em (2,2) e (4,2)), como no runner; só é preciso se o runner os passar a variar.

@@ -166,6 +166,7 @@ class TestCollectorSelectionAndProvenance(unittest.TestCase):
                     ["collector", str(SCENARIO), "--output", output], output,
                 )
 
+    @unittest.skipUnless((ROOT / ".git").exists(), "sem .git: a entrega foi copiada sem o repositório (ver README)")
     def test_cli_from_other_directory_reports_code_repository(self):
         expected_commit = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True,

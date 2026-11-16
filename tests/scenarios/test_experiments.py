@@ -72,6 +72,7 @@ class TestExperiments(unittest.IsolatedAsyncioTestCase):
 
 @unittest.skipUnless(run_mvp, "SPADE não está instalado")
 class TestCollectorOutput(unittest.TestCase):
+    @unittest.skipUnless((ROOT / ".git").exists(), "sem .git: a entrega foi copiada sem o repositório (ver README)")
     def test_failed_collection_leaves_no_stale_results(self):
         with TemporaryDirectory() as output:
             for name in ("runs.csv", "summary.csv", "manifest.json", "runs/A/full/old.json"):
