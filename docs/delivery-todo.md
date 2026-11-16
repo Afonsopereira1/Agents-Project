@@ -8,7 +8,7 @@
 
 - **O que é:** a lista do que falta para entregar o projeto completo.
 - **Relação com o plano:** complementa o [plano de desenvolvimento](development-plan.md), não o substitui. Só inclui trabalho que **não está** no plano ou que lá está mal definido; estas últimas tarefas aparecem como «Ajuste à Etapa X».
-- **Organização:** os Blocos A, B e C respondem às três questões de análise abaixo; o Bloco D cobre os entregáveis do enunciado (demonstração, apresentação, README); o Bloco E fecha as caixas pendentes do plano.
+- **Organização:** os Blocos A, B e C respondem às três questões de análise abaixo; o Bloco D cobre os entregáveis do enunciado (demonstração, apresentação, README); o Bloco E fecha as caixas pendentes do plano. O Bloco F, no fim, reúne testes de stress opcionais.
 - **Porquê agora:** parte da análise destas questões existe apenas em notas locais, fora do Git. A lista indica o que passar para a documentação versionada.
 - **Como usar:** cada elemento escolhe uma tarefa `- [ ]`, executa-a e assinala-a com a evidência. O trabalho opcional só começa depois de fechados os obrigatórios.
 - **Quando termina:** quando a [checklist de marcos](#checklist-de-marcos) estiver completa. Nessa altura o documento passa a registo histórico.
@@ -58,10 +58,10 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 
 **Tarefas concretas:**
 
-- [ ] **Ajuste à Etapa 10: reescrever a secção 3 de `architecture.md` com o conteúdo de P1.2–P1.5** (obrigatório, ~1,5 h) — a secção atual descreve uma proposta que o código não tem (drone que «anuncia disponibilidade», sensor com «lista de vizinhos»). Ver [architecture.md:60](architecture.md#L60).
-- [ ] **Corrigir as linhas e os números da Parte 0** (obrigatório, ~0,5 h) — as ligações a `incident.py`, `runner.py` e `reputation.py` deslocaram-se com o PR #18, e «421 testes em 12 s» passou a 489 em cerca de 58 s.
-- [ ] **Fazer um diapositivo de P1** (obrigatório, ~1 h) — a construção dos agentes deve poder ser explicada em 30 segundos.
-- [ ] **Declarar que `InformantAgent` corre como `sensor-2` visual** (obrigatório, ~0,25 h) — o enunciado pede informadores e nenhum cenário medido tem fonte `human`. Ver [architecture.md:70](architecture.md#L70).
+- [x] **Ajuste à Etapa 10: reescrever a secção 3 de `architecture.md` com o conteúdo de P1.2–P1.5** (obrigatório, ~1,5 h) — a secção atual descreve uma proposta que o código não tem (drone que «anuncia disponibilidade», sensor com «lista de vizinhos»). Ver [architecture.md:60](architecture.md#L60). **Feito:** [secção 3](architecture.md#3-como-os-agentes-são-construídos) com as três camadas, a tabela agente/comportamentos/código, as sete decisões e a autonomia; cada `ficheiro:linha` conferido em `89c08a7`. O título deixou de dizer «proposta».
+- [x] **Corrigir as linhas e os números da Parte 0** (obrigatório, ~0,5 h) — as ligações a `incident.py`, `runner.py` e `reputation.py` deslocaram-se com o PR #18, e «421 testes em 12 s» passou a 489 em cerca de 58 s. **Feito** em `temp/perguntas-defesa.md` (local): 29 ligações conferidas; suite reexecutada a 16-11-2026: 489 testes, OK, 57,9 s.
+- [x] **Fazer um diapositivo de P1** (obrigatório, ~1 h) — a construção dos agentes deve poder ser explicada em 30 segundos. **Feito:** conteúdo em [presentation/p1-agentes.md](presentation/p1-agentes.md), com as três ligações de autonomia; formato final no Bloco D.
+- [x] **Declarar que `InformantAgent` corre como `sensor-2` visual** (obrigatório, ~0,25 h) — o enunciado pede informadores e nenhum cenário medido tem fonte `human`. Ver [architecture.md:70](architecture.md#L70). **Feito:** nota e tabela de instâncias na [secção 3.2](architecture.md#instâncias-usadas-nas-execuções-medidas).
 
 **Evidência disponível:** comportamentos em [sensor.py:129](../src/isia/agents/sensor.py#L129), [informant.py:66](../src/isia/agents/informant.py#L66) e [mobile.py:137](../src/isia/agents/mobile.py#L137), [:195](../src/isia/agents/mobile.py#L195), [:285](../src/isia/agents/mobile.py#L285). Autonomia do recurso em [mobile.py:103](../src/isia/agents/mobile.py#L103) (decide localmente), [mobile.py:115](../src/isia/agents/mobile.py#L115) (energia de ida e volta) e [incident.py:190](../src/isia/agents/incident.py#L190) (pode recusar a reserva depois do `ACCEPT`).
 
@@ -87,10 +87,10 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 
 **Tarefas concretas:**
 
-- [ ] **Ajuste à Etapa 10: copiar as tabelas de alternativas (P2.2, P2.3, P2.5) para os documentos versionados** (obrigatório, ~1,5 h) — «porquê não outras» só tem resposta num ficheiro que o Git ignora. A versão atual tem quatro linhas em [architecture.md:196](architecture.md#L196).
-- [ ] **Corrigir `protocols.md`: `refuse` contra `reject-proposal`, e `ALERT`/`INCIDENT_CLOSED` não enviados** (obrigatório, ~0,5 h) — o diagrama diz `refuse` ([protocols.md:245](protocols.md#L245)), mas o código envia `reject-proposal` ([mobile.py:256](../src/isia/agents/mobile.py#L256)). É um desvio do FIPA fácil de detetar. A tabela de tipos atribui destinatários a mensagens que só ficam no registo local ([protocols.md:160](protocols.md#L160)).
-- [ ] **Reescrever «várias ocorrências em paralelo» como «o desenho permite; não medido»** (obrigatório, ~0,25 h) — é a principal vantagem alegada da abordagem B1 e nenhuma execução tem mais de um iniciador. Ver [evaluation.md:126](evaluation.md#L126).
-- [ ] **Fazer um diapositivo de P2 com dois contras medidos** (obrigatório, ~1 h) — prós e contras com números convencem mais do que a tabela teórica.
+- [x] **Ajuste à Etapa 10: copiar as tabelas de alternativas (P2.2, P2.3, P2.5) para os documentos versionados** (obrigatório, ~1,5 h) — «porquê não outras» só tem resposta num ficheiro que o Git ignora. A versão atual tem quatro linhas em [architecture.md:196](architecture.md#L196). **Feito:** P2.2 e P2.3 em [protocols.md, secção 9](protocols.md#9-porquê-estes-protocolos-alternativas-prós-e-contras); P2.5 em [architecture.md](architecture.md#porquê-b1-e-não-outras-arquiteturas-do-sistema).
+- [x] **Corrigir `protocols.md`: `refuse` contra `reject-proposal`, e `ALERT`/`INCIDENT_CLOSED` não enviados** (obrigatório, ~0,5 h) — o diagrama diz `refuse` ([protocols.md:245](protocols.md#L245)), mas o código envia `reject-proposal` ([mobile.py:256](../src/isia/agents/mobile.py#L256)). É um desvio do FIPA fácil de detetar. A tabela de tipos atribui destinatários a mensagens que só ficam no registo local ([protocols.md:160](protocols.md#L160)). **Feito:** tabela da secção 3 com a performativa enviada e a linha do código; diagramas das secções 4 e 5 sem `refuse`; desvios ao FIPA na secção 9.
+- [x] **Reescrever «várias ocorrências em paralelo» como «o desenho permite; não medido»** (obrigatório, ~0,25 h) — é a principal vantagem alegada da abordagem B1 e nenhuma execução tem mais de um iniciador. Ver [evaluation.md:126](evaluation.md#L126). **Feito** aí e na tabela B1 de `architecture.md`.
+- [x] **Fazer um diapositivo de P2 com dois contras medidos** (obrigatório, ~1 h) — prós e contras com números convencem mais do que a tabela teórica. **Feito:** conteúdo em [presentation/p2-protocolos.md](presentation/p2-protocolos.md) (espera 1,5 → 5,5 s; recall 0,80 → 0,65); formato final no Bloco D.
 
 **Evidência disponível:** em [experiments.md:98](experiments.md#L98), a reputação mudou uma decisão em 560 execuções; no cenário B, a comparação `full`/`no_corroboration` dá FPR de 0,25 contra 0,75 e recall de 0,65 contra 0,80.
 
@@ -116,11 +116,10 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 
 **Tarefas concretas:**
 
-- [ ] **Ajuste à Etapa 9A (tarefa 1): mover os scripts para `scripts/`, gravar CSV e criar `docs/scalability.md`** (obrigatório, ~2 h) — a tarefa do plano não diz para onde nem em que formato. Ver [development-plan.md:545](development-plan.md#L545).
-- [ ] **Ajuste à Etapa 9A: fechar a etapa com uma tabela C1–C8 «medido / proposto / adiado»** (obrigatório, ~0,5 h) — as oito tarefas atuais pedem C6, C7 e fila por gravidade; com esse âmbito a etapa não fecha. A métrica por caçador conta como feita pela função `attended()` do script de distribuição.
-- [ ] **Corrigir três afirmações de P3** (obrigatório, ~0,5 h) — C1 diz que o iniciador conhece a posição base, mas `candidates` só tem `{jid: resource_id}` ([runner.py:165](../src/isia/simulation/runner.py#L165)); o fator «3,4×» varia com a máquina; «menos recursos só prejudica com falhas» é forte demais para 20 repetições.
-- [ ] **Fazer um diapositivo de P3** (obrigatório, ~1 h) — é a questão com mais medições e estas têm de aparecer.
-- [ ] **Implementar C4 mínimo e C1 e medir mensagens em função de N** (opcional, ~5 h) — é a única correção com «antes e depois» visível. Ver [runner.py:80](../src/isia/simulation/runner.py#L80), [:148](../src/isia/simulation/runner.py#L148), [:165](../src/isia/simulation/runner.py#L165) e [incident.py:128](../src/isia/agents/incident.py#L128).
+- [x] **Ajuste à Etapa 9A (tarefa 1): mover os scripts para `scripts/`, gravar CSV e criar `docs/scalability.md`** (obrigatório, ~2 h) — a tarefa do plano não diz para onde nem em que formato. Ver [development-plan.md:545](development-plan.md#L545). **Evidência:** [scripts/](../scripts/), [results/scalability/](../results/scalability/), [scalability.md](scalability.md); corridos num clone limpo a 16-11-2026.
+- [x] **Ajuste à Etapa 9A: fechar a etapa com uma tabela C1–C8 «medido / proposto / adiado»** (obrigatório, ~0,5 h) — as oito tarefas atuais pedem C6, C7 e fila por gravidade; com esse âmbito a etapa não fecha. A métrica por caçador conta como feita pela função `attended()` do script de distribuição. **Evidência:** [scalability.md#estado-de-c1c8](scalability.md#estado-de-c1c8); Etapa 9A assinalada no plano.
+- [x] **Corrigir três afirmações de P3** (obrigatório, ~0,5 h) — C1 diz que o iniciador conhece a posição base, mas `candidates` só tem `{jid: resource_id}` ([runner.py:165](../src/isia/simulation/runner.py#L165)); o fator «3,4×» varia com a máquina; «menos recursos só prejudica com falhas» é forte demais para 20 repetições. **Evidência:** secção «Correções a afirmações anteriores» de [scalability.md](scalability.md), plano e `temp/perguntas-defesa.md`.
+- [x] **Fazer um diapositivo de P3** (obrigatório, ~1 h) — é a questão com mais medições e estas têm de aparecer. **Evidência:** [presentation/p3-escalabilidade.md](presentation/p3-escalabilidade.md) (conteúdo; o formato final dos diapositivos é decidido no Bloco D).
 
 **Estado proposto para C1–C8:**
 
@@ -221,15 +220,60 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 
 - **C5 (pesquisa binária no feed)** — sem efeito mensurável; fica como proposta de duas linhas.
 - **C8, histórico da reputação em JSONL** — parte testes e não resolve nada que tenha sido medido.
-- **C2, C3, C6, C7, processos separados, qualquer sensor a iniciar, fila por gravidade** — mudanças grandes; ficam como limite medido, com proposta.
+- **C2, C3, C6, C7, processos separados, qualquer sensor a iniciar, fila por gravidade** — mudanças grandes; ficam como limite medido, com proposta. Medir duas ocorrências em paralelo é diferente: está como opcional no [Bloco F](#bloco-f--testes-de-stress-opcional).
 - **Trocar `reject-proposal` por `refuse` no código** — mexe em templates e testes; basta documentar.
 - **Interface gráfica ou painel interativo** — 10 h ou mais, e o enunciado aceita demonstração gravada.
 - **Mais repetições, intervalos de confiança, reescrever `message-contract.md`, PyDoc em HTML** — ninguém pediu; basta declarar o limite.
 
 ## Checklist de marcos
 
-- [ ] Bloco A: P1 respondida na documentação versionada e num diapositivo.
-- [ ] Bloco B: P2 respondida com alternativas, prós e contras, e diagrama igual ao código.
-- [ ] Bloco C: P3 reproduzível a partir de `scripts/` e Etapa 9A fechada com adiamentos justificados.
+- [x] Bloco A: P1 respondida na documentação versionada e num diapositivo.
+- [x] Bloco B: P2 respondida com alternativas, prós e contras, e diagrama igual ao código.
+- [x] Bloco C: P3 reproduzível a partir de `scripts/` e Etapa 9A fechada com adiamentos justificados.
 - [ ] Bloco D: repetição gravada, apresentação e README finais.
 - [ ] Bloco E: aprovações registadas e plano coerente.
+
+---
+
+## Bloco F — Testes de stress (opcional)
+
+**Objetivo:** levar o sistema aos limites em várias dimensões e trocar «o desenho permite» por números.
+
+**Pré-requisitos:** Blocos A a E fechados; Bloco C com os scripts em `scripts/`, que servem de modelo.
+
+**Ficheiros envolvidos:** `scripts/stress_*.py` (novos), `results/stress/` (novo), `docs/scalability.md`, `src/isia/simulation/runner.py` (só no grupo F2).
+
+**Regra:** cada teste grava um CSV em `results/stress/` e uma linha em `docs/scalability.md` com o ponto onde o sistema deixa de atender. Sem CSV, o teste não conta como feito.
+
+### F1 — Sem código novo (só parâmetros de `faults` e `scenario`)
+
+Os parâmetros já existem e estão validados em [runner.py:36](../src/isia/simulation/runner.py#L36) e [faults.md](faults.md). Cada teste é um ciclo sobre `run_mvp`.
+
+- [ ] **Curva de perda** (opcional, ~1 h) — `loss` em 0; 0,1; 0,2; 0,3; 0,5, com 20 repetições cada. Medir atendidas, `unresolved` e mensagens perdidas. Hoje só existe o ponto de 10 % (13/20 contra 9/20).
+- [ ] **Curva de latência** (opcional, ~1 h) — `delay` de 0,1 s a 1,0 s em `PROPOSAL` e depois em `STATUS`, à volta do `receive_timeout` de 0,5 s ([runner.py:166](../src/isia/simulation/runner.py#L166)). Medir onde passa a `no_eligible_proposals` ou `confirmation_unknown`. Mostra se o prazo fixo é frágil.
+- [ ] **Recursos a cair em cascata** (opcional, ~0,5 h) — `unavailable_agents` com `drone`, depois `drone`+`vehicle`, depois `ranger`. Medir estados finais e tempo real. Mostra como o sistema degrada com menos recursos, e não só quanto demora.
+- [ ] **Escassez de autonomia** (opcional, ~1 h) — `autonomy_percent` do drone e do veículo de 100 a 10. Medir recusas (`REJECT`), quem ganha e ocorrências sem proposta. Confirma que a decisão local de recusar funciona sob pressão.
+- [ ] **Falhas combinadas** (opcional, ~1 h) — `loss` 0,2 com `duplicate` em `MISSION_RESULT` e `occupied_after_proposal` no drone, tudo na mesma execução. Medir se alguma vez há duas missões no mesmo recurso ou um incidente fechado duas vezes. Hoje cada falha só foi testada sozinha.
+
+### F2 — Com código novo no runner
+
+- [ ] **Duas ocorrências em paralelo** (opcional, ~5 h) — um segundo `IncidentSensorAgent` (hoje só existe um, em [runner.py:132](../src/isia/simulation/runner.py#L132)) e duas ameaças simultâneas em zonas diferentes, a disputar os mesmos recursos. Medir:
+  - duplas reservas: tem de dar zero;
+  - renegociações causadas pelo `STATUS`;
+  - tempo de resolução com duas ocorrências contra uma.
+
+  Mede a principal vantagem alegada da B1 e a condição de corrida que justifica o `STATUS`.
+- [ ] **Rajada de ocorrências** (opcional, ~2 h, depois da anterior) — 2, 4 e 8 ameaças no mesmo instante. Medir quantas são atendidas e quantas ficam `no_eligible_proposals`. Encontra o ponto de saturação dos três recursos.
+- [ ] **Mensagens inválidas em massa** (opcional, ~1,5 h) — enviar ao iniciador e aos recursos uma rajada de JSON malformado, IDs trocados e respostas fora de prazo, a meio de uma negociação. Medir se o resultado da negociação legítima se mantém e se algum agente termina com exceção. A validação já existe; falta prová-la sob carga.
+- [ ] **Execução longa** (opcional, ~1 h) — 1000 execuções seguidas com a mesma reputação. Medir a memória do processo e o tamanho de `book.history`. Dá o número que falta ao C8 (reputação), hoje «não medido».
+- [ ] **Implementar C4 mínimo e C1 e medir mensagens em função de N** (opcional, ~5 h) — é a única correção com «antes e depois» visível. Ver [runner.py:80](../src/isia/simulation/runner.py#L80), [:148](../src/isia/simulation/runner.py#L148), [:165](../src/isia/simulation/runner.py#L165) e [incident.py:128](../src/isia/agents/incident.py#L128).
+
+**Dependências:** F1 depende só do Bloco C. F2 depende de F1 para reutilizar os scripts.
+
+**Testes a realizar:** cada script corre num clone limpo e grava o CSV; repetir uma vez com a mesma semente e conferir que o CSV é igual (a perda depende da ordem do `asyncio`, por isso registar a diferença, se houver).
+
+**Critérios de conclusão:** pelo menos as cinco curvas de F1 em `results/stress/` e resumidas em `docs/scalability.md`; F2 só se houver tempo.
+
+**Resultado esperado:** um mapa de limites («até X % de perda atende Y de 20; a partir de Z s de atraso, deixa de negociar») para a defesa.
+
+**Erros prováveis/diagnóstico:** varrer valores sem repetições e ler ruído como efeito; aumentar o `receive_timeout` para «passar» o teste em vez de reportar o limite; em F2, ter um despachante escondido no runner a escolher qual iniciador trata cada ameaça.

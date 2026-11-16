@@ -1,4 +1,4 @@
-# Comunicação, mensagens e protocolos — proposta
+# Comunicação, mensagens e protocolos
 
 > **Estado revisto (12-11-2026):** Etapa 6 implementada: o sensor iniciador integra corroboração, Contract Net, execução e resultados, incluindo intervenção do guarda. Validada em testes locais dos comportamentos e numa demonstração ligada a XMPP com agentes no mesmo processo; esta última pode usar entrega interna do SPADE. A Etapa 7 acrescenta reputação e adjudicação posterior à execução, sujeita aos critérios de independência e cobertura. As aprovações formais do grupo e a avaliação final permanecem pendentes.
 
@@ -155,37 +155,39 @@ que exista atualmente uma escala de severidade aprovada.
 
 ## 3. Tipos de mensagens e intenção
 
-| Tipo lógico | Performative sugerida | Emissor → destinatário | Resposta esperada |
-|---|---|---|---|
-| `ALERT` | `inform` | Sensor/informador → vizinhos elegíveis | Opcional: verificação |
-| `VERIFY_REQUEST` | `request` | Iniciador local → fontes próximas | `VERIFY_RESPONSE` / `refuse` / timeout |
-| `VERIFY_RESPONSE` | `inform` ou `refuse` | Fonte → iniciador | Evidência/ausência; referência ao pedido |
-| `CFP` | `cfp` | Iniciador → recursos candidatos | `PROPOSAL` / `refuse` |
-| `PROPOSAL` | `propose` | Recurso → iniciador | `ACCEPT` / `REJECT` |
-| `ACCEPT` | `accept-proposal` | Iniciador → recurso | Confirmação de reserva ou falha |
-| `REJECT` | `reject-proposal` | Iniciador → recurso | Nenhuma; libertar eventual reserva provisória |
-| `MISSION_RESULT` | `inform` / `failure` | Patrulha/ranger → iniciador ou pares relevantes | Atualização de estado |
-| `STATUS` | `inform` | Recurso → agentes interessados | Atualização temporizada |
-| `INCIDENT_CLOSED` | `inform` | Agente que encerra → envolvidos | Deduplicação e fecho local |
+A tabela descreve o que o código envia hoje (verificado em 16-11-2026).
 
-Nem todos os esquemas propostos correspondem formalmente a um protocolo FIPA completo. Devemos dizer **«inspirado em FIPA»** salvo quando respeitarmos integralmente as sequências e a semântica documentadas.
+| Tipo lógico | Performative enviada | Emissor → destinatário | Resposta esperada | Código |
+|---|---|---|---|---|
+| `ALERT` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:258](../src/isia/agents/incident.py#L258) |
+| `VERIFY_REQUEST` | `request` | Iniciador (`sensor-1`) → uma fonte par (`informant_jid`) | `VERIFY_RESPONSE` ou timeout | [sensor.py:179](../src/isia/agents/sensor.py#L179) |
+| `VERIFY_RESPONSE` | `inform` (nunca `refuse`) | Fonte → iniciador | `status`: `observations_available`, `no_data` ou `informative_absence` | [informant.py:119](../src/isia/agents/informant.py#L119) |
+| `CFP` | `cfp` | Iniciador → recursos candidatos | `PROPOSAL` ou `REJECT` | [incident.py:129](../src/isia/agents/incident.py#L129) |
+| `PROPOSAL` | `propose` | Recurso → iniciador | `ACCEPT` ou `REJECT` | [mobile.py:254](../src/isia/agents/mobile.py#L254) |
+| `REJECT` (recusa do CFP) | `reject-proposal` | Recurso → iniciador | Nenhuma | [mobile.py:256](../src/isia/agents/mobile.py#L256) |
+| `ACCEPT` | `accept-proposal` | Iniciador → recurso vencedor | `STATUS` | [incident.py:164](../src/isia/agents/incident.py#L164) |
+| `REJECT` (perdedores) | `reject-proposal` | Iniciador → outros proponentes | Nenhuma | [incident.py:169](../src/isia/agents/incident.py#L169) |
+| `STATUS` | `inform` | Recurso vencedor → iniciador | `reserved` ou `reservation_failed` | [mobile.py:361](../src/isia/agents/mobile.py#L361) |
+| `MISSION_RESULT` | `inform` (também com `outcome=failed`; nunca `failure`) | Recurso → iniciador | Nenhuma | [mobile.py:164](../src/isia/agents/mobile.py#L164) |
+| `INCIDENT_CLOSED` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:289](../src/isia/agents/incident.py#L289) |
+
+`ALERT` e `INCIDENT_CLOSED` existem em `MessageType` para quando houver vários iniciadores a avisar vizinhos; nenhuma execução atual os envia.
+
+Nem todos os esquemas correspondem formalmente a um protocolo FIPA completo. Devemos dizer **«inspirado em FIPA»**; os desvios estão na [secção 9](#9-porquê-estes-protocolos-alternativas-prós-e-contras).
 
 ## 4. Verificação distribuída
 
 ```mermaid
 sequenceDiagram
-  participant S1 as Sensor 1 / iniciador local
-  participant S2 as Sensor 2
-  participant I as Informador
+  participant S1 as sensor-1 / iniciador local
+  participant S2 as sensor-2 (InformantAgent)
   S1->>S2: request / VERIFY_REQUEST
-  S1->>I: request / VERIFY_REQUEST
-  alt Evidência existente
-    S2-->>S1: inform / VERIFY_RESPONSE
-  else Não tem dados ou não consegue observar
-    S2-->>S1: inform (ausência) ou refuse
-  end
-  opt Informador responde dentro do prazo
-    I-->>S1: inform / VERIFY_RESPONSE
+  alt Tem observações compatíveis
+    S2-->>S1: inform / VERIFY_RESPONSE (observations_available)
+  else Não tem dados
+    S2-->>S1: inform / VERIFY_RESPONSE (no_data ou informative_absence)
+  else Sem resposta no prazo
+    Note over S1: timeout; nunca conta como ausência informativa
   end
   Note over S1: Validar janela temporal, área e IDs; tratar timeout
   Note over S1: Calcular evidência local sem acesso à verdade
@@ -242,8 +244,9 @@ sequenceDiagram
   participant V as Veículo
   M->>D: cfp / CFP
   M->>V: cfp / CFP
-  D-->>M: propose / PROPOSAL ou refuse
-  V-->>M: propose / PROPOSAL ou refuse
+  D-->>M: propose / PROPOSAL ou reject-proposal / REJECT
+  V-->>M: propose / PROPOSAL ou reject-proposal / REJECT
+  Note over M,V: Recusa do recurso usa reject-proposal, não refuse (ver secção 9)
   Note over M: Prazo: ignorar propostas tardias e avaliar elegibilidade
   alt Proposta válida aceite
     M->>D: accept-proposal / ACCEPT
@@ -392,8 +395,8 @@ ver [reputação e política](reputation-policy.md).
 | Mensagem duplicada | Deduplicação por `message_id`/`event_id` | Reenviar mensagem idêntica |
 | Mensagem tardia | Conferir `deadline` e estado da conversa | Atrasar uma proposta após o fecho |
 | Dupla atribuição | Reserva atómica por recurso | Duas conversas concorrentes |
-| Recurso sem energia | `refuse` com motivo | Bateria inferior à reserva mínima |
-| Falha de missão | `failure`, libertação/reavaliação | Interromper recurso em movimento |
+| Recurso sem energia | `reject-proposal` / `REJECT` com motivo | Bateria inferior à reserva mínima |
+| Falha de missão | `inform` / `MISSION_RESULT` com `outcome=failed`, libertação/reavaliação | Interromper recurso em movimento |
 | Falha do iniciador | Política de substituição ainda pendente | Simular desaparecimento do iniciador |
 | Mensagem inválida | Validação + rejeição sem crash | JSON malformado ou campos ausentes |
 | Conectividade degradada | Perda/atraso no adaptador de transporte | Comparar cenários de rede |
@@ -404,7 +407,50 @@ Na Etapa 3 foram verificados com SPADE 4.1.4: `spade.agent.Agent`, `OneShotBehav
 
 Os contratos atuais estão implementados em `src/isia/communication/messages.py`, o adaptador SPADE/XMPP em `src/isia/communication/transport.py`, a lógica de alocação em `src/isia/reasoning/allocation.py`, e a correlação nos comportamentos dos agentes e no demo. Não existe `communication/protocols.py` separado. `DroneAgent`, `VehicleAgent` e `RangerAgent` reutilizam o ciclo comum de `src/isia/agents/mobile.py`; `IncidentSensorAgent` integra o ciclo do incidente. A injeção parametrizada de perda/latência permanece proposta para etapas posteriores. Os testes de serialização e mocks não substituem testes de entrega real XMPP; na Etapa 5 o cenário normal foi executado com XMPP e os cenários de falha foram testados localmente com mocks/determinismo.
 
-## 9. Checklist de aprovação
+## 9. Porquê estes protocolos: alternativas, prós e contras
+
+Os prós e contras abaixo são **do desenho**, salvo quando indicam uma medição. Os números medidos estão em [experiments.md](experiments.md) e na verificação de 16-11-2026 de [delivery-todo.md](delivery-todo.md#verificação-de-partida-16-11-2026).
+
+### Verificação: porquê FIPA Request
+
+| Opção | Como funciona | Prós | Contras | Escolhida? |
+|---|---|---|---|---|
+| **FIPA Request** | Pede uma vez e recebe uma resposta | Simples; correlação por `in-reply-to`; timeout fácil | Só dá uma «fotografia»: evidência posterior ao pedido não chega | **Sim** |
+| FIPA Query-ref | Pergunta «qual é o valor de X?» | Semanticamente certo para pedir dados | Para este caso, igual ao Request | Não: sem ganho |
+| FIPA Subscribe | O par avisa sempre que observar algo | Recebe evidência que surge depois do pedido | Mais mensagens; é preciso cancelar a subscrição | Não: trabalho futuro (várias janelas) |
+| Difusão a todos os sensores | Todos respondem | Mais evidência | O(n) mensagens e respostas a correlacionar | Não: não escala |
+| Blackboard partilhado | Todos escrevem num quadro comum | Sem troca de mensagens | O quadro é uma entidade central, o que contradiz o tema | Não |
+
+### Atribuição: porquê Contract Net
+
+| Opção | Como funciona | Prós | Contras | Escolhida? |
+|---|---|---|---|---|
+| **Contract Net** (leilão inverso, propostas fechadas, uma ronda) | O iniciador anuncia; os recursos propõem ou recusam; ganha o menor custo | Uma ronda, ~3N mensagens por ronda; cada recurso decide localmente se propõe; protocolo das aulas (ISIA 3); recusas são explícitas | Escolha gulosa por ocorrência; não é *strategy-proof*; espera pelo prazo quando um recurso não responde | **Sim** |
+| Atribuição direta | O iniciador escolhe e ordena | 2 mensagens | O iniciador teria de conhecer o estado de todos; sem autonomia do recurso; é um despachante disfarçado | Não |
+| Primeiro a voluntariar-se | Ganha a primeira proposta que chegar | Rápido | Ganha a rede mais rápida, não o melhor recurso | Não |
+| Leilão inglês | Lances públicos em rondas ascendentes | Revela informação | Várias rondas; lento e com muitas mensagens | Não |
+| Leilão holandês | O «preço» desce até alguém aceitar | Uma aceitação | Precisa de relógio partilhado; escolhe por velocidade de resposta | Não |
+| Vickrey (segundo preço) | Ganha o melhor, «paga» o segundo | Dizer a verdade é estratégia dominante | Sem pagamentos não há incentivo; os agentes são cooperativos | Não |
+| Leilão combinatório / VCG | Atribui vários recursos a várias ocorrências de uma vez | Eficiência global | NP-difícil; exige pagamentos; só existe uma ocorrência por janela | Não: trabalho futuro |
+
+### Porquê o `STATUS` depois do `ACCEPT`
+
+No Contract Net clássico, `accept-proposal` vale como compromisso. Entre propor e ser aceite, o recurso pode ter sido reservado por outra ocorrência; sem `STATUS`, o iniciador acreditaria ter um recurso que não tem. A falha `occupied_after_proposal` ([test_faults.py:69](../tests/integration/test_faults.py#L69)) testa este caso: o recurso responde `reservation_failed` e o iniciador renegoceia uma vez.
+
+- **Pró:** nunca há duas missões no mesmo recurso.
+- **Contra:** mais uma mensagem e mais um ponto onde uma perda deixa a ocorrência `unresolved` (`confirmation_unknown`).
+
+### Desvios ao FIPA assumidos como decisão
+
+| Desvio | FIPA | Código | Porquê não alterar |
+|---|---|---|---|
+| Recurso recusa o CFP | `refuse` | `reject-proposal` / `REJECT` ([mobile.py:256](../src/isia/agents/mobile.py#L256)) | O iniciador já valida a performativa ([incident.py:146](../src/isia/agents/incident.py#L146)); trocar obriga a mexer em templates e testes, sem ganho de comportamento |
+| Confirmação de reserva | não existe | `inform` / `STATUS` depois do `ACCEPT` | Evita a condição de corrida descrita acima |
+| Falha de missão | `failure` | `inform` / `MISSION_RESULT` com `outcome=failed` | Um único tipo de resultado com `outcome`; o iniciador valida um só caminho |
+| Fonte sem dados | `refuse` ou `failure` | `inform` com `status=no_data` | «Não vi» é informação, não recusa |
+| Conteúdo | FIPA-SL | JSON validado | Compatível com SPADE e testável sem XMPP; não é conformidade FIPA-ACL integral |
+
+## 10. Checklist de aprovação
 
 - [ ] Escolher versão final do contrato e unidade do relógio.
 - [ ] Acordar IDs, destinatários, convenção de correlação e prazos.

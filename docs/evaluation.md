@@ -123,7 +123,7 @@ Não inserir métricas fictícias na apresentação. Um gráfico só é resultad
 
 | Fonte/requisito | Método de verificação | Artefacto esperado |
 |---|---|---|
-| Tema C — descentralização | Testar mais de uma ocorrência/iniciador e ausência de despacho global | Diagrama + logs de conversação |
+| Tema C — descentralização | Ausência de despacho global: o runner não escolhe vencedores nem fecha incidentes. Várias ocorrências/iniciadores em paralelo: **o desenho permite; não medido** (todas as execuções têm um só iniciador, `sensor-1`) | Diagrama + logs de conversação |
 | Tema C — deteção | Injetar eventos conhecidos e conferir observações | TP/FP/FN e timeline |
 | Tema C — corroboração | Sensores com evidência diferente | Registo de pedidos e agregação |
 | `requirements` RF3 — reputação | Fontes com históricos distintos | Histórico e decisões justificadas |
