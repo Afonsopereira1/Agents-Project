@@ -26,6 +26,7 @@ from isia.communication.transport import (
     PERFORMATIVE_CFP,
     PERFORMATIVE_INFORM,
     PERFORMATIVE_PROPOSE,
+    PERFORMATIVE_REFUSE,
     PERFORMATIVE_REJECT_PROPOSAL,
     build_spade_message,
     parse_spade_message,
@@ -97,7 +98,7 @@ def response_matches_cfp(
     expected_performative = (
         PERFORMATIVE_PROPOSE
         if response.message_type is MessageType.PROPOSAL
-        else PERFORMATIVE_REJECT_PROPOSAL
+        else PERFORMATIVE_REFUSE
     )
     if not (
         response.mission_id == cfp.mission_id

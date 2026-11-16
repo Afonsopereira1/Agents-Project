@@ -8,7 +8,7 @@
 
 - **O que é:** a lista do que falta para entregar o projeto completo.
 - **Relação com o plano:** complementa o [plano de desenvolvimento](development-plan.md), não o substitui. Só inclui trabalho que **não está** no plano ou que lá está mal definido; estas últimas tarefas aparecem como «Ajuste à Etapa X».
-- **Organização:** os Blocos A, B e C respondem às três questões de análise abaixo; o Bloco D cobre os entregáveis do enunciado (demonstração, apresentação, README); o Bloco E fecha as caixas pendentes do plano. O Bloco F, no fim, reúne testes de stress opcionais.
+- **Organização:** os Blocos A, B e C respondem às três questões de análise abaixo; o Bloco D cobre os entregáveis do enunciado (demonstração, apresentação, README); o Bloco E fecha as caixas pendentes do plano. O Bloco F reúne testes de stress opcionais e o Bloco G, no fim, mede a sensibilidade dos parâmetros.
 - **Porquê agora:** parte da análise destas questões existe apenas em notas locais, fora do Git. A lista indica o que passar para a documentação versionada.
 - **Como usar:** cada elemento escolhe uma tarefa `- [ ]`, executa-a e assinala-a com a evidência. O trabalho opcional só começa depois de fechados os obrigatórios.
 - **Quando termina:** quando a [checklist de marcos](#checklist-de-marcos) estiver completa. Nessa altura o documento passa a registo histórico.
@@ -63,7 +63,7 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 - [x] **Fazer um diapositivo de P1** (obrigatório, ~1 h) — a construção dos agentes deve poder ser explicada em 30 segundos. **Feito:** conteúdo em [presentation/p1-agentes.md](presentation/p1-agentes.md), com as três ligações de autonomia; formato final no Bloco D.
 - [x] **Declarar que `InformantAgent` corre como `sensor-2` visual** (obrigatório, ~0,25 h) — o enunciado pede informadores e nenhum cenário medido tem fonte `human`. Ver [architecture.md:70](architecture.md#L70). **Feito:** nota e tabela de instâncias na [secção 3.2](architecture.md#instâncias-usadas-nas-execuções-medidas).
 
-**Evidência disponível:** comportamentos em [sensor.py:129](../src/isia/agents/sensor.py#L129), [informant.py:66](../src/isia/agents/informant.py#L66) e [mobile.py:137](../src/isia/agents/mobile.py#L137), [:195](../src/isia/agents/mobile.py#L195), [:285](../src/isia/agents/mobile.py#L285). Autonomia do recurso em [mobile.py:103](../src/isia/agents/mobile.py#L103) (decide localmente), [mobile.py:115](../src/isia/agents/mobile.py#L115) (energia de ida e volta) e [incident.py:190](../src/isia/agents/incident.py#L190) (pode recusar a reserva depois do `ACCEPT`).
+**Evidência disponível:** comportamentos em [sensor.py:129](../src/isia/agents/sensor.py#L129), [informant.py:66](../src/isia/agents/informant.py#L66) e [mobile.py:138](../src/isia/agents/mobile.py#L138), [:195](../src/isia/agents/mobile.py#L196), [:285](../src/isia/agents/mobile.py#L286). Autonomia do recurso em [mobile.py:104](../src/isia/agents/mobile.py#L104) (decide localmente), [mobile.py:116](../src/isia/agents/mobile.py#L116) (energia de ida e volta) e [incident.py:190](../src/isia/agents/incident.py#L190) (pode recusar a reserva depois do `ACCEPT`).
 
 **Dependências:** nenhuma. Alimenta o Bloco D.
 
@@ -88,7 +88,7 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 **Tarefas concretas:**
 
 - [x] **Ajuste à Etapa 10: copiar as tabelas de alternativas (P2.2, P2.3, P2.5) para os documentos versionados** (obrigatório, ~1,5 h) — «porquê não outras» só tem resposta num ficheiro que o Git ignora. A versão atual tem quatro linhas em [architecture.md:196](architecture.md#L196). **Feito:** P2.2 e P2.3 em [protocols.md, secção 9](protocols.md#9-porquê-estes-protocolos-alternativas-prós-e-contras); P2.5 em [architecture.md](architecture.md#porquê-b1-e-não-outras-arquiteturas-do-sistema).
-- [x] **Corrigir `protocols.md`: `refuse` contra `reject-proposal`, e `ALERT`/`INCIDENT_CLOSED` não enviados** (obrigatório, ~0,5 h) — o diagrama diz `refuse` ([protocols.md:245](protocols.md#L245)), mas o código envia `reject-proposal` ([mobile.py:256](../src/isia/agents/mobile.py#L256)). É um desvio do FIPA fácil de detetar. A tabela de tipos atribui destinatários a mensagens que só ficam no registo local ([protocols.md:160](protocols.md#L160)). **Feito:** tabela da secção 3 com a performativa enviada e a linha do código; diagramas das secções 4 e 5 sem `refuse`; desvios ao FIPA na secção 9.
+- [x] **Corrigir `protocols.md`: `refuse` contra `reject-proposal`, e `ALERT`/`INCIDENT_CLOSED` não enviados** (obrigatório, ~0,5 h) — o diagrama diz `refuse` ([protocols.md:245](protocols.md#L245)), mas o código envia `reject-proposal` ([mobile.py:257](../src/isia/agents/mobile.py#L257)). É um desvio do FIPA fácil de detetar. A tabela de tipos atribui destinatários a mensagens que só ficam no registo local ([protocols.md:160](protocols.md#L160)). **Feito:** tabela da secção 3 com a performativa enviada e a linha do código; diagramas das secções 4 e 5 sem `refuse`; desvios ao FIPA na secção 9.
 - [x] **Reescrever «várias ocorrências em paralelo» como «o desenho permite; não medido»** (obrigatório, ~0,25 h) — é a principal vantagem alegada da abordagem B1 e nenhuma execução tem mais de um iniciador. Ver [evaluation.md:126](evaluation.md#L126). **Feito** aí e na tabela B1 de `architecture.md`.
 - [x] **Fazer um diapositivo de P2 com dois contras medidos** (obrigatório, ~1 h) — prós e contras com números convencem mais do que a tabela teórica. **Feito:** conteúdo em [presentation/p2-protocolos.md](presentation/p2-protocolos.md) (espera 1,5 → 5,5 s; recall 0,80 → 0,65); formato final no Bloco D.
 
@@ -200,8 +200,8 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 
 **Tarefas concretas:**
 
-- [ ] **Ajuste às Etapas 0, 1 e 7: aprovar parâmetros e contratos numa reunião de 15 minutos** (obrigatório, ~0,25 h) — as caixas das Etapas 0–1, 4–5 e 7 só dependem dessa aprovação. Ver [development-plan.md:49](development-plan.md#L49), [:91](development-plan.md#L91) e [:341](development-plan.md#L341).
-- [ ] **Ajuste à Etapa 9: corrigir a caixa «tabelas/gráficos»** (obrigatório, ~0,1 h) — está assinalada como feita ([development-plan.md:455](development-plan.md#L455)), mas não há gráficos ([:464](development-plan.md#L464)).
+- [ ] **Ajuste às Etapas 0, 1 e 7: aprovar parâmetros e contratos numa reunião de 15 minutos** (obrigatório, ~0,25 h) — as caixas das Etapas 0–1, 4–5 e 7 só dependem dessa aprovação. Ver [development-plan.md:49](development-plan.md#L49), [:91](development-plan.md#L91) e [:341](development-plan.md#L341). **Preparado:** ata com os valores atuais em [approvals.md](approvals.md); falta a reunião e o preenchimento.
+- [x] **Ajuste à Etapa 9: corrigir a caixa «tabelas/gráficos»** (obrigatório, ~0,1 h) — está assinalada como feita ([development-plan.md:455](development-plan.md#L455)), mas não há gráficos ([:464](development-plan.md#L464)). **Feito:** dividida em «tabelas» (feita) e «gráficos» (opcional, por fazer).
 - [ ] **Repetir a recolha das 560 execuções na `main`** (opcional, ~0,5 h) — o `manifest.json` cita o commit `667cba2`, anterior ao PR #18.
 
 **Dependências:** nenhuma.
@@ -221,7 +221,7 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 - **C5 (pesquisa binária no feed)** — sem efeito mensurável; fica como proposta de duas linhas.
 - **C8, histórico da reputação em JSONL** — parte testes e não resolve nada que tenha sido medido.
 - **C2, C3, C6, C7, processos separados, qualquer sensor a iniciar, fila por gravidade** — mudanças grandes; ficam como limite medido, com proposta. Medir duas ocorrências em paralelo é diferente: está como opcional no [Bloco F](#bloco-f--testes-de-stress-opcional).
-- **Trocar `reject-proposal` por `refuse` no código** — mexe em templates e testes; basta documentar.
+- ~~**Trocar `reject-proposal` por `refuse` no código**~~ — feito a 16-11-2026, a pedido da equipa: o desvio seria fácil de apontar na defesa.
 - **Interface gráfica ou painel interativo** — 10 h ou mais, e o enunciado aceita demonstração gravada.
 - **Mais repetições, intervalos de confiança, reescrever `message-contract.md`, PyDoc em HTML** — ninguém pediu; basta declarar o limite.
 
@@ -290,3 +290,52 @@ O que ficou por fazer ou por verificar depois das quatro tarefas obrigatórias d
 - [ ] **Gerar dois gráficos a partir de `summary.csv`** (opcional, ~2 h) — a mesma tarefa do [Bloco D](#bloco-d--entregáveis-oficiais); só depois do Bloco E.
 - [ ] **Correr `scripts/replay.py` sobre um relatório `--xmpp`** (opcional, ~0,25 h) — o visualizador foi feito para não depender de `messages`, mas só foi testado com o transporte local.
 - [ ] **Ler o mapa e os sensores do relatório em `scripts/replay.py`** (opcional, ~0,5 h) — hoje estão fixos (8×8, sensores em (2,2) e (4,2)), como no runner; só é preciso se o runner os passar a variar.
+
+---
+
+## Bloco G — Sensibilidade dos parâmetros (no final)
+
+**Objetivo:** explicar o impacto de cada configuração na solução do problema, medindo dois valores alternativos por parâmetro contra o valor atual. Serve também para decidir os itens ainda abertos da [ata](approvals.md).
+
+**Pré-requisitos:** Blocos A a E fechados; `run_scenario` do coletor e `scripts/scale.py` como modelo.
+
+**Ficheiros envolvidos:** `scripts/sensitivity.py` (novo), `results/sensitivity/summary.csv` (novo), `docs/sensitivity.md` (novo), `src/isia/simulation/runner.py` (só para 4.1 e 5.1), `docs/presentation/roteiro.md`.
+
+**Regra:** variar um parâmetro de cada vez, com tudo o resto igual ao atual; cenários A, B e C, variante `full`, as mesmas sementes da Etapa 9 (20 repetições por episódio). Cada linha do CSV tem `parametro`, `valor`, `cenario` e as métricas de `summary.csv`. As expectativas abaixo são **hipóteses a confirmar**, não resultados.
+
+**Tarefas concretas:**
+
+- [ ] **Escrever `scripts/sensitivity.py`** (obrigatório para o bloco, ~2 h) — um ciclo sobre `(parametro, valor)` que copia o cenário, altera o valor e chama `run_scenario(config, "full")`. Inclui um self-check de que o valor atual reproduz a linha `full` de `results/experiments/summary.csv`.
+- [ ] **Expor 4.1 e 5.1 ao cenário** (obrigatório para o bloco, ~1 h) — hoje estão fixos no runner: `set_corroboration_context(..., 3.0, 2.0, 1)` e `receive_timeout=0.5`. Passar a lê-los do cenário, mantendo os valores atuais como omissão.
+- [ ] **Medir os nove parâmetros e calibrar os scores (7.6)** (obrigatório para o bloco, ~1,5 h de execução) — 26 configurações (algumas linhas da tabela têm dois subparâmetros) × 3 cenários, cerca de 3500 execuções; a calibração usa os relatórios da Etapa 9 (`results/experiments/runs/`, não versionados: regenerar com o coletor se faltarem).
+- [ ] **Escrever `docs/sensitivity.md`** (obrigatório para o bloco, ~2 h) — uma secção por parâmetro: o que controla no problema, a tabela dos três valores e uma frase sobre o compromisso medido.
+- [ ] **Um diapositivo de sensibilidade no roteiro** (obrigatório para o bloco, ~1 h) — os dois parâmetros com maior efeito, em gráfico ou tabela.
+
+**Valores a comparar:**
+
+| Ref. | Parâmetro | Atual | Alternativas | O que mostra no problema | Medir |
+|---|---|---|---|---|---|
+| 4.1 | Distância de compatibilidade | 3,0 células | 1,0 · 5,0 | Quão perto duas observações têm de estar para serem a mesma ameaça | Recall e FPR em B (erro de posição ±1) |
+| 4.1 | Janela temporal | 2,0 s | 0,5 · 5,0 s | Quão simultâneas têm de ser | Recall em A; `expired` por falta de corroboração |
+| 4.3 | Qualidade das fontes | as de A | ideal (FP = FN = 0) · ruidosa (FP = FN = 0,3) | Quanto do resultado se deve ao sensor e não aos agentes | Precision, recall e FPR em A |
+| 5.1 | Prazo de espera | 0,5 s | 0,1 · 2,0 s | Rapidez contra tolerância a atrasos | Tempo real; `no_eligible_proposals` e `confirmation_unknown` em C |
+| 5.2 | Pesos do custo (ETA, energia, carga) | 1, 1, 1 | 0, 1, 0 (só energia) · 1, 1, 5 (carga pesada) | Que recurso é escolhido e o que custa | Patrulha escolhida, t de verificação, energia gasta (o «só ETA» já é `nearest`) |
+| 5.2 | Autonomia mínima | 10 % | 5 · 30 % | Margem de segurança contra recursos disponíveis | Recusas `autonomy_insufficient`; ocorrências sem proposta em C |
+| 7.1 | Prior da reputação α = β | 2,0 | 0,5 · 10,0 | Velocidade de aprendizagem | Decisões alteradas pela reputação (hoje 1 em 560); score final do `sensor-1` |
+| 7.2 | Limiar de patrulha | 0,25 | 0,15 · 0,35 | Prudência contra alarmes falsos | Precision, recall, FPR em B (curva de compromisso) |
+| 7.2 | Limiar do guarda | 0,65 | 0,5 · 0,8 | Quando se chama o recurso mais caro | Missões do guarda; t de resposta |
+| 7.3 | Diversidade para o guarda (grupos e modalidades) | 2 e 2 | 1 e 1 · 3 e 3 | Exigir fontes independentes | Missões do guarda; com 3 e 3 o guarda nunca é chamado pela política (só há 2 fontes) |
+| 7.4 | Gravidade por omissão | 0,5 | 0,2 · 0,9 | Com 0,9 entra o caminho «grave» (limiar de patrulha 0,08) | Recall e FPR em B |
+| 7.5 | Adjudicação: distância | 1 célula | 0 · 2 | Que resultados de missão contam para aprender | Atualizações de reputação; em B, aprender com a célula errada |
+| 7.5 | Adjudicação: atraso | 30 s | 5 · 120 s | Até quando um resultado ainda é da observação | Atualizações de reputação em C (resultados atrasados) |
+| 7.6 | Score como probabilidade | não calibrado | — (análise, não variação) | Se um score de 0,65 se comporta como «65 % de ameaças reais»; justifica nunca o chamar probabilidade | Tabela de calibração: agrupar as execuções por score (0–0,25, 0,25–0,5, 0,5–0,75, 0,75–1) e contar a fração de ameaças reais em cada grupo, em A, B e C |
+
+**Dependências:** Blocos A a E. Os resultados decidem os itens abertos da [ata](approvals.md).
+
+**Testes a realizar:** o self-check do valor atual; repetir uma configuração e conferir que o CSV é igual (registar a diferença, se a perda em C a provocar).
+
+**Critérios de conclusão:** `results/sensitivity/summary.csv` com as 26 configurações e a tabela de calibração do 7.6; `docs/sensitivity.md` com uma frase de impacto medido por parâmetro; diapositivo no roteiro.
+
+**Resultado esperado:** para cada parâmetro, uma frase como «subir o limiar de patrulha de 0,25 para 0,35 baixa o FPR em B de X para Y e o recall de Z para W».
+
+**Erros prováveis/diagnóstico:** mudar dois parâmetros de cada vez; ler diferenças de 1–2 execuções como efeito (20 repetições, sem intervalos de confiança); esquecer que a reputação em `full` aprende pela ordem das execuções; ajustar valores até «ficar bom» e apresentá-los como calibrados.

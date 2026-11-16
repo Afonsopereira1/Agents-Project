@@ -144,7 +144,7 @@ class IncidentSensorAgent(SensorAgent):
                         and body.payload.get("cfp_message_id") == cfp.message_id
                         and incoming.get_metadata("in-reply-to") == cfp.message_id
                         and incoming.get_metadata("performative") == (
-                            "propose" if body.message_type is MessageType.PROPOSAL else "reject-proposal")
+                            "propose" if body.message_type is MessageType.PROPOSAL else "refuse")
                         and cfp.created_at <= body.created_at <= cfp.payload["deadline"]):
                     continue
                 if body.message_type is MessageType.PROPOSAL:

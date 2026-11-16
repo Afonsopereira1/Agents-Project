@@ -452,7 +452,8 @@ A injeção não se aplica ao XMPP, que não foi executado nesta validação.
 - [x] Fixar parâmetros de cenário e condições iniciais em ficheiros versionados.
 - [x] Executar diferentes sementes quando há aleatoriedade; registar o número de repetições.
 - [x] Comparar políticas simples: sem corroboração, sem reputação e seleção da patrulha mais próxima.
-- [x] Produzir tabelas/gráficos e discutir compromissos entre precisão, rapidez e custo.
+- [x] Produzir tabelas e discutir compromissos entre precisão, rapidez e custo.
+- [ ] Produzir gráficos a partir de `summary.csv` — **opcional**; ver [delivery-todo.md](delivery-todo.md#bloco-d--entregáveis-oficiais).
 - [x] Registar falhas observadas, limitações e incerteza — **sem inventar resultados**.
 
 **Implementação (12-11-2026):** a unidade é a execução (zona 8×8 numa janela

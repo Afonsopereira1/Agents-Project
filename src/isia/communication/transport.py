@@ -18,7 +18,8 @@ PERFORMATIVE_REQUEST = "request"
 PERFORMATIVE_INFORM = "inform"
 PERFORMATIVE_CFP = "cfp"
 PERFORMATIVE_PROPOSE = "propose"
-PERFORMATIVE_REJECT_PROPOSAL = "reject-proposal"
+PERFORMATIVE_REJECT_PROPOSAL = "reject-proposal"  # iniciador → propostas não escolhidas
+PERFORMATIVE_REFUSE = "refuse"  # recurso → iniciador: recusa do CFP (FIPA Contract Net)
 PERFORMATIVE_ACCEPT_PROPOSAL = "accept-proposal"
 CONTRACT_NET_PROTOCOL = "contract-net"
 

@@ -67,6 +67,7 @@ class TestMobileProposalLifecycle(unittest.IsolatedAsyncioTestCase):
         behaviour.receive = AsyncMock(return_value=incoming)
         behaviour.send = AsyncMock()
         await behaviour.run()
+        self.sent = [call.args[0] for call in behaviour.send.await_args_list]
         return [
             parse_spade_message(call.args[0], expected_protocol=CONTRACT_NET_PROTOCOL)
             for call in behaviour.send.await_args_list
@@ -77,6 +78,17 @@ class TestMobileProposalLifecycle(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(responses), 1)
         self.assertEqual(responses[0].message_type.value, "PROPOSAL")
         return responses[0]
+
+    async def test_refused_cfp_uses_fipa_refuse_performative(self):
+        mission = Mission("mission-2", "incident-1", "respond_incident", Position(6, 9),
+                          "incident_response", 2)
+        cfp = build_cfp_message(mission, 20.0, 25.0, message_id="cfp-2",
+                                conversation_id="conversation-2")
+        responses = await self.dispatch(cfp)
+        self.assertEqual(responses[0].message_type.value, "REJECT")
+        self.assertEqual(self.sent[0].get_metadata("performative"), "refuse")
+        await self.propose()
+        self.assertEqual(self.sent[0].get_metadata("performative"), "propose")
 
     async def test_reject_invalidates_proposal_and_late_accept_cannot_reserve(self):
         proposal = await self.propose()

@@ -14,7 +14,7 @@ A partir da raiz, com Python 3.12. Nenhum passo precisa de servidor XMPP.
 python3 -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
 
-# 2. Testes: 489, OK, cerca de 1 min (16-11-2026)
+# 2. Testes: 490, OK, cerca de 1 min (16-11-2026)
 PYTHONPATH=src python -m unittest discover -s tests
 
 # 3. MVP: uma ocorrência completa, relatório JSON
