@@ -1,4 +1,4 @@
-# Arquitetura do sistema multiagente — proposta
+# Arquitetura do sistema multiagente
 
 > **Estado revisto (12-11-2026):** arquitetura ainda sujeita a revisão formal pelos três elementos. As Etapas 1–6 estão integradas na `main`, incluindo o MVP e as correções dos PRs #12 e #13. A Etapa 7 acrescenta reputação e política ao `SensorAgent`; o `IncidentSensorAgent` continua a negociar e executar o ciclo existente com os recursos móveis. Após a execução, o avaliador já pode atualizar reputações a partir de resultados de missão independentes com cobertura espacial e temporal suficiente; um resultado operacional, por si só, não fundamenta aprendizagem. A robustez avançada e a avaliação final permanecem pendentes. Ver [implementação e limites da Etapa 7](reputation-policy.md).
 
@@ -57,52 +57,138 @@ flowchart TB
 
 **Os retângulos “Verificação” e “Iniciador” representam funções e papéis temporários distribuídos**, não serviços centrais obrigatórios. Na implementação, a lógica de corroboração e decisão pertence a instâncias de agentes; os módulos Python reutilizáveis servem apenas para executar algoritmos locais.
 
-## 3. Tipos de agentes
+## 3. Como os agentes são construídos
 
-### `SensorAgent`
+> **Estado (16-11-2026, `main` em `89c08a7`):** esta secção descreve o código implementado. As ligações `ficheiro:linha` foram conferidas nesse commit.
 
-- **Perceção:** sinais acústicos ou visuais simulados, sujeitos a alcance, erros e falhas.
-- **Estado local:** `sensor_id`, posição, modalidade, lista de vizinhos, última leitura, histórico limitado de observações e identificadores vistos.
-- **Comportamentos:** obter leitura, gerar `Observation`, enviar `inform`/alerta, responder a `request` de verificação, atualizar conhecimento local.
-- **Decisões:** se a leitura justifica alerta; que fontes consultar; quando a evidência é insuficiente ou está desatualizada.
-- **Limitação:** não possui acesso ao evento verdadeiro; não deve confirmar automaticamente um incidente só por existir uma leitura.
+**Resumo em 30 segundos.** Cada agente é uma subclasse de `spade.agent.Agent`. No `setup()` regista **comportamentos** SPADE, e cada um tem um **template** que filtra as mensagens pelos metadados FIPA (performativa, ontologia, protocolo). Os comportamentos tratam da comunicação e do tempo. As **decisões** (avaliar evidência, decidir a resposta, propor, escolher a proposta, atualizar a reputação) estão em **funções puras** em `src/isia/reasoning/`, testáveis sem servidor XMPP. Drone, veículo e guarda são **a mesma classe** com capacidades diferentes.
 
-### `InformantAgent`
+### 3.1 As três camadas
 
-- **Perceção:** avistamentos simulados de cidadãos/colaboradores da reserva; frequência e qualidade variáveis.
-- **Estado:** posição/zona, identificador, observações próprias e informação temporal.
-- **Comportamentos:** reportar observações e responder a pedidos quando possuir informação relevante.
-- **Decisões:** quando reportar; eventualmente se tem evidência adicional.
-- **Limitação:** uma afirmação não é prova; a reputação será mantida por quem avalia a fonte.
+```mermaid
+flowchart TB
+    subgraph SPADE["1 - Camada SPADE: comunicação e tempo"]
+        AG[Agent.setup] --> BH[Behaviours + Templates]
+        BH -->|send / receive| XMPP[(XMPP ou filas locais)]
+    end
+    subgraph RAC["2 - Camada de raciocínio: funções puras"]
+        R1[corroboration.py<br/>score da evidência]
+        R2[policy.py<br/>observar / verificar / rangers]
+        R3[allocation.py<br/>evaluate_cfp, select_best_proposal, reserva]
+        R4[reputation.py<br/>média Beta]
+    end
+    subgraph DOM["3 - Domínio: dados imutáveis e validados"]
+        D1[Observation, Mission, Bid,<br/>ResourceState, IncidentState]
+        D2[Message JSON]
+    end
+    BH --> RAC --> DOM
+```
 
-### `DroneAgent`
+### 3.2 Os agentes e os seus comportamentos
 
-- **Estado:** posição, bateria, velocidade, autonomia mínima para missão e regresso, disponibilidade, missão atual, informação local sobre incidentes.
-- **Comportamentos:** anunciar disponibilidade, receber CFP, calcular proposta, reservar missão, deslocar-se, verificar e reportar resultado.
-- **Decisões:** aceitar ou recusar propostas em função de bateria, capacidade e compromissos prévios.
-- **Estados:** `AVAILABLE`, `RESERVED`, `MOVING`, `VERIFYING`, `RETURNING`, `UNAVAILABLE`.
-- **Limitação:** velocidade, alcance e resultados são **parâmetros simulados**, não características de um drone real.
+```mermaid
+classDiagram
+    class Agent {
+      <<SPADE>>
+      setup()
+    }
+    class SensorAgent {
+      OneShot VerificationBehaviour
+    }
+    class IncidentSensorAgent {
+      OneShot IncidentBehaviour
+    }
+    class InformantAgent {
+      Cyclic VerificationBehaviour
+    }
+    class MobileResourceAgent {
+      Cyclic ContractNetBehaviour
+      Cyclic AcceptBehaviour
+      Cyclic ExecutionBehaviour
+      capabilities
+      reservation
+    }
+    Agent <|-- SensorAgent
+    SensorAgent <|-- IncidentSensorAgent
+    Agent <|-- InformantAgent
+    Agent <|-- MobileResourceAgent
+    MobileResourceAgent <|-- DroneAgent
+    MobileResourceAgent <|-- VehicleAgent
+    MobileResourceAgent <|-- RangerAgent
+```
 
-### `VehicleAgent`
+| Agente | Comportamentos | O que faz | Código |
+|---|---|---|---|
+| `SensorAgent` | `VerificationBehaviour` (OneShot) | Lê o feed local, envia `VERIFY_REQUEST`, espera até 10 s, avalia a evidência e decide | [sensor.py:129](../src/isia/agents/sensor.py#L129) |
+| `IncidentSensorAgent` | `IncidentBehaviour` (OneShot; estende o anterior) | Depois da decisão, cria a missão, conduz o Contract Net, espera o resultado e fecha a ocorrência | [incident.py:62](../src/isia/agents/incident.py#L62), `run()` em [:248](../src/isia/agents/incident.py#L248) |
+| `InformantAgent` | `VerificationBehaviour` (Cyclic) | Responde a pedidos de verificação só com as observações do seu feed | [informant.py:66](../src/isia/agents/informant.py#L66) |
+| `MobileResourceAgent` | `ContractNetBehaviour`, `AcceptBehaviour`, `ExecutionBehaviour` (todos Cyclic) | Responde a CFP; trata ACCEPT/REJECT e reserva-se; avança a missão e envia o resultado | [mobile.py:195](../src/isia/agents/mobile.py#L195), [:285](../src/isia/agents/mobile.py#L285), [:137](../src/isia/agents/mobile.py#L137); `setup()` em [:385](../src/isia/agents/mobile.py#L385) |
+| `DroneAgent`, `VehicleAgent`, `RangerAgent` | herdados | Classes **vazias**: só mudam a capacidade, a posição e a energia, definidas pelo cenário | [drone.py](../src/isia/agents/drone.py), [vehicle.py](../src/isia/agents/vehicle.py), [ranger.py](../src/isia/agents/ranger.py) |
 
-- **Estado:** posição, combustível, velocidade, capacidade de deslocação, disponibilidade e missão em curso.
-- **Comportamentos:** análogos aos do drone, mas com parâmetros/limitações próprios.
-- **Decisões:** disponibilidade, percurso admissível e custo de uma missão.
-- **Limitação:** se for usada grelha sem rede viária, registar essa simplificação no relatório.
+O `ExecutionBehaviour` só é registado quando o recurso recebe `configure_execution()`, o que acontece sempre em `run_mvp`. Sem ele, o recurso negoceia e reserva, mas não se desloca.
 
-### `RangerAgent`
+#### Instâncias usadas nas execuções medidas
 
-- **Estado:** posição da equipa, disponibilidade, prioridade da missão, capacidade de resposta e compromissos.
-- **Comportamentos:** responder a pedidos de assistência, negociar participação, deslocar-se/intervir na simulação, comunicar resultado.
-- **Decisões:** aceitar intervenção se for operacionalmente admissível e prioritária.
-- **Limitação:** não simular ações perigosas reais, apenas estados/resultados abstratos de resposta.
+| JID | Classe | Fonte / capacidade |
+|---|---|---|
+| `sensor-mvp` | `IncidentSensorAgent` | `sensor-1`, acústica; inicia a ocorrência |
+| `sensor-peer-mvp` | `InformantAgent` | `sensor-2`: visual nos cenários A, B e C; acústica no MVP sem cenário |
+| `drone-mvp`, `vehicle-mvp` | `DroneAgent`, `VehicleAgent` | `mobile_verification` |
+| `ranger-mvp` | `RangerAgent` | `incident_response` |
 
-### Infraestrutura que não deve ser confundida com agentes decisores
+Criação em [runner.py:130-166](../src/isia/simulation/runner.py#L130-L166); fontes por cenário em [config/scenarios/](../config/scenarios/).
 
-- `World`/ambiente: produz condições e atualiza a verdade de referência.
-- `ScenarioRunner`: configura e inicia uma execução para fins experimentais, **não distribui missões**.
-- `MetricsCollector`: regista resultados, sem determinar a escolha de patrulhas.
-- `Visualizer`: representa o estado e as interações; não interfere na lógica de decisão.
+> **Informador = `sensor-2` visual.** O enunciado pede informadores (fontes humanas). No código, o `InformantAgent` é o papel de **quem responde a pedidos de verificação**, e nas execuções medidas esse papel é desempenhado pelo `sensor-2`, uma câmara (fonte `visual`), ligado em [runner.py:146](../src/isia/simulation/runner.py#L146). O tipo de fonte `human` existe no simulador ([scenario.py:16-19](../src/isia/simulation/scenario.py#L16-L19)), mas **nenhum dos cenários A, B ou C tem uma fonte `human`**. Não há, por isso, resultados medidos sobre informadores humanos.
+
+### 3.3 Porquê assim: sete decisões, com alternativas
+
+**Decisão 1 — Separar a comunicação (SPADE) das decisões (funções puras).**
+- **Porquê:** a mesma lógica corre igual com XMPP real ou com filas locais. Cada regra testa-se isoladamente: **489 testes, cerca de 58 s, sem servidor XMPP** (verificação de 16-11-2026). As falhas (perda, atraso, duplicação) são injetadas só no transporte local, sem tocar nos agentes.
+- **Alternativa:** pôr a lógica dentro do `run()` dos comportamentos, como nos exemplos do SPADE.
+- ✅ Testável, reutilizável e explicável: cada decisão regista fatores e razões no histórico.
+- ❌ Mais ficheiros e mais «cola» entre camadas (validações repetidas na fronteira).
+
+**Decisão 2 — Uma única classe `MobileResourceAgent` para drone, veículo e guarda.**
+- **Porquê:** em GAIA, o **papel** (executor de verificação, interventor) é diferente do **agente**. O que distingue os recursos é a **capacidade** (`mobile_verification` ou `incident_response`), não o código. Um novo tipo de recurso passa a ser configuração.
+- **Alternativa:** três classes com lógica própria.
+- ✅ Sem código duplicado; uma correção serve para todos.
+- ❌ Não modela diferenças reais: o drone voa por cima de obstáculos, o veículo precisa de estrada. Todos se movem da mesma forma, primeiro em x e depois em y, uma célula por segundo simulado ([movement.py](../src/isia/simulation/movement.py)).
+
+**Decisão 3 — O sensor é OneShot; o informador e os recursos são Cyclic.**
+- **Porquê:** o sensor conduz **uma** ocorrência, com princípio e fim. O informador e os recursos são **prestadores de serviço**, sempre à espera de pedidos.
+- **Alternativa A:** `FSMBehaviour` do SPADE, com cada estado da ocorrência como estado da máquina. ✅ A máquina ficaria visível no SPADE. ❌ Presa ao SPADE e difícil de testar; a máquina de estados está em [incident_state.py](../src/isia/domain/incident_state.py), com tabela de transições testada sem SPADE.
+- **Alternativa B:** um sensor Cyclic que trate várias ocorrências. ✅ Permitiria escalar para vários caçadores. ❌ Exige agrupar observações em ocorrências e gerir várias conversas em simultâneo; ficou fora do MVP (ver escalabilidade, limite C7).
+
+**Decisão 4 — O recurso tem três comportamentos em paralelo.**
+- **Porquê:** enquanto executa uma missão, o recurso **continua a responder** a CFP com `REJECT` (`resource_unavailable`), e o movimento avança ao ritmo do relógio simulado. Num só comportamento, uma missão longa bloquearia a negociação.
+- ❌ O estado (a reserva) é partilhado entre os três. A `LocalResourceReservation` garante no máximo uma missão de cada vez ([allocation.py:257](../src/isia/reasoning/allocation.py#L257)).
+
+**Decisão 5 — Arquitetura interna híbrida (reativa + objetivos/utilidade), não BDI completo.**
+- **Porquê:** os sensores só precisam de estímulo-resposta. Os recursos precisam de estado (energia, posição, reserva) e de uma função de **utilidade** (o custo da proposta). Um interpretador BDI (AgentSpeak, `spade_bdi`) seria pesado para regras tão simples.
+- ✅ Determinística, explicável e fácil de testar.
+- ❌ Sem planeamento nem reconsideração rica: um drone não abandona uma verificação para ir a uma ocorrência mais grave.
+- **Correspondência com BDI:** crença = `ResourceState` e observações; desejo = missão possível (o CFP); intenção = reserva aceite; reconsideração = falha por energia ou interrupção, seguida do regresso.
+
+**Decisão 6 — Dados do domínio imutáveis (`frozen dataclass`) e validados na fronteira.**
+- **Porquê:** as mensagens vêm da rede e não são de confiança. Cada `Message`, `Bid` e `Observation` é validado ao ser criado; uma mensagem inválida é rejeitada e registada. A imutabilidade impede que um comportamento altere o estado de outro sem querer.
+- ❌ Mais código de validação; é o maior volume do projeto ([allocation.py](../src/isia/reasoning/allocation.py) tem 810 linhas, [corroboration.py](../src/isia/reasoning/corroboration.py) tem 876).
+
+**Decisão 7 — Os agentes nunca veem o `ground_truth`.**
+- **Porquê:** se o vissem, não haveria problema de agentes. A verdade serve só ao **avaliador**, que mede TP, FP, TN e FN e atualiza a reputação **depois** da execução ([runner.py:269-275](../src/isia/simulation/runner.py#L269-L275)). O sensor recebe apenas uma cópia dos pesos (`snapshot`) no início.
+
+### 3.4 Onde está a autonomia
+
+1. **O recurso decide localmente se propõe.** `evaluate_request` ([mobile.py:103](../src/isia/agents/mobile.py#L103)) chama `evaluate_cfp` ([allocation.py:498](../src/isia/reasoning/allocation.py#L498)) com o estado do **próprio** recurso. Recusa por estar ocupado, por falta de capacidade ou por energia insuficiente.
+2. **A energia conta a ida e a volta.** O custo é `2 × células × energia_por_célula` ([mobile.py:115](../src/isia/agents/mobile.py#L115)); o recurso recusa se ficar abaixo da autonomia mínima.
+3. **O recurso pode recusar a reserva depois do `ACCEPT`.** Se o `STATUS` não for `reserved`, o iniciador regista `reservation_rejected` e não o consegue obrigar ([incident.py:190](../src/isia/agents/incident.py#L190)).
+
+O informador também decide o que responder com base **só** nas suas observações; o iniciador não lhe impõe conteúdo.
+
+### 3.5 Infraestrutura que não é agente
+
+- `World` / `Scenario` ([world.py](../src/isia/simulation/world.py), [scenario.py](../src/isia/simulation/scenario.py)): produzem as observações e guardam a verdade de referência.
+- `run_mvp` ([runner.py:94](../src/isia/simulation/runner.py#L94)): cria os agentes, avança o relógio e, no fim, atua como avaliador. **Não distribui missões.**
+- Coletor ([collector.py](../src/isia/evaluation/collector.py)): corre os cenários e grava métricas, sem influenciar a escolha de recursos.
 
 ## 4. Estado do ambiente vs. crenças dos agentes
 
@@ -201,6 +287,44 @@ Ver também [protocols.md](protocols.md) e [decisões pendentes](#decisões-pend
 | Atribuição | Contract Net simplificado por ocorrência | Patrulha elegível mais próxima é baseline útil; otimização global é mais exigente |
 | Corroboração | Pontuação ponderada e reputação | Contar alertas ignora fiabilidade/correlação; modelo probabilístico requer calibração |
 | Ambiente | Reserva 2D, relógio coerente e observações imperfeitas | Não é preciso áudio/imagens reais ou simulação física detalhada |
+
+### Porquê B1 e não outras arquiteturas do sistema
+
+```mermaid
+flowchart LR
+    subgraph C["Centralizada"]
+        D((Despachante)) --> c1[drone]
+        D --> c2[veículo]
+        D --> c3[guarda]
+    end
+    subgraph B["B1 - escolhida"]
+        S((sensor que<br/>detetou)) -.CFP.-> b1[drone]
+        S -.CFP.-> b2[veículo]
+        b1 -.proposta.-> S
+        b2 -.proposta.-> S
+    end
+    subgraph T["Totalmente distribuída"]
+        t1[drone] <--> t2[veículo]
+        t2 <--> t3[guarda]
+        t1 <--> t3
+    end
+```
+
+| Arquitetura | Prós | Contras | Veredicto |
+|---|---|---|---|
+| Despachante central | Vê tudo; permite atribuição ótima global (algoritmo húngaro); simples e consistente | Ponto único de falha e gargalo; precisa do estado de todos a toda a hora; o enunciado pede *«without a central authority»* | Não: contraria o tema |
+| **B1: iniciador temporário + Contract Net** | Sem gestor global; cada ocorrência tem o seu coordenador, por isso o desenho permite várias em paralelo (**não medido**: todas as execuções têm um só iniciador); usa informação local; recursos autónomos; poucas mensagens | Guloso, não ótimo globalmente; se o iniciador cair, a ocorrência fica parada; dois sensores podem criar ocorrências duplicadas; na prática só o `sensor-1` inicia | **Sim:** melhor equilíbrio |
+| Totalmente distribuída (consenso ou votação) | Robusta e simétrica | O(n²) mensagens; lenta; a votação não descobre a verdade (ISIA 5): fontes correlacionadas enganam a maioria | Não: cara e resolve o problema errado |
+| Hierárquica (líderes de zona) | Escala bem em reservas grandes | Exige eleger líderes e tratar a falha de um líder | Não: excessivo para um mapa 8×8; evolução futura |
+| Blackboard / tuple space | Simples | O quadro é central | Não |
+
+**Contras medidos** (os restantes são do desenho):
+
+- **Contract Net espera pelo prazo:** com o drone silencioso, dez execuções passaram de 1,5 s para 5,5 s reais (verificação de 16-11-2026 em [delivery-todo.md](delivery-todo.md#verificação-de-partida-16-11-2026); o fator depende da máquina).
+- **Corroboração por FIPA Request custa recall:** no cenário B, `full` contra `no_corroboration` dá FPR 0,25 contra 0,75, mas recall 0,65 contra 0,80 ([experiments.md](experiments.md)). A baseline também baixa o limiar de patrulha, por isso não isola o efeito da corroboração.
+- **Reputação quase sem efeito:** mudou uma decisão em 560 execuções ([experiments.md](experiments.md#desfechos-observados)).
+
+Ver também os [protocolos e desvios ao FIPA](protocols.md#9-porquê-estes-protocolos-alternativas-prós-e-contras).
 
 ### Algoritmos candidatos
 
