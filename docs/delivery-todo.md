@@ -1,10 +1,19 @@
 # Pendentes para a entrega — complemento ao plano (Blocos A a E)
 
-> **Lista de acompanhamento (criada em 2026-11-16).** Complementa o [plano de desenvolvimento](development-plan.md): só inclui trabalho que **não está** no plano ou que lá está mal definido (assinalado como «Ajuste à Etapa X»). O objetivo é que a entrega e a defesa mostrem que o grupo analisou as **três perguntas anunciadas pelo professor**. `- [ ]` indica trabalho pendente; `- [x]` exige evidência verificada. As linhas citadas referem-se à `main` em `81a09e8`.
+> **Lista de acompanhamento (criada em 2026-11-16).** `- [ ]` indica trabalho pendente; `- [x]` exige evidência verificada. As linhas citadas referem-se à `main` em `81a09e8`.
 
 [README](../README.md) · [Plano](development-plan.md) · [Arquitetura](architecture.md) · [Protocolos](protocols.md) · [Experiências](experiments.md)
 
-## As três perguntas anunciadas
+## Para que serve este documento
+
+- **O que é:** a lista do que falta para entregar o projeto completo.
+- **Relação com o plano:** complementa o [plano de desenvolvimento](development-plan.md), não o substitui. Só inclui trabalho que **não está** no plano ou que lá está mal definido; estas últimas tarefas aparecem como «Ajuste à Etapa X».
+- **Organização:** os Blocos A, B e C respondem às três questões de análise abaixo; o Bloco D cobre os entregáveis do enunciado (demonstração, apresentação, README); o Bloco E fecha as caixas pendentes do plano.
+- **Porquê agora:** parte da análise destas questões existe apenas em notas locais, fora do Git. A lista indica o que passar para a documentação versionada.
+- **Como usar:** cada elemento escolhe uma tarefa `- [ ]`, executa-a e assinala-a com a evidência. O trabalho opcional só começa depois de fechados os obrigatórios.
+- **Quando termina:** quando a [checklist de marcos](#checklist-de-marcos) estiver completa. Nessa altura o documento passa a registo histórico.
+
+## Questões de análise
 
 - **P1.** Como são construídos os agentes?
 - **P2.** Que protocolos são usados? Porquê esta arquitetura e não outras? Prós e contras?
@@ -15,7 +24,7 @@
 - Trabalho **obrigatório** estimado: cerca de **17 h** no total. O trabalho **opcional** só começa depois de os obrigatórios estarem fechados.
 - Cada tarefa tem o porquê numa frase. Sem porquê, não entra.
 - Não inventar resultados: o que não foi medido fica escrito como «não medido».
-- A análise das três perguntas está hoje em `temp/perguntas-defesa.md`, um ficheiro local que o Git ignora. Tudo o que for necessário à entrega tem de passar para um caminho versionado.
+- A análise das três questões está hoje em `temp/perguntas-defesa.md`, um ficheiro local que o Git ignora. Tudo o que for necessário à entrega tem de passar para um caminho versionado.
 
 ## Verificação de partida (16-11-2026)
 
@@ -51,7 +60,7 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 
 - [ ] **Ajuste à Etapa 10: reescrever a secção 3 de `architecture.md` com o conteúdo de P1.2–P1.5** (obrigatório, ~1,5 h) — a secção atual descreve uma proposta que o código não tem (drone que «anuncia disponibilidade», sensor com «lista de vizinhos»). Ver [architecture.md:60](architecture.md#L60).
 - [ ] **Corrigir as linhas e os números da Parte 0** (obrigatório, ~0,5 h) — as ligações a `incident.py`, `runner.py` e `reputation.py` deslocaram-se com o PR #18, e «421 testes em 12 s» passou a 489 em cerca de 58 s.
-- [ ] **Fazer um diapositivo de P1** (obrigatório, ~1 h) — é a primeira pergunta anunciada e precisa de resposta em 30 segundos.
+- [ ] **Fazer um diapositivo de P1** (obrigatório, ~1 h) — a construção dos agentes deve poder ser explicada em 30 segundos.
 - [ ] **Declarar que `InformantAgent` corre como `sensor-2` visual** (obrigatório, ~0,25 h) — o enunciado pede informadores e nenhum cenário medido tem fonte `human`. Ver [architecture.md:70](architecture.md#L70).
 
 **Evidência disponível:** comportamentos em [sensor.py:129](../src/isia/agents/sensor.py#L129), [informant.py:66](../src/isia/agents/informant.py#L66) e [mobile.py:137](../src/isia/agents/mobile.py#L137), [:195](../src/isia/agents/mobile.py#L195), [:285](../src/isia/agents/mobile.py#L285). Autonomia do recurso em [mobile.py:103](../src/isia/agents/mobile.py#L103) (decide localmente), [mobile.py:115](../src/isia/agents/mobile.py#L115) (energia de ida e volta) e [incident.py:190](../src/isia/agents/incident.py#L190) (pode recusar a reserva depois do `ACCEPT`).
@@ -62,7 +71,7 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 
 **Critérios de conclusão:** `architecture.md` contém as três camadas, a tabela agente/comportamentos/código e as sete decisões, sem a palavra «proposta»; o diapositivo mostra as três ligações de autonomia.
 
-**Resultado esperado:** o professor encontra a resposta a P1 na documentação versionada e nos diapositivos.
+**Resultado esperado:** quem lê a entrega encontra a resposta a P1 na documentação versionada e nos diapositivos.
 
 **Erros prováveis/diagnóstico:** copiar linhas da base antiga; descrever o informador como fonte humana quando os cenários A, B e C só têm fontes acústica e visual.
 
@@ -157,7 +166,7 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 **Tarefas concretas:**
 
 - [ ] **Ajuste à Etapa 10: fazer a visualização como repetição do relatório JSON, em `scripts/replay.py`** (obrigatório, ~3 h) — é a opção mais barata que mostra interações e métricas; o plano previa um módulo ao vivo ([development-plan.md:572](development-plan.md#L572)). Ler a `timeline` e não `messages`, que vem vazio em XMPP.
-- [ ] **Ajuste à Etapa 10: fixar o roteiro da apresentação** (obrigatório, ~2 h) — o plano só diz «inserir dados na apresentação» ([development-plan.md:578](development-plan.md#L578)); o professor anunciou a ordem das perguntas.
+- [ ] **Ajuste à Etapa 10: fixar o roteiro da apresentação** (obrigatório, ~2 h) — o plano só diz «inserir dados na apresentação» ([development-plan.md:578](development-plan.md#L578)); sem roteiro, as três questões de análise ficam dispersas entre os resultados.
 - [ ] **Ajuste à Etapa 10: pôr no topo do README os comandos por ordem** (obrigatório, ~1 h) — o estado é de 12-11-2026 e as contagens de testes são antigas ([README.md:172](../README.md#L172)).
 - [ ] **Testar a entrega sem a pasta `.git`** (obrigatório, ~0,5 h) — numa cópia sem Git, o coletor recusa correr e sete testes falham.
 - [ ] **Gerar dois gráficos a partir de `summary.csv`** (opcional, ~2 h) — precision, recall e FPR por cenário leem-se melhor em gráfico do que numa tabela de doze linhas.
