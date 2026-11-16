@@ -119,7 +119,7 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 - [ ] **Ajuste à Etapa 9A (tarefa 1): mover os scripts para `scripts/`, gravar CSV e criar `docs/scalability.md`** (obrigatório, ~2 h) — a tarefa do plano não diz para onde nem em que formato. Ver [development-plan.md:545](development-plan.md#L545).
 - [ ] **Ajuste à Etapa 9A: fechar a etapa com uma tabela C1–C8 «medido / proposto / adiado»** (obrigatório, ~0,5 h) — as oito tarefas atuais pedem C6, C7 e fila por gravidade; com esse âmbito a etapa não fecha. A métrica por caçador conta como feita pela função `attended()` do script de distribuição.
 - [ ] **Corrigir três afirmações de P3** (obrigatório, ~0,5 h) — C1 diz que o iniciador conhece a posição base, mas `candidates` só tem `{jid: resource_id}` ([runner.py:165](../src/isia/simulation/runner.py#L165)); o fator «3,4×» varia com a máquina; «menos recursos só prejudica com falhas» é forte demais para 20 repetições.
-- [ ] **Fazer um diapositivo de P3** (obrigatório, ~1 h) — é a pergunta com mais medições e estas têm de aparecer.
+- [ ] **Fazer um diapositivo de P3** (obrigatório, ~1 h) — é a questão com mais medições e estas têm de aparecer.
 - [ ] **Implementar C4 mínimo e C1 e medir mensagens em função de N** (opcional, ~5 h) — é a única correção com «antes e depois» visível. Ver [runner.py:80](../src/isia/simulation/runner.py#L80), [:148](../src/isia/simulation/runner.py#L148), [:165](../src/isia/simulation/runner.py#L165) e [incident.py:128](../src/isia/agents/incident.py#L128).
 
 **Estado proposto para C1–C8:**
