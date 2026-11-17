@@ -18,6 +18,7 @@ from isia.agents.incident import IncidentSensorAgent
 from isia.agents.informant import InformantAgent
 from isia.communication.messages import MessageType, model_from_dict, model_to_dict
 from isia.domain.models import Position, ResourceState
+from isia.domain.validation import is_finite_number
 from isia.reasoning.policy import ResponsePolicy
 from isia.reasoning.reputation import ReputationBook, result_from_mission
 from isia.simulation.world import World
@@ -65,6 +66,42 @@ def fault_settings(faults):
 
 MVP_RESOURCES = {"drone": Position(0, 2), "vehicle": Position(0, 0), "ranger": Position(5, 5)}
 RESOURCE_KEYS = {"position", "autonomy_percent", "load"}
+CORROBORATION_DEFAULTS = {"max_distance": 3.0, "max_time_difference": 2.0}
+
+
+def validate_experimental_settings(*, xmpp=False, corroboration_settings=None,
+                                   receive_timeout=None, minimum_autonomy_percent=10.0,
+                                   selection_weights=None):
+    """Validar o Bloco G antes de criar agentes; devolver os valores efetivos.
+
+    A janela de corroboração usa tempo simulado. ``receive_timeout`` é o prazo
+    base em tempo real e não o teto dinâmico opcional do Bloco F.
+    """
+    if corroboration_settings is not None and (
+            not isinstance(corroboration_settings, dict)
+            or set(corroboration_settings) - set(CORROBORATION_DEFAULTS)):
+        raise ValueError(f"corroboration_settings aceita apenas {sorted(CORROBORATION_DEFAULTS)}.")
+    corroboration = {**CORROBORATION_DEFAULTS, **(corroboration_settings or {})}
+    for name, value in corroboration.items():
+        if not is_finite_number(value) or value < 0:
+            raise ValueError(f"corroboration_settings.{name} deve ser finito e não negativo.")
+    timeout = (2.0 if xmpp else 0.5) if receive_timeout is None else receive_timeout
+    if not is_finite_number(timeout) or timeout <= 0:
+        raise ValueError("receive_timeout deve ser finito e positivo.")
+    if not is_finite_number(minimum_autonomy_percent) or not 0 <= minimum_autonomy_percent <= 100:
+        raise ValueError("minimum_autonomy_percent deve estar entre 0 e 100.")
+    if selection_weights is not None:
+        defaults = {"eta_weight": 1.0, "energy_weight": 1.0, "load_weight": 1.0,
+                    "eta_scale_seconds": 60.0, "energy_scale_percent": 100.0, "load_scale": 1.0}
+        if not isinstance(selection_weights, dict) or set(selection_weights) - set(defaults):
+            raise ValueError(f"selection_weights aceita apenas {sorted(defaults)}.")
+        cost = {**defaults, **selection_weights}
+        for name, value in cost.items():
+            if not is_finite_number(value) or value < 0 or ("scale" in name and value == 0):
+                raise ValueError(f"selection_weights.{name} inválido: peso não negativo, escala positiva.")
+        if not any(cost[name] > 0 for name in ("eta_weight", "energy_weight", "load_weight")):
+            raise ValueError("Pelo menos um peso deve ser positivo.")
+    return corroboration, timeout, minimum_autonomy_percent
 
 
 def scenario_settings(scenario):
@@ -98,7 +135,8 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                   response_settings=None, reputation=None, faults=None,
                   scenario=None, corroborate=True, selection_weights=None, run_id=None,
                   extra_initiators=None, extra_patrols=None, cfp_limit=None, max_receive_timeout=None,
-                  queue_rounds=0, silent_invalid=False, queue_priority=False):
+                  queue_rounds=0, silent_invalid=False, queue_priority=False,
+                  corroboration_settings=None, receive_timeout=None, minimum_autonomy_percent=10.0):
     """O runner só fornece ambiente, relógio e transporte; agentes decidem.
 
     inspection_outcomes e interrupt_resource permitem testes determinísticos.
@@ -133,7 +171,14 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     extra_patrols (C4 mínimo) associa novos IDs de patrulha a posições base; são
     drones com 100 % de autonomia. cfp_limit=K (C1) faz cada iniciador enviar o
     CFP só às K patrulhas com base mais próxima do alvo.
+    corroboration_settings configura max_distance e max_time_difference, com
+    omissões 3.0 células e 2.0 s simulados. receive_timeout substitui o prazo
+    base (0.5 s local, 2.0 s XMPP); não liga o prazo dinâmico do Bloco F.
+    minimum_autonomy_percent é a reserva mínima de todas as patrulhas e do guarda.
     """
+    corroboration, receive_timeout, minimum_autonomy_percent = validate_experimental_settings(
+        xmpp=xmpp, corroboration_settings=corroboration_settings, receive_timeout=receive_timeout,
+        minimum_autonomy_percent=minimum_autonomy_percent, selection_weights=selection_weights)
     faults = fault_settings(faults)
     if faults is not None and xmpp:
         raise ValueError("A injeção de falhas só existe no transporte local.")
@@ -158,7 +203,8 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     sensor = IncidentSensorAgent("sensor-mvp@localhost", password, "sensor-peer-mvp@localhost")
     peer = InformantAgent("sensor-peer-mvp@localhost", password)
     sensor.set_local_observation_feed(scenario.source("sensor-1"), 0.0)
-    sensor.set_corroboration_context(("sensor-2",) if corroborate else (), 3.0, 2.0, 1,
+    sensor.set_corroboration_context(("sensor-2",) if corroborate else (),
+                                     corroboration["max_distance"], corroboration["max_time_difference"], 1,
                                      compatibility_rules=(response_settings or {}).get("compatibility_rules"))
     extras = {}
     for source_id in extra_initiators:
@@ -167,7 +213,8 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         extra.set_local_observation_feed(scenario.source(source_id), 0.0)
         # shortcut: sem corroboração nem aprendizagem de reputação (o par responde, mas a
         # resposta não conta); dar um par a cada iniciador quando C6 for implementado.
-        extra.set_corroboration_context((), 3.0, 2.0, 1)
+        extra.set_corroboration_context((), corroboration["max_distance"],
+                                        corroboration["max_time_difference"], 1)
     initiators = [sensor, *extras.values()]
     if response_settings is not None:
         if reputation is None:
@@ -195,7 +242,7 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         agent = agent_class(f"{name}-mvp@localhost", password,
                             ResourceState(name, "drone" if name in extra_patrols else name, origin, True,
                                           options.get("autonomy_percent", 100.0)),
-                            (capability,), minimum_autonomy_percent=10.0, eta_seconds=0.0,
+                            (capability,), minimum_autonomy_percent=minimum_autonomy_percent, eta_seconds=0.0,
                             energy_cost_percent=0.0, load=options.get("load", 0.0))
         outcome = (inspection_outcomes or {}).get(name)
         inspect = scenario.inspect if outcome is None else lambda position, now, task, value=outcome: value
@@ -204,7 +251,7 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         mobiles.append(agent)
     for initiator in initiators:
         initiator.configure_mvp({str(a.jid): a.resource.resource_id for a in mobiles if a is not mobiles[2]},
-                                {str(mobiles[2].jid): "ranger"}, receive_timeout=0.5 if not xmpp else 2.0,
+                                {str(mobiles[2].jid): "ranger"}, receive_timeout=receive_timeout,
                                 selection_weights=selection_weights, cfp_limit=cfp_limit,
                                 max_receive_timeout=max_receive_timeout, queue_rounds=queue_rounds,
                                 base_positions={str(a.jid): a.resource.position for a in mobiles})
@@ -349,6 +396,8 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                 "response_settings": response_settings,
                 "scenario_seed": seed, "faults": faults, "fault_log": fault_log,
                 "corroborate": corroborate, "selection_weights": selection_weights,
+                "corroboration_settings": corroboration, "receive_timeout": receive_timeout,
+                "minimum_autonomy_percent": minimum_autonomy_percent,
                 # Só para o avaliador, depois de a execução terminar.
                 "ground_truth": scenario.ground_truth,
                 "initial_resources": initial_resources,

@@ -14,7 +14,7 @@ from pathlib import Path
 
 from isia.evaluation.metrics import NUMERIC, run_metrics, summarize
 from isia.reasoning.reputation import ReputationBook
-from isia.simulation.runner import run_mvp
+from isia.simulation.runner import run_mvp, validate_experimental_settings
 
 
 # Variantes de pipelines; "no_corroboration" também adapta o limiar de patrulha.
@@ -60,8 +60,27 @@ def load_scenario(path):
     return config
 
 
-async def run_scenario(config, variant, *, repetitions=None, output=None):
-    """Execuções sequenciais; em "full" a reputação aprende ao longo delas."""
+def validate_runner_options(options):
+    """Overrides experimentais separados do contrato oficial dos cenários.
+
+    As extensões de stress do Bloco F ficam fora deste conjunto: a referência
+    do Bloco G usa as condições da Etapa 9. O chamador conserva os seus dados.
+    """
+    allowed = {"corroboration_settings", "receive_timeout", "minimum_autonomy_percent", "selection_weights"}
+    if options is None:
+        return {}
+    if not isinstance(options, dict) or set(options) - allowed:
+        raise ValueError(f"runner_options aceita apenas {sorted(allowed)}.")
+    validate_experimental_settings(**options)
+    return deepcopy(options)
+
+
+async def run_scenario(config, variant, *, repetitions=None, output=None, runner_options=None):
+    """Execuções sequenciais; em "full" a reputação aprende ao longo delas.
+
+    ``runner_options`` permite variar parâmetros do Bloco G sem acrescentar
+    campos aos JSON oficiais nem ativar as extensões opcionais de stress.
+    """
     validate_scenario(config)
     count = config["repetitions"] if repetitions is None else repetitions
     if type(count) is not int or count < 1:
@@ -69,6 +88,13 @@ async def run_scenario(config, variant, *, repetitions=None, output=None):
     if not isinstance(variant, str) or variant not in VARIANTS:
         raise ValueError(f"variant deve ser uma de {sorted(VARIANTS)}.")
     options = VARIANTS[variant]
+    overrides = validate_runner_options(runner_options)
+    if options.get("selection_weights") is not None and "selection_weights" in overrides:
+        raise ValueError("selection_weights experimental é incompatível com os pesos da variante.")
+    selection_weights = overrides.pop("selection_weights", options.get("selection_weights"))
+    # Preservar o watchdog da Etapa 9; um prazo-base maior exige a margem
+    # calculada pelo runner, incluindo a espera de dez prazos pelo resultado.
+    max_seconds = None if overrides.get("receive_timeout", 0.5) > 0.5 else 30.0
     settings = deepcopy(config["response_settings"])
     settings["policy"].update(options.get("policy", {}))
     book = ReputationBook(**settings["reputation"])
@@ -85,7 +111,7 @@ async def run_scenario(config, variant, *, repetitions=None, output=None):
                 scenario={"run_id": run_id, "seed": seed, "sources": config["sources"],
                           "events": episode["events"], "resources": config["resources"]},
                 corroborate=options.get("corroborate", True),
-                selection_weights=options.get("selection_weights"), max_seconds=30.0)
+                selection_weights=deepcopy(selection_weights), max_seconds=max_seconds, **deepcopy(overrides))
             row = {"scenario": config["scenario_id"], "variant": variant, "repetition": repetition,
                    "episode": episode["label"], "seed": seed, **run_metrics(report),
                    "reputation_sensor_1": book.score("sensor-1")}
