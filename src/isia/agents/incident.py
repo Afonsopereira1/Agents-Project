@@ -1,5 +1,6 @@
 """Ciclo local de um incidente iniciado pelo próprio sensor, sem despachante."""
 
+import asyncio
 from dataclasses import replace
 import logging
 from time import monotonic
@@ -23,6 +24,7 @@ from isia.reasoning.reputation import EvaluationResult
 
 
 logger = logging.getLogger(__name__)
+QUEUE_INTERVAL_SECONDS = 5.0  # tempo simulado entre dois pedidos a um recurso ocupado
 
 
 def bare(value):
@@ -34,11 +36,13 @@ class IncidentSensorAgent(SensorAgent):
 
     def configure_mvp(self, patrols, rangers, *, receive_timeout=2.0, max_attempts=2,
                       selection_weights=None, base_positions=None, cfp_limit=None,
-                      max_receive_timeout=None):
+                      max_receive_timeout=None, queue_rounds=0):
         """base_positions ({jid: Position}) e cfp_limit=K ativam C1: CFP só aos K mais próximos.
 
         max_receive_timeout ativa o prazo dinâmico: sem nenhuma proposta ao fim de
         receive_timeout, o iniciador espera até este teto; o STATUS espera sempre até ao teto.
+        queue_rounds ativa a fila: com os recursos ocupados, o iniciador espera
+        QUEUE_INTERVAL_SECONDS simulados e volta a pedir, até queue_rounds vezes.
         """
         if type(max_attempts) is not int or max_attempts < 1:
             raise ValueError("max_attempts deve ser positivo.")
@@ -55,6 +59,9 @@ class IncidentSensorAgent(SensorAgent):
             if max_receive_timeout < receive_timeout:
                 raise ValueError("max_receive_timeout não pode ser inferior a receive_timeout.")
         self.max_receive_timeout = max_receive_timeout or receive_timeout
+        if type(queue_rounds) is not int or queue_rounds < 0:
+            raise ValueError("queue_rounds deve ser um inteiro não negativo.")
+        self.queue_rounds = queue_rounds
         self.patrols, self.rangers = dict(patrols), dict(rangers)
         self.receive_timeout, self.max_attempts = receive_timeout, max_attempts
         self.selection_weights = dict(selection_weights or {})
@@ -182,6 +189,7 @@ class IncidentSensorAgent(SensorAgent):
             selection = select_best_proposal(cfp, responses.values(), **agent.selection_weights)
             winner = selection.winner
             if winner is None:
+                self._busy = any(r.payload.get("reason") == "resource_unavailable" for r in responses.values())
                 return None, "no_eligible_proposals"
             winner_jid = next(jid for jid, body in responses.items() if body.message_id == winner.message_id)
             accept = build_accept_message(cfp, winner, agent.simulated_time, source_id=bare(agent.jid))
@@ -242,8 +250,21 @@ class IncidentSensorAgent(SensorAgent):
         async def execute_task(self, mission, candidates):
             agent = self.agent
             remaining = {bare(jid): resource for jid, resource in candidates.items()}
+            rounds = 0
             for attempt in range(1, agent.max_attempts + 1):
-                assignment, failure = await self.allocate(mission, remaining, attempt)
+                for wait in range(agent.queue_rounds + 1):
+                    rounds += 1
+                    self._busy = False
+                    assignment, failure = await self.allocate(mission, remaining, rounds)
+                    # Fila: recurso ocupado não é falha; esperar tempo simulado e voltar a pedir.
+                    # shortcut: sem ordem de chegada nem prioridade; trocar por fila no recurso se for preciso.
+                    if (assignment is not None or wait == agent.queue_rounds
+                            or not (self._busy or failure == "reservation_rejected")):
+                        break
+                    # Relógio parado (ninguém em missão): o prazo real evita esperar para sempre.
+                    until, limit = agent.simulated_time + QUEUE_INTERVAL_SECONDS, monotonic() + agent.receive_timeout
+                    while agent.simulated_time < until and monotonic() < limit:
+                        await asyncio.sleep(0.01)
                 if assignment is None:
                     agent.close_reason = failure
                     if failure == "reservation_rejected" and attempt < agent.max_attempts:

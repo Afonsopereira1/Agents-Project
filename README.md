@@ -14,7 +14,7 @@ A partir da raiz, com Python 3.12. Nenhum passo precisa de servidor XMPP.
 python3 -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
 
-# 2. Testes: 494, OK, cerca de 1 min (17-11-2026)
+# 2. Testes: 496, OK, cerca de 1 min (17-11-2026)
 PYTHONPATH=src python -m unittest discover -s tests
 
 # 3. MVP: uma ocorrência completa, relatório JSON
@@ -32,9 +32,9 @@ PYTHONPATH=src python -m isia.evaluation.collector config/scenarios/*.json --out
 PYTHONPATH=src python scripts/scale.py
 PYTHONPATH=src python scripts/dist.py
 
-# 7. Testes de stress, opcional (grava results/stress/*.csv; cerca de 22 min no total)
+# 7. Testes de stress, opcional (grava results/stress/*.csv; cerca de 26 min no total)
 PYTHONPATH=src python scripts/stress_f1.py     # perda, latência, cascata, autonomia, falhas combinadas
-PYTHONPATH=src python scripts/stress_f2.py     # ocorrências em paralelo, mensagens inválidas, N patrulhas, prazo dinâmico
+PYTHONPATH=src python scripts/stress_f2.py     # ocorrências em paralelo, mensagens inválidas, N patrulhas, prazo dinâmico, fila, silêncio
 PYTHONPATH=src python scripts/stress_long.py   # 1000 execuções com a mesma reputação
 ```
 

@@ -53,6 +53,8 @@ class MobileResourceAgent(Agent):
     O relógio simulado é atualizado através de ``set_simulated_time``.
     """
 
+    silent_invalid = False  # True: um ACCEPT que não bate com a proposta fica sem resposta
+
     def __init__(
         self,
         jid: str,
@@ -345,6 +347,10 @@ class MobileResourceAgent(Agent):
                         incoming.get_metadata("in-reply-to") != proposal.message_id
                         or accept.created_at > agent.simulated_time
                     ):
+                        if agent.silent_invalid:
+                            # Contra-amplificação: responder daria tráfego grátis a quem envia lixo.
+                            logger.warning("ACCEPT incoerente ignorado: %s", accept.message_id)
+                            return
                         result = ReservationResult(
                             ReservationStatus.INVALID_REQUEST,
                             agent.reservation.resource_state,

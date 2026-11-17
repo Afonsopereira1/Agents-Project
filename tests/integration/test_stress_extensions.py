@@ -66,6 +66,37 @@ class TestStressExtensions(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await run_mvp(max_receive_timeout=0.1)
 
+    async def test_queue_closes_both_incidents_with_one_ranger(self):
+        root = Path(__file__).resolve().parents[2]
+        settings = json.loads((root / "config/scenarios/A.json").read_text())["response_settings"]
+        settings["policy"].update(patrol_threshold=0.01, severe_patrol_threshold=0.01)
+        settings["sources"]["sensor-3"] = {"modality": "acoustic", "correlation_group": "local_3"}
+        near = {"kind": "acoustic", "detection_range": 1.0}
+        threat = {"kind": "threat", "starts_at": 0.0, "duration": 1000.0}
+        report = await run_mvp(
+            response_settings=settings, corroborate=False, extra_initiators={"sensor-3": Position(6, 2)},
+            queue_rounds=20, max_seconds=30.0,
+            scenario={"run_id": "queue", "seed": 1, "resources": {},
+                      "sources": {"sensor-1": near, "sensor-2": {"kind": "visual", "detection_range": 0.0},
+                                  "sensor-3": near},
+                      "events": [{**threat, "event_id": "a", "position": {"x": 2, "y": 2}},
+                                 {**threat, "event_id": "b", "position": {"x": 6, "y": 2}}]})
+        # Sem fila, a segunda ocorrência fica unresolved (teste acima); com fila, espera pelo guarda.
+        self.assertEqual((report["incident_status"], report["extra_initiators"]["sensor-3"]["incident_status"]),
+                         ("closed", "closed"))
+        self.assertEqual(len(executions(report, "ranger")), 2)
+        with self.assertRaises(ValueError):
+            await run_mvp(queue_rounds=-1)
+
+    async def test_silent_invalid_stops_replies_to_incoherent_accepts(self):
+        replies = lambda report: sum("junk-" in str(m["body"]) and m["body"]["message_type"] == "STATUS"
+                                     for m in report["messages"])
+        loud = await run_mvp(faults={"flood": 2})
+        quiet = await run_mvp(faults={"flood": 2}, silent_invalid=True)
+        # Dois ACCEPT reais (patrulha e guarda), duas variantes de lixo cada, flood 2: 8 respostas.
+        self.assertEqual((replies(loud), replies(quiet)), (8, 0))
+        self.assertEqual((loud["incident_status"], quiet["incident_status"]), ("closed", "closed"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,7 +6,8 @@ política sem corroboração, para que cada iniciador trate só a sua ameaça e 
 Cada grupo grava results/stress/<grupo>.csv; tempo_real_s depende da máquina.
 Uso, a partir da raiz: PYTHONPATH=src python scripts/stress_f2.py [grupo ...]
 Grupos: paralelo (1, 2, 4 e 8 ocorrências) invalidas escala (C4 mínimo + C1)
-        prazo (prazo fixo contra prazo dinâmico, max_receive_timeout)
+        prazo (prazo fixo contra prazo dinâmico, max_receive_timeout) teto (vários tetos)
+        fila (queue_rounds) silencio (silent_invalid)
 """
 import asyncio, collections, copy, csv, logging, sys, time
 from pathlib import Path
@@ -165,14 +166,80 @@ async def prazo():
             print(out[-1], flush=True)
     return fields, out
 
+async def teto():
+    """Sensibilidade do teto do prazo dinâmico: atraso tolerado contra tempo perdido quando ninguém responde."""
+    fields = ["caso", "teto_s", "runs", "fechadas", "estados", "tempo_real_por_execucao_s"]
+    cases = [*((f"PROPOSAL delay={d}s", {"delay": {"PROPOSAL": d}}) for d in (0.6, 1.5, 3.0)),
+             ("-drone -vehicle", {"unavailable_agents": ["drone-mvp", "vehicle-mvp"]})]
+    out, reps = [], 5  # sem perdas aleatórias, as execuções de cada célula são iguais
+    for name, faults in cases:
+        for ceiling in (0.5, 1.0, 2.0, 4.0):
+            states, t0 = collections.Counter(), time.monotonic()
+            for rep in range(reps):
+                report = await run(1, rep, faults=faults, max_receive_timeout=ceiling)
+                states[f"{report['incident_status']}/{report['reason']}"] += 1
+            out.append({"caso": name, "teto_s": ceiling, "runs": reps, "fechadas": states["closed/confirmed"],
+                        "estados": " ".join(f"{k}={v}" for k, v in states.items()),
+                        "tempo_real_por_execucao_s": round((time.monotonic() - t0) / reps, 2)})
+            print(out[-1], flush=True)
+    return fields, out
+
+async def fila():
+    """Antes e depois da fila: 2, 4 e 8 ocorrências com queue_rounds a 0 e a 60."""
+    fields = ["ocorrencias", "queue_rounds", "runs", "total", "fechadas_com_guarda", "unresolved", "motivos",
+              "t_ultimo_fecho_sim_mean", "msgs_mean", "cfp_mean", "duplas_reservas", "tempo_real_por_execucao_s"]
+    out = []
+    for count in (2, 4, 8):
+        for rounds in (0, 60):
+            rows, last, msgs, cfps, doubles, t0 = [], [], [], [], 0, time.monotonic()
+            for rep in range(REPS):
+                report = await run(count, rep, queue_rounds=rounds)
+                one = incidents(report)
+                rows += one
+                last.append(max((r["closed_at"] for r in one if r["status"] == "closed"), default=None))
+                msgs.append(len(report["messages"]))
+                cfps.append(sum(m["body"]["message_type"] == "CFP" for m in report["messages"]))
+                doubles += double_bookings(report)
+            out.append({"ocorrencias": count, "queue_rounds": rounds, "runs": REPS, "total": len(rows),
+                        "fechadas_com_guarda": sum(r["status"] == "closed" for r in rows),
+                        "unresolved": sum(r["status"] == "unresolved" for r in rows),
+                        "motivos": " ".join(f"{k}={v}" for k, v in collections.Counter(r["reason"] for r in rows).items()),
+                        "t_ultimo_fecho_sim_mean": mean(last), "msgs_mean": mean(msgs), "cfp_mean": mean(cfps),
+                        "duplas_reservas": doubles,
+                        "tempo_real_por_execucao_s": round((time.monotonic() - t0) / REPS, 2)})
+            print(out[-1], flush=True)
+    return fields, out
+
+async def silencio():
+    """Antes e depois de silent_invalid: quantas respostas os agentes dão às mensagens inválidas."""
+    fields = ["flood_por_mensagem", "silent_invalid", "runs", "fechadas", "lixo_injetado_mean",
+              "respostas_a_lixo_mean", "respostas_por_remetente", "msgs_mean"]
+    out = []
+    for flood in (10, 100, 300):
+        for silent in (False, True):
+            closed, junk, replies, msgs, senders = 0, [], [], [], collections.Counter()
+            for rep in range(REPS):
+                report = await run(1, rep, flood, silent_invalid=silent)
+                closed += report["incident_status"] == "closed"
+                junk.append(sum((2 if e["type"] == "CFP" else 3) * flood
+                                for e in report["fault_log"] if e["fault"] == "flood"))
+                answered = [m["sender"].split("-mvp")[0] for m in report["messages"] if "junk-" in str(m["body"])]
+                replies.append(len(answered)); senders.update(answered); msgs.append(len(report["messages"]))
+            out.append({"flood_por_mensagem": flood, "silent_invalid": silent, "runs": REPS, "fechadas": closed,
+                        "lixo_injetado_mean": mean(junk), "respostas_a_lixo_mean": mean(replies),
+                        "respostas_por_remetente": " ".join(f"{k}={v // REPS}" for k, v in senders.items()),
+                        "msgs_mean": mean(msgs)})
+            print(out[-1], flush=True)
+    return fields, out
+
 async def go(groups):
     OUT.mkdir(parents=True, exist_ok=True)
     for group in groups:
-        fields, out = await {"paralelo": paralelo, "invalidas": invalidas, "escala": escala, "prazo": prazo}[group]()
+        fields, out = await globals()[group]()
         path = OUT / f"{group}.csv"
         with path.open("w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fields, lineterminator="\n"); w.writeheader(); w.writerows(out)
         print("gravado:", path.relative_to(ROOT), flush=True)
 
 if __name__ == "__main__":
-    asyncio.run(go(sys.argv[1:] or ["paralelo", "invalidas", "escala", "prazo"]))
+    asyncio.run(go(sys.argv[1:] or ["paralelo", "invalidas", "escala", "prazo", "teto", "fila", "silencio"]))

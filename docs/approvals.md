@@ -14,7 +14,7 @@
 |---|---|---|---|
 | 0.1 | Documentação em `docs/` aceite como base da entrega | `main` atual | [ ] |
 | 0.2 | Versões | Python 3.12, SPADE 4.1.4 ([requirements.txt](../requirements.txt)) | [ ] |
-| 0.3 | Instalação testada: `PYTHONPATH=src python -m unittest discover -s tests` dá 494 testes OK | num computador | [ ] |
+| 0.3 | Instalação testada: `PYTHONPATH=src python -m unittest discover -s tests` dá 496 testes OK | num computador | [ ] |
 
 ## Etapa 1 — contratos (fecha [development-plan.md:91](development-plan.md#L91))
 
@@ -30,7 +30,7 @@
 | 4.1 | Compatibilidade de observações | distância ≤ 3,0 células, janela de 2,0 s, mínimo de 1 fonte compatível ([runner.py](../src/isia/simulation/runner.py)) | [ ] |
 | 4.2 | Ausência de resposta, timeout ou falha de comunicação | `no_data`, nunca ausência informativa | [x] 16-11-2026 (Guilherme) |
 | 4.3 | Sensibilidade e taxas de erro das fontes | as de [config/scenarios/](../config/scenarios/), sem calibração empírica | [ ] |
-| 5.1 | Prazo de espera por propostas e `STATUS` | 0,5 s reais (local), 2,0 s (XMPP). Prazo dinâmico opcional (`max_receive_timeout`), desligado: [antes e depois](scalability.md#prazo-dinâmico-antes-e-depois) | [ ] |
+| 5.1 | Prazo de espera por propostas e `STATUS` | 0,5 s reais (local), 2,0 s (XMPP). Prazo dinâmico opcional (`max_receive_timeout`), desligado; proposta: teto de 2,0 s ([que teto escolher](scalability.md#que-teto-escolher)) | [ ] |
 | 5.2 | Custo da proposta | ETA + energia + carga, pesos 1,0 cada; autonomia mínima de 10 % | [ ] |
 | 5.3 | ~~Desvio ao FIPA na recusa do CFP~~ | Corrigido a 16-11-2026: o recurso envia `refuse` ([protocols.md, secção 9](protocols.md#9-porquê-estes-protocolos-alternativas-prós-e-contras)) | Não se aplica |
 

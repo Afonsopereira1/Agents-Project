@@ -92,13 +92,13 @@ Mensagens por missão com N candidatos: N CFP + N respostas + 1 `ACCEPT` + até 
 
 | Ref. | Limite | Onde | Estado | Justificação |
 |---|---|---|---|---|
-| C1 | CFP enviado a todos os candidatos: O(N) por missão | [incident.py:149](../src/isia/agents/incident.py#L149) | **Implementado e medido (Bloco F)** | `cfp_limit=K` envia o CFP só às K patrulhas com base mais próxima do alvo. Com 16 patrulhas: 57 → 15 mensagens por ocorrência, mesma decisão. Opcional: sem `cfp_limit`, o comportamento é o anterior. Usa a posição base, não a atual |
-| C2 | Candidato calado obriga a esperar o prazo inteiro | [incident.py:152](../src/isia/agents/incident.py#L152) | **Medido** | 1,5 s → 5,5 s reais nesta máquina. Proposta: não voltar a chamar quem ficou calado na ronda seguinte |
-| C3 | Prazos reais com tempo simulado | [runner.py:219](../src/isia/simulation/runner.py#L219), [incident.py:152](../src/isia/agents/incident.py#L152) | Adiado | Obriga a avançar o relógio simulado durante a negociação; trabalho futuro |
-| C4 | Recursos e sensores fixos no runner | [runner.py:66](../src/isia/simulation/runner.py#L66), [:82](../src/isia/simulation/runner.py#L82), [:178](../src/isia/simulation/runner.py#L178) | **Mínimo implementado (Bloco F)** | `run_mvp(extra_patrols=..., extra_initiators=...)` acrescenta drones e sensores iniciadores sem mudar o código. Os ficheiros de cenário continuam com os três recursos fixos |
+| C1 | CFP enviado a todos os candidatos: O(N) por missão | [incident.py:156](../src/isia/agents/incident.py#L156) | **Implementado e medido (Bloco F)** | `cfp_limit=K` envia o CFP só às K patrulhas com base mais próxima do alvo. Com 16 patrulhas: 57 → 15 mensagens por ocorrência, mesma decisão. Opcional: sem `cfp_limit`, o comportamento é o anterior. Usa a posição base, não a atual |
+| C2 | Candidato calado obriga a esperar o prazo inteiro | [incident.py:159](../src/isia/agents/incident.py#L159) | **Medido** | 1,5 s → 5,5 s reais nesta máquina. Proposta: não voltar a chamar quem ficou calado na ronda seguinte |
+| C3 | Prazos reais com tempo simulado | [runner.py:224](../src/isia/simulation/runner.py#L224), [incident.py:159](../src/isia/agents/incident.py#L159) | Adiado | Obriga a avançar o relógio simulado durante a negociação; trabalho futuro |
+| C4 | Recursos e sensores fixos no runner | [runner.py:66](../src/isia/simulation/runner.py#L66), [:82](../src/isia/simulation/runner.py#L82), [:181](../src/isia/simulation/runner.py#L181) | **Mínimo implementado (Bloco F)** | `run_mvp(extra_patrols=..., extra_initiators=...)` acrescenta drones e sensores iniciadores sem mudar o código. Os ficheiros de cenário continuam com os três recursos fixos |
 | C5 | `ObservationFeed.recent()` percorre todo o histórico, O(H) | [scenario.py:98](../src/isia/simulation/scenario.py#L98) | Proposto | O feed é lido uma vez por execução; o ganho não é mensurável neste sistema. Proposta: `bisect` ou `deque` da janela |
-| C6 | Corroboração com um único par fixo | [runner.py:155](../src/isia/simulation/runner.py#L155) | Proposto | Perguntar aos k vizinhos com alcance e decidir com as respostas até ao prazo |
-| C7 | Uma ocorrência por janela, ancorada na primeira observação | [incident.py:279](../src/isia/agents/incident.py#L279), [allocation.py:804](../src/isia/reasoning/allocation.py#L804) | **Medido** | 8/10, 8/20, 8/30 atendidos. Proposta: agrupar observações por proximidade e criar uma ocorrência por grupo |
+| C6 | Corroboração com um único par fixo | [runner.py:158](../src/isia/simulation/runner.py#L158) | Proposto | Perguntar aos k vizinhos com alcance e decidir com as respostas até ao prazo |
+| C7 | Uma ocorrência por janela, ancorada na primeira observação | [incident.py:300](../src/isia/agents/incident.py#L300), [allocation.py:804](../src/isia/reasoning/allocation.py#L804) | **Medido** | 8/10, 8/20, 8/30 atendidos. Proposta: agrupar observações por proximidade e criar uma ocorrência por grupo |
 | C8 (reputação) | Histórico da reputação cresce em memória | [reputation.py:128](../src/isia/reasoning/reputation.py#L128) | **Medido (Bloco F)** | 1000 execuções: 1824 registos, 1,3 MB serializados, crescimento linear (~1,3 kB por execução). Irrelevante à escala do projeto; a proposta de truncar ou gravar em JSONL mantém-se para execuções muito longas |
 | C8 (processos) | Todos os agentes num processo | [runner.py](../src/isia/simulation/runner.py) | Adiado | Um processo por agente ligado ao XMPP; mudança grande, trabalho futuro |
 
@@ -106,7 +106,7 @@ Mensagens por missão com N candidatos: N CFP + N respostas + 1 `ACCEPT` + até 
 
 ## Correções a afirmações anteriores
 
-- **C1 — o iniciador não conhece a posição base dos recursos.** `candidates` só tem `{jid: resource_id}` ([runner.py:197](../src/isia/simulation/runner.py#L197)). Filtrar pelos K mais próximos obriga o runner a passar as posições ou os recursos a anunciá-las; a posição só chega ao iniciador na `PROPOSAL`, depois do CFP. **Resolvido no Bloco F** pela primeira via: o runner passa as posições base em `configure_mvp(base_positions=...)`.
+- **C1 — o iniciador não conhece a posição base dos recursos.** `candidates` só tem `{jid: resource_id}` ([runner.py:201](../src/isia/simulation/runner.py#L201)). Filtrar pelos K mais próximos obriga o runner a passar as posições ou os recursos a anunciá-las; a posição só chega ao iniciador na `PROPOSAL`, depois do CFP. **Resolvido no Bloco F** pela primeira via: o runner passa as posições base em `configure_mvp(base_positions=...)`.
 - **C2 — o fator de lentidão não é constante.** A análise de 13-11 indicava «3,4×» (1,6 s → 5,5 s); a medição de 16-11 deu 1,5 s → 5,5 s. Reportam-se os tempos e a máquina, não um fator.
 - **Recursos — «menos recursos só prejudica com falhas» é forte demais.** Sem perdas, retirar todas as patrulhas elegíveis já impede qualquer confirmação; e a diferença 13/20 contra 9/20 vem de 20 repetições sem intervalo de confiança.
 
@@ -123,7 +123,7 @@ Onde o sistema deixa de atender, em várias dimensões. Os números vêm de [`re
 
 ```bash
 PYTHONPATH=src python scripts/stress_f1.py     # ~8 min: perda, latencia, cascata, autonomia, combinadas
-PYTHONPATH=src python scripts/stress_f2.py     # ~10 min: paralelo, invalidas, escala, prazo (só o prazo: ~8,5 min)
+PYTHONPATH=src python scripts/stress_f2.py     # ~14 min: paralelo, invalidas, escala, prazo (~8,5 min), teto (~2,5 min), fila, silencio
 PYTHONPATH=src python scripts/stress_long.py   # ~3 min: longa
 ```
 
@@ -148,8 +148,8 @@ Antes dizíamos «o sistema foi desenhado para aguentar falhas». Agora dizemos 
 **2. Mostrou três fraquezas que não se viam.**
 
 - O prazo de espera fixo (0,5 s) é frágil: não há degradação gradual, o sistema passa de «funciona sempre» para «nunca funciona». Foi isto que motivou o [prazo dinâmico](#prazo-dinâmico-antes-e-depois).
-- O único guarda é o gargalo: com 2, 4 ou 8 ocorrências, só uma fecha por janela.
-- Os agentes respondem a parte das mensagens inválidas. As respostas estão corretas, mas multiplicam o tráfego de quem ataca.
+- O único guarda é o gargalo: com 2, 4 ou 8 ocorrências, só uma fecha por janela. Foi isto que motivou a [fila](#fila-para-recursos-ocupados-antes-e-depois).
+- Os agentes respondem a parte das mensagens inválidas. As respostas estão corretas, mas dão tráfego de volta a quem ataca. Foi isto que motivou o [silêncio perante `ACCEPT` incoerente](#silêncio-perante-accept-incoerente-antes-e-depois).
 
 **3. Provou duas garantias que eram só alegações.**
 
@@ -173,6 +173,9 @@ Antes dizíamos «o sistema foi desenhado para aguentar falhas». Agora dizemos 
 | Mensagens inválidas | [invalidas.csv](../results/stress/invalidas.csv) | Até 300 mensagens inválidas de cada tipo por mensagem real (12 600 por execução), resultado igual em 10/10. Com 1000, depende da carga da máquina: 0/10 na primeira execução e 10/10 no clone limpo. Nenhuma exceção |
 | Execução longa | [longa.csv](../results/stress/longa.csv) | Não deixa de atender em 1000 execuções; o histórico da reputação cresce 1,3 kB por execução |
 | Prazo fixo contra prazo dinâmico | [prazo.csv](../results/stress/prazo.csv) | Atraso: o limite passa de 0,5 s para 2,0 s. Mensagens inválidas: passa de 1000 para 5000 por mensagem real. Ver [antes e depois](#prazo-dinâmico-antes-e-depois) |
+| Tetos do prazo dinâmico | [teto.csv](../results/stress/teto.csv) | O teto é o maior atraso tolerado e também o tempo perdido quando ninguém responde. Ver [que teto escolher](#que-teto-escolher) |
+| Fila para recursos ocupados | [fila.csv](../results/stress/fila.csv) | Sem fila fecha 1 ocorrência por janela; com fila fecha todas (8 de 8), com o triplo das mensagens. Ver [antes e depois](#fila-para-recursos-ocupados-antes-e-depois) |
+| Silêncio perante `ACCEPT` incoerente | [silencio.csv](../results/stress/silencio.csv) | As respostas a lixo descem 80 % (de 5 para 1 por unidade de `flood`). Ver [antes e depois](#silêncio-perante-accept-incoerente-antes-e-depois) |
 | Mensagens em função de N (C4 + C1) | [escala.csv](../results/stress/escala.csv) | Sem limite: 15, 21, 33 e 57 mensagens com 2, 4, 8 e 16 patrulhas. Com K = 2: 15 em todos os casos |
 
 ### F1 — só parâmetros
@@ -233,7 +236,7 @@ Antes dizíamos «o sistema foi desenhado para aguentar falhas». Agora dizemos 
 
 - A validação aguenta a carga: nenhum agente termina com exceção e nenhuma mensagem inválida muda uma decisão.
 - Com 1000, a negociação legítima falhou por tempo, não por erro: processar o lixo demorou mais do que o prazo de 0,5 s. No clone limpo, com a máquina menos carregada, o mesmo ponto deu 10/10 (42 000 inválidas por execução, 17,8 s). O limite depende do CPU, não do código: na medição do [prazo dinâmico](#prazo-dinâmico-antes-e-depois), com a máquina sem carga, o prazo fixo aguentou 1000 e falhou com 2000.
-- **Achado:** os agentes respondem a parte do lixo (5 respostas por unidade de `flood`). O `InformantAgent` responde a um `VERIFY_REQUEST` com data no futuro, e os recursos respondem `reservation_failed` a um `ACCEPT` de missão desconhecida. São respostas corretas, mas dão a um atacante um amplificador de tráfego.
+- **Achado:** os agentes respondem a parte do lixo (5 respostas por unidade de `flood`). O `InformantAgent` responde a um `VERIFY_REQUEST` com IDs trocados (é um pedido bem formado), e os recursos respondem `reservation_failed` a um `ACCEPT` incoerente. São respostas corretas, mas dão tráfego de volta a quem ataca. Ver [silêncio perante `ACCEPT` incoerente](#silêncio-perante-accept-incoerente-antes-e-depois).
 
 **Execução longa.** 1000 execuções com o mesmo `ReputationBook` em 176 s: 1824 registos em `book.history`, 1,3 MB serializados. O pico de memória do processo passou de 85 MB para 104 MB, dos quais 12 MB nas primeiras 100 execuções. A reputação do sensor-1 estabiliza em 0,998.
 
@@ -257,7 +260,7 @@ Cada patrulha a mais custa 3 mensagens (CFP, `PROPOSAL`, `REJECT`). Com K = 2, o
 - **Propostas:** ao fim de 0,5 s, se já chegou pelo menos uma proposta, o iniciador avança com ela, como antes. Se não chegou nenhuma, continua à espera até um teto de 2,0 s.
 - **`STATUS`:** o iniciador espera até ao teto. Depois do `ACCEPT` não há alternativa: desistir dá `confirmation_unknown`, que não permite escolher outro recurso.
 
-**Como ligar.** `run_mvp(max_receive_timeout=2.0)` ([incident.py:153](../src/isia/agents/incident.py#L153) e [:199](../src/isia/agents/incident.py#L199)). Está desligado por omissão, porque os resultados da Etapa 9 e do F1 foram recolhidos com o prazo fixo; ligá-lo por omissão obrigaria a repeti-los. A decisão fica no item 5.1 da [ata](approvals.md).
+**Como ligar.** `run_mvp(max_receive_timeout=2.0)` ([incident.py:160](../src/isia/agents/incident.py#L160) e [:207](../src/isia/agents/incident.py#L207)). Está desligado por omissão, porque os resultados da Etapa 9 e do F1 foram recolhidos com o prazo fixo; ligá-lo por omissão obrigaria a repeti-los. A decisão fica no item 5.1 da [ata](approvals.md).
 
 **Resultados** ([prazo.csv](../results/stress/prazo.csv), 17-11-2026, montagem do F2, 10 execuções por célula; ocorrências fechadas e tempo real por execução):
 
@@ -297,7 +300,91 @@ Cada patrulha a mais custa 3 mensagens (CFP, `PROPOSAL`, `REJECT`). Com K = 2, o
 - Uma proposta lenta continua a perder: se uma proposta chega dentro de 0,5 s, o iniciador não espera pelas outras, mesmo que fossem melhores. Já era assim.
 - O prazo continua a ser em tempo real. Por isso, o limite das mensagens inválidas depende do computador: os valores 5000 e 8000 são desta máquina, sem carga.
 - Só muda a espera por propostas e pelo `STATUS`. A espera pelo `VERIFY_RESPONSE` (10 s) e pelo `MISSION_RESULT` (dez prazos) fica igual.
-- Medido só no transporte local, com a política sem corroboração e 10 execuções por célula.
+- Medido só no transporte local, com a política sem corroboração e 10 execuções por célula. Na rede XMPP (servidor local, 17-11-2026) só se confirmou que o MVP fecha a ocorrência com as três opções ligadas; não há injeção de atrasos nesse transporte.
+
+#### Que teto escolher
+
+Medimos quatro tetos ([teto.csv](../results/stress/teto.csv), 5 execuções por célula; sem perdas aleatórias, as execuções de cada célula são iguais). Ocorrências fechadas e tempo real por execução:
+
+| Caso | Teto 0,5 s (prazo fixo) | Teto 1,0 s | Teto 2,0 s | Teto 4,0 s |
+|---|---|---|---|---|
+| `PROPOSAL` com 0,6 s de atraso | 0/5 · 0,51 s | **5/5** · 1,37 s | **5/5** · 1,38 s | **5/5** · 1,37 s |
+| `PROPOSAL` com 1,5 s | 0/5 · 0,51 s | 0/5 · 1,01 s | **5/5** · 3,17 s | **5/5** · 3,18 s |
+| `PROPOSAL` com 3,0 s | 0/5 · 0,51 s | 0/5 · 1,01 s | 0/5 · 2,01 s | **5/5** · 6,18 s |
+| Ninguém responde (sem patrulhas) | 0/5 · 0,51 s | 0/5 · 1,01 s | 0/5 · 2,01 s | 0/5 · 4,01 s |
+
+- **A regra é simples:** o teto é, ao mesmo tempo, o maior atraso que o sistema tolera e o tempo que se perde quando ninguém responde. Não há um valor ótimo; há uma troca.
+- **Quando há resposta, o teto não custa nada:** com 0,6 s de atraso, o tempo é o mesmo (1,37 s) com teto de 1, 2 ou 4 s.
+- **O custo é pequeno face a uma missão.** Uma verificação seguida de intervenção demora pelo menos 12 s simulados; num caso real, deslocar um veículo demora minutos. Perder 2 s a mais quando ninguém responde não muda o resultado.
+- **Proposta para a ata (item 5.1):** teto de 2,0 s, que é o prazo que o projeto já usa na rede XMPP.
+
+### Fila para recursos ocupados (antes e depois)
+
+**O problema.** Com várias ocorrências ao mesmo tempo, quem encontrava o guarda ocupado terminava logo como `unresolved`. O guarda ficava livre segundos depois, mas já ninguém o voltava a chamar.
+
+**A ideia.** Um recurso ocupado não é uma falha. O iniciador espera 5 s simulados e volta a enviar o `CFP`, até um número máximo de vezes. Vale para o guarda e para as patrulhas.
+
+**Como ligar.** `run_mvp(queue_rounds=60)` ([incident.py:259](../src/isia/agents/incident.py#L259)). Está desligada por omissão, pela mesma razão do prazo dinâmico. A decisão é de cada iniciador; o runner continua sem despachante.
+
+**Resultados** ([fila.csv](../results/stress/fila.csv), 10 execuções por linha):
+
+| Ocorrências | Fechadas sem fila | Fechadas com fila | Último fecho (simulado) | Mensagens sem fila | Mensagens com fila | Duplas reservas |
+|---|---|---|---|---|---|---|
+| 2 | 10 de 20 | **20 de 20** | 12 s → 23 s | 33 | 40 | 0 |
+| 4 | 10 de 40 | **40 de 40** | 12 s → 45 s | 63 | 120 | 0 |
+| 8 | 10 de 80 | **80 de 80** | 12 s → 80 s | 123 | 352 | 0 |
+
+**Vantagens**
+
+- Todas as ocorrências acabam por ser atendidas, em vez de uma por janela.
+- Continua sem duplas reservas: a disputa pelo recurso libertado é resolvida pelo `STATUS`, como antes.
+- Não há agente novo nem mensagens novas: é o mesmo `CFP`, numa ronda seguinte.
+
+**Desvantagens**
+
+- Mais mensagens: com 8 ocorrências, quase o triplo (352 contra 123). Cada tentativa é um `CFP` e uma recusa por candidato.
+- A última ocorrência espera: cerca de 10 s simulados a mais por cada ocorrência à frente.
+
+**Limitações**
+
+- Não há ordem de chegada nem prioridade. Ganha quem perguntar primeiro depois de o recurso ficar livre; uma ocorrência grave pode ficar atrás de uma ligeira.
+- O gargalo continua a ser o guarda único. A fila troca «não atendida» por «atendida mais tarde»; só um segundo guarda reduziria a espera.
+- O iniciador desiste ao fim de `queue_rounds` tentativas, e não verifica se a ameaça ainda lá está quando chega a sua vez.
+- Medido só no transporte local, com a política sem corroboração.
+
+### Silêncio perante `ACCEPT` incoerente (antes e depois)
+
+**O problema.** Os recursos respondiam `reservation_failed` a qualquer `ACCEPT` que não batesse com a proposta feita. Quem enviasse lixo recebia uma resposta por cada mensagem.
+
+**A ideia.** Um `ACCEPT` com IDs trocados ou com data no futuro nunca é enviado por um iniciador legítimo. Por isso, o recurso regista um aviso e não responde.
+
+**Como ligar.** `run_mvp(silent_invalid=True)` ([mobile.py:351](../src/isia/agents/mobile.py#L351)). Está desligado por omissão, porque muda o contrato de mensagens aprovado e os testes que o verificam.
+
+**Resultados** ([silencio.csv](../results/stress/silencio.csv), 10 execuções por linha; a ocorrência fecha em 10/10 nos dois casos):
+
+| Inválidas por mensagem real | Inválidas por execução | Respostas a lixo, antes | Respostas a lixo, depois |
+|---|---|---|---|
+| 10 | 420 | 50 | 10 |
+| 100 | 4 200 | 500 | 100 |
+| 300 | 12 600 | 1 500 | 300 |
+
+**Vantagens:** menos 80 % de respostas a lixo e menos tráfego total (1515 mensagens passam a 315), sem mudar o resultado.
+
+**Desvantagens:** um iniciador com um erro deixa de receber «reserva falhada» e passa a ver silêncio, que só se nota no fim do prazo (`confirmation_unknown`). Fica mais difícil de diagnosticar.
+
+**Limitações**
+
+- Sobra uma resposta em cada cinco: o `InformantAgent` responde ao `VERIFY_REQUEST` com IDs trocados, porque é um pedido bem formado. Só autenticar o remetente ou limitar pedidos por remetente o impediria.
+- Um `ACCEPT` de uma proposta desconhecida ou expirada continua a ter resposta (`proposal_not_correlated`), de propósito: um iniciador legítimo pode aceitar uma proposta que entretanto expirou.
+- Não é um amplificador no sentido estrito: cada mensagem inválida gera, no máximo, uma resposta.
+
+### O que fica por investigar
+
+1. **Prazo que se ajusta sozinho:** estimar o teto a partir dos tempos de resposta observados, em vez de o fixar.
+2. **Segundo guarda:** quantos guardas são precisos para N ocorrências simultâneas (pede o C4 completo).
+3. **Prioridade na fila:** atender primeiro a ocorrência mais grave.
+4. **Atrasos reais na rede XMPP:** os atrasos só foram injetados no transporte local.
+5. **Mais cenários e intervalos de confiança:** os testes de stress usam um cenário e 5 a 20 execuções por ponto.
 
 ### Limites destes testes
 
@@ -306,4 +393,4 @@ Cada patrulha a mais custa 3 mensagens (CFP, `PROPOSAL`, `REJECT`). Com K = 2, o
 - Os iniciadores adicionais não corroboram nem atualizam a reputação.
 - `cfp_limit` usa a posição base dos recursos, não a atual.
 - Os valores de tempo real e o limite das mensagens inválidas dependem da máquina e da carga: com o prazo fixo, entre 300 e 2000; com o prazo dinâmico, entre 5000 e 8000.
-- Repetição (17-11-2026, mesma máquina): o F1 foi corrido duas vezes com as mesmas sementes e depois os três scripts num clone limpo do commit. Os nove CSV de então saíram iguais em todas as colunas, exceto `tempo_real_s` e `rss_pico_kb`, com uma exceção: o ponto de 1000 inválidas, que falhou na primeira execução e passou no clone (ver acima). O `prazo.csv` só foi corrido uma vez.
+- Repetição (17-11-2026, mesma máquina): o F1 foi corrido duas vezes com as mesmas sementes e depois os três scripts num clone limpo do commit. Os nove CSV de então saíram iguais em todas as colunas, exceto `tempo_real_s` e `rss_pico_kb`, com uma exceção: o ponto de 1000 inválidas, que falhou na primeira execução e passou no clone (ver acima). Os CSV `prazo`, `teto`, `fila` e `silencio` só foram corridos uma vez.
