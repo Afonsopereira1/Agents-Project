@@ -123,7 +123,7 @@ Onde o sistema deixa de atender, em várias dimensões. Os números vêm de [`re
 
 ```bash
 PYTHONPATH=src python scripts/stress_f1.py     # ~8 min: perda, latencia, cascata, autonomia, combinadas
-PYTHONPATH=src python scripts/stress_f2.py     # ~14 min: paralelo, invalidas, escala, prazo (~8,5 min), teto (~2,5 min), fila, silencio
+PYTHONPATH=src python scripts/stress_f2.py     # ~14 min: paralelo, invalidas, escala, prazo (~8,5 min), teto (~2,5 min), fila, silencio, espera
 PYTHONPATH=src python scripts/stress_long.py   # ~3 min: longa
 ```
 
@@ -175,6 +175,7 @@ Antes dizíamos «o sistema foi desenhado para aguentar falhas». Agora dizemos 
 | Prazo fixo contra prazo dinâmico | [prazo.csv](../results/stress/prazo.csv) | Atraso: o limite passa de 0,5 s para 2,0 s. Mensagens inválidas: passa de 1000 para 5000 por mensagem real. Ver [antes e depois](#prazo-dinâmico-antes-e-depois) |
 | Tetos do prazo dinâmico | [teto.csv](../results/stress/teto.csv) | O teto é o maior atraso tolerado e também o tempo perdido quando ninguém responde. Ver [que teto escolher](#que-teto-escolher) |
 | Fila para recursos ocupados | [fila.csv](../results/stress/fila.csv) | Sem fila fecha 1 ocorrência por janela; com fila fecha todas (8 de 8), com o triplo das mensagens. Ver [antes e depois](#fila-para-recursos-ocupados-antes-e-depois) |
+| Espera na fila com ameaças curtas | [espera.csv](../results/stress/espera.csv) | Com ameaças de 30 s, 41 de 80 patrulhas chegam em vão e só 20 de 80 ocorrências têm o guarda a tempo. Ver [o que acontece a quem espera](#fila-para-recursos-ocupados-antes-e-depois) |
 | Silêncio perante `ACCEPT` incoerente | [silencio.csv](../results/stress/silencio.csv) | As respostas a lixo descem 80 % (de 5 para 1 por unidade de `flood`). Ver [antes e depois](#silêncio-perante-accept-incoerente-antes-e-depois) |
 | Mensagens em função de N (C4 + C1) | [escala.csv](../results/stress/escala.csv) | Sem limite: 15, 21, 33 e 57 mensagens com 2, 4, 8 e 16 patrulhas. Com K = 2: 15 em todos os casos |
 
@@ -353,6 +354,19 @@ Medimos quatro tetos ([teto.csv](../results/stress/teto.csv), 5 execuções por 
 - O número de mensagens e o instante do último fecho variam até 2 % entre execuções iguais, porque a espera depende do relógio real; o número de ocorrências fechadas não varia.
 - Medido só no transporte local, com a política sem corroboração.
 
+**O que acontece a quem espera** ([espera.csv](../results/stress/espera.csv), 8 ocorrências com fila, 10 execuções, 80 ocorrências por linha):
+
+| Duração da ameaça | Fechadas como confirmadas | Patrulhas que chegam em vão | Intervenções do guarda depois do fim da ameaça | Rondas ao guarda (média · máximo) |
+|---|---|---|---|---|
+| 1000 s | 80 | 0 | 0 | 2,9 · 15 |
+| 60 s | 70 | 10 | 15 | 2,7 · 13 |
+| 30 s | 39 | 41 | 19 | 2,8 · 8 |
+
+- **A fila atende todas, mas não a tempo.** Com ameaças de 30 s, só 20 das 80 ocorrências têm o guarda no local antes de a ameaça terminar (39 confirmadas menos 19 tardias).
+- **O simulador não vê o guarda atrasado:** a intervenção dá sempre `confirmed` ([scenario.py:195](../src/isia/simulation/scenario.py#L195)). As 19 intervenções tardias foram contadas pelo instante em que terminam, não pelo resultado.
+- **Uma ocorrência chega a pedir o guarda 15 vezes,** contra uma média de 2,9: não há ordem de chegada.
+- As mitigações estão em [pendentes do Bloco F](delivery-todo.md#pendentes-deixados-pelo-bloco-f).
+
 ### Silêncio perante `ACCEPT` incoerente (antes e depois)
 
 **O problema.** Os recursos respondiam `reservation_failed` a qualquer `ACCEPT` que não batesse com a proposta feita. Quem enviasse lixo recebia uma resposta por cada mensagem.
@@ -421,4 +435,4 @@ flowchart TD
 - Os iniciadores adicionais não corroboram nem atualizam a reputação.
 - `cfp_limit` usa a posição base dos recursos, não a atual.
 - Os valores de tempo real e o limite das mensagens inválidas dependem da máquina e da carga: com o prazo fixo, entre 300 e 2000; com o prazo dinâmico, entre 5000 e 8000.
-- Repetição (17-11-2026, mesma máquina): o F1 foi corrido duas vezes com as mesmas sementes e depois os três scripts num clone limpo do commit. Os nove CSV de então saíram iguais em todas as colunas, exceto `tempo_real_s` e `rss_pico_kb`, com uma exceção: o ponto de 1000 inválidas, que falhou na primeira execução e passou no clone (ver acima). Os grupos novos do F2 (`prazo`, `teto`, `fila`, `silencio`) foram repetidos num segundo clone limpo: `teto` e `silencio` saíram iguais; no `prazo`, as ocorrências fechadas são as mesmas e só muda o motivo de uma falha em 300 execuções; na `fila`, as ocorrências fechadas são as mesmas (40 de 40 e 80 de 80), mas as mensagens e o instante do último fecho variam até 2 %, porque a espera da fila depende do relógio real.
+- Repetição (17-11-2026, mesma máquina): o F1 foi corrido duas vezes com as mesmas sementes e depois os três scripts num clone limpo do commit. Os nove CSV de então saíram iguais em todas as colunas, exceto `tempo_real_s` e `rss_pico_kb`, com uma exceção: o ponto de 1000 inválidas, que falhou na primeira execução e passou no clone (ver acima). O `espera.csv` foi corrido duas vezes na mesma máquina: as contagens saíram iguais; as mensagens e as rondas variam até 3 %. Os grupos novos do F2 (`prazo`, `teto`, `fila`, `silencio`) foram repetidos num segundo clone limpo: `teto` e `silencio` saíram iguais; no `prazo`, as ocorrências fechadas são as mesmas e só muda o motivo de uma falha em 300 execuções; na `fila`, as ocorrências fechadas são as mesmas (40 de 40 e 80 de 80), mas as mensagens e o instante do último fecho variam até 2 %, porque a espera da fila depende do relógio real.

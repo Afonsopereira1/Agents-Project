@@ -232,7 +232,7 @@ Os Blocos A, B, C e E podem decorrer em paralelo. O Bloco D depende deles para o
 - [x] Bloco C: P3 reproduzível a partir de `scripts/` e Etapa 9A fechada com adiamentos justificados.
 - [x] Bloco D: repetição gravada, apresentação e README finais. Feito: repetição, roteiro, README e teste sem `.git`.
 - [x] Bloco E: aprovações registadas e plano coerente.
-- [x] Bloco F: 13 CSV em `results/stress/` e mapa de limites em [scalability.md](scalability.md#testes-de-stress-bloco-f).
+- [x] Bloco F: 14 CSV em `results/stress/` e mapa de limites em [scalability.md](scalability.md#testes-de-stress-bloco-f).
 
 ---
 
@@ -293,10 +293,18 @@ Os parâmetros já existem e estão validados em [runner.py:36](../src/isia/simu
 
 O que ficou por investigar depois do prazo dinâmico, da fila e do silêncio ([scalability.md](scalability.md#o-que-fica-por-investigar)). Opcional; fazer só depois do Bloco G e dos diapositivos.
 
-- [ ] **Prioridade na fila** (opcional, ~3 h) — hoje, quando o guarda fica livre, ganha o iniciador cujo `ACCEPT` chega primeiro. Uma ocorrência grave pode esperar atrás de uma ligeira, e uma ocorrência pode perder todas as disputas até esgotar `queue_rounds`.
-  1. Ligar a gravidade à missão: `create_from_decision` aceita `priority`, mas o iniciador nunca a passa (fica sempre 0), e a gravidade é uma só por cenário (`response_settings.severity`). Passar a gravidade por ameaça ou por sensor.
-  2. Escolher uma de duas formas: **(a)** o intervalo de espera da fila depende da prioridade (uma ocorrência grave volta a perguntar mais cedo); não precisa de mensagens novas, mas não garante a ordem. **(b)** O recurso ocupado guarda uma lista de espera e, quando fica livre, avisa o primeiro; garante a ordem, mas acrescenta um passo ao protocolo e estado ao recurso.
-  3. Medir com 8 ocorrências (2 graves e 6 ligeiras), antes e depois: tempo até ao fecho das graves, maior número de tentativas de uma só ocorrência e duplas reservas (tem de dar zero). Gravar `results/stress/prioridade.csv` e uma linha no mapa de limites.
+**Mitigações para quem espera muito tempo na fila.** Medição de partida em [espera.csv](../results/stress/espera.csv) (8 ocorrências, 10 execuções): com ameaças de 30 s, 41 de 80 patrulhas chegam em vão e 19 das 39 intervenções do guarda acabam depois de a ameaça terminar; uma ocorrência chega a pedir o guarda 15 vezes. Por ordem de valor:
+
+- [ ] **0. O simulador verificar a ameaça quando o guarda chega** (pré-requisito, ~0,5 h) — hoje a intervenção do guarda dá sempre `confirmed` ([scenario.py:195](../src/isia/simulation/scenario.py#L195)), por isso o simulador não vê um guarda que chega tarde. Sem isto, as mitigações 1 e 5 não se conseguem medir pelo resultado. Repetir a Etapa 9 e conferir que não muda.
+- [ ] **1. Prazo de validade da ocorrência** (opcional, ~1,5 h) — resolve «a ameaça já lá não está». Antes de cada novo pedido, o iniciador volta a ler o seu próprio sensor; se já não vê a ameaça há N leituras seguidas, fecha como `expired` em vez de mandar alguém. Sem mensagens novas. Medir: patrulhas em vão e intervenções tardias com ameaças de 30 e 60 s, antes e depois. Risco: um sensor com falsos negativos pode desistir de uma ameaça real; por isso N leituras e não uma.
+- [ ] **2. Mais guardas** (opcional, ~2 h) — resolve a causa, o guarda único. Acrescentar `extra_rangers` a `run_mvp`, como já existe `extra_patrols` (C4). Medir com 8 ocorrências e 1, 2 e 4 guardas: instante do último fecho e mensagens.
+- [ ] **3. O recurso ocupado dizer quando fica livre** (opcional, ~2 h) — resolve o tráfego. A recusa por ocupação passa a levar `busy_until` (o recurso conhece o percurso da missão); o iniciador espera até lá em vez de perguntar de 5 em 5 s. Medir: mensagens e rondas ao guarda, antes e depois (hoje 352 mensagens e até 15 rondas com 8 ocorrências).
+- [ ] **4. Ordem na fila: gravidade e tempo de espera** (opcional, ~3 h) — resolve «sem prioridade» e «uma ocorrência pode perder sempre».
+  1. Ligar a gravidade à missão: `create_from_decision` aceita `priority`, mas o iniciador nunca a passa (fica sempre 0), e a gravidade é uma só por cenário (`response_settings.severity`).
+  2. Escolher uma de duas formas: **(a)** o intervalo de espera depende da prioridade e do número de disputas perdidas (quem é grave ou já perdeu muitas vezes volta a perguntar mais cedo); não precisa de mensagens novas, mas não garante a ordem. **(b)** O recurso ocupado guarda uma lista de espera e, quando fica livre, propõe só ao primeiro (mais grave; em caso de empate, o que espera há mais tempo); garante a ordem, mas acrescenta estado ao recurso.
+  3. Medir com 8 ocorrências (2 graves e 6 ligeiras): tempo até ao fecho das graves, maior número de rondas de uma só ocorrência e duplas reservas (tem de dar zero). Gravar `results/stress/prioridade.csv`.
+- [ ] **5. O guarda encadear missões** (opcional, ~3 h) — hoje o guarda só fica livre depois de regressar à base ([movement.py:145](../src/isia/simulation/movement.py#L145)). Aceitar a missão seguinte durante o regresso encurta a espera de quem está na fila. Verificar a autonomia a partir da posição atual, não da base. Medir o instante do último fecho com 8 ocorrências.
+
 - [ ] **Atrasos reais na rede XMPP** (opcional, ~2 h) — os atrasos só foram injetados no transporte local; o runner recusa `faults` com `xmpp=True`. Não se sabe a latência real nem se os prazos chegam na rede.
   1. Medir sem injeção: no servidor local (`spade run`), os tempos de `CFP` a `PROPOSAL` e de `ACCEPT` a `STATUS` em 20 execuções (mediana e máximo). É a base para justificar o teto.
   2. Injetar atraso real na interface local: `sudo tc qdisc add dev lo root netem delay 300ms` (o atraso conta nos dois sentidos) e, no fim, `sudo tc qdisc del dev lo root`. O `tc` existe no WSL2; falta confirmar que o kernel tem o `netem`. Alternativa: o servidor XMPP noutra máquina.

@@ -7,7 +7,7 @@ Cada grupo grava results/stress/<grupo>.csv; tempo_real_s depende da máquina.
 Uso, a partir da raiz: PYTHONPATH=src python scripts/stress_f2.py [grupo ...]
 Grupos: paralelo (1, 2, 4 e 8 ocorrências) invalidas escala (C4 mínimo + C1)
         prazo (prazo fixo contra prazo dinâmico, max_receive_timeout) teto (vários tetos)
-        fila (queue_rounds) silencio (silent_invalid)
+        fila (queue_rounds) silencio (silent_invalid) espera (fila com ameaças que duram pouco)
 """
 import asyncio, collections, copy, csv, logging, sys, time
 from pathlib import Path
@@ -42,8 +42,10 @@ def setup(count):
               for key, p in {"sensor-1": Position(2, 2), **extra}.items()]
     return extra, sources, settings, events
 
-async def run(count, rep, flood=0, faults=None, **options):
+async def run(count, rep, flood=0, faults=None, duration=None, **options):
     extra, sources, settings, events = setup(count)
+    if duration is not None:
+        events = [{**event, "duration": duration} for event in events]
     return await run_mvp(
         response_settings=settings, reputation=ReputationBook(**settings["reputation"]),
         corroborate=False, extra_initiators=extra, faults=faults or ({"flood": flood} if flood else None), **options,
@@ -210,6 +212,34 @@ async def fila():
             print(out[-1], flush=True)
     return fields, out
 
+async def espera():
+    """Problemas de esperar na fila: 8 ocorrências, queue_rounds=60, ameaças que duram 1000, 60 e 30 s."""
+    fields = ["duracao_ameaca_s", "runs", "total", "fechadas_confirmadas", "patrulha_em_vao", "guarda_apos_fim_da_ameaca",
+              "rondas_ao_guarda_mean", "rondas_ao_guarda_max", "msgs_mean"]
+    out = []
+    for duration in (1000.0, 60.0, 30.0):
+        confirmed, late, after, rounds, msgs = 0, 0, 0, [], []
+        for rep in range(REPS):
+            report = await run(8, rep, duration=duration, queue_rounds=60)
+            views = [report, *report["extra_initiators"].values()]
+            confirmed += sum(v["incident_status"] == "closed" and v["reason"] == "confirmed" for v in views)
+            results = [r["payload"] for v in views for r in v["results"]]
+            # Em vão: a patrulha chegou ao alvo e a ameaça já lá não estava.
+            late += sum(r["task"] == "verify_incident" and r["outcome"] == "not_confirmed" for r in results)
+            # A intervenção do guarda é sempre "confirmed" no simulador; contar as que acabam depois do fim da ameaça.
+            after += sum(r["task"] == "respond_incident" and r["completed_at"] > duration for r in results)
+            last = collections.Counter()
+            for m in report["messages"]:
+                if m["body"]["message_type"] == "CFP" and m["to"].startswith("ranger"):
+                    last[m["sender"]] = max(last[m["sender"]], m["body"]["payload"]["round_number"])
+            rounds += last.values(); msgs.append(len(report["messages"]))
+        out.append({"duracao_ameaca_s": duration, "runs": REPS, "total": 8 * REPS, "fechadas_confirmadas": confirmed,
+                    "patrulha_em_vao": late, "guarda_apos_fim_da_ameaca": after,
+                    "rondas_ao_guarda_mean": mean(rounds), "rondas_ao_guarda_max": max(rounds, default=0),
+                    "msgs_mean": mean(msgs)})
+        print(out[-1], flush=True)
+    return fields, out
+
 async def silencio():
     """Antes e depois de silent_invalid: quantas respostas os agentes dão às mensagens inválidas."""
     fields = ["flood_por_mensagem", "silent_invalid", "runs", "fechadas", "lixo_injetado_mean",
@@ -242,4 +272,4 @@ async def go(groups):
         print("gravado:", path.relative_to(ROOT), flush=True)
 
 if __name__ == "__main__":
-    asyncio.run(go(sys.argv[1:] or ["paralelo", "invalidas", "escala", "prazo", "teto", "fila", "silencio"]))
+    asyncio.run(go(sys.argv[1:] or ["paralelo", "invalidas", "escala", "prazo", "teto", "fila", "silencio", "espera"]))

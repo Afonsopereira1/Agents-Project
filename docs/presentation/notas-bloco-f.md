@@ -50,7 +50,7 @@ As três estão desligadas por omissão e ligam-se em `run_mvp(max_receive_timeo
 
 **Como se resolve a disputa quando o guarda fica livre.** Todos os iniciadores em espera voltam a enviar o `CFP` mais ou menos ao mesmo tempo. O guarda, livre, faz proposta a todos; cada iniciador envia o seu `ACCEPT`. O guarda reserva para o primeiro `ACCEPT` que lê e responde `STATUS(reservation_failed)` aos outros, que voltam à fila. Não há sorteio nem ordem de chegada: ganha quem chega primeiro naquele instante. O `STATUS` é o que impede a reserva dupla.
 
-**Problemas de ficar muito tempo na fila:**
+**Problemas de ficar muito tempo na fila** (medições e soluções na secção [A fila: o que aconteceu e o que propomos](#a-fila-o-que-aconteceu-e-o-que-propomos)):
 
 - **A ameaça pode já não estar lá.** O iniciador não volta a confirmar a ameaça quando chega a sua vez; o guarda pode ir a uma célula vazia.
 - **Uma ocorrência pode perder sempre.** Sem ordem de chegada, nada impede que perca todas as disputas até esgotar as tentativas e terminar como não resolvida, muito mais tarde.
@@ -63,6 +63,41 @@ As três estão desligadas por omissão e ligam-se em `run_mvp(max_receive_timeo
 - **Como funciona:** se o `ACCEPT` não bate com a proposta que o recurso fez (IDs trocados, data no futuro), o recurso regista um aviso e não responde. Um iniciador legítimo nunca envia um `ACCEPT` assim.
 - **Ganho:** menos 80 % de respostas a mensagens inválidas, com o mesmo resultado.
 - **Custo:** um iniciador com um erro de programação deixa de receber «reserva falhada» e passa a ver silêncio, o que é mais difícil de diagnosticar.
+
+## A fila: o que aconteceu e o que propomos
+
+### A história em quatro passos (cabe num diapositivo)
+
+1. **O que encontrámos.** Com 8 ocorrências ao mesmo tempo, só 1 fechava. As outras 7 terminavam como não resolvidas, porque encontravam o guarda ocupado e ninguém o voltava a chamar.
+2. **O que fizemos.** Uma fila: recurso ocupado deixa de ser falha; o iniciador espera e volta a pedir. Passaram a fechar as 8, sem reservas duplas.
+3. **O que a fila revelou.** Atender todas não é o mesmo que atender a tempo. Medimos com ameaças que duram pouco ([espera.csv](../../results/stress/espera.csv)).
+4. **O que propomos.** Cinco mitigações, cada uma para um problema medido (tabela abaixo).
+
+**Frase para dizer:** «A fila troca "não atendida" por "atendida mais tarde". O passo seguinte é garantir "atendida a tempo".»
+
+### O que medimos (8 ocorrências com fila, 80 ocorrências por linha)
+
+| Duração da ameaça | Confirmadas | Patrulhas em vão | Guarda chega depois do fim |
+|---|---|---|---|
+| 1000 s | 80 | 0 | 0 |
+| 60 s | 70 | 10 | 15 |
+| 30 s | 39 | 41 | 19 |
+
+Com ameaças de 30 s, só 20 das 80 ocorrências têm o guarda no local a tempo.
+
+### Problema, evidência e solução futura
+
+| Problema | O que medimos | Solução futura | Custo estimado |
+|---|---|---|---|
+| A ameaça já lá não está quando chega a vez | Com ameaças de 30 s, 41 de 80 patrulhas chegam em vão | **Prazo de validade:** antes de voltar a pedir, o iniciador relê o seu sensor; se já não vê a ameaça, desiste | ~1,5 h |
+| O guarda único é o gargalo | O último fecho passa de 12 s para 80 s com 8 ocorrências | **Mais guardas:** medir 1, 2 e 4 guardas | ~2 h |
+| Tráfego de quem espera | 352 mensagens contra 123; pede-se o guarda de 5 em 5 s | **O recurso diz quando fica livre:** a recusa leva a hora prevista e o iniciador espera até lá | ~2 h |
+| Sem ordem nem prioridade | Uma ocorrência chega a pedir o guarda 15 vezes (média 2,9); a gravidade não conta | **Ordem na fila:** primeiro a mais grave; em caso de empate, a que espera há mais tempo | ~3 h |
+| O guarda volta à base entre missões | Cerca de 10 s simulados a mais por cada ocorrência à frente | **Encadear missões:** aceitar a seguinte durante o regresso | ~3 h |
+
+**Um limite do simulador que convém dizer:** a intervenção do guarda dá sempre «confirmada», mesmo que a ameaça já tenha terminado. As 19 intervenções tardias foram contadas pelo relógio, não pelo resultado. Corrigir isto é o primeiro passo das mitigações.
+
+**Se perguntarem «porque não fizeram já?»:** cada mitigação muda o comportamento dos agentes e pede uma medição de antes e depois. Preferimos mostrar os problemas medidos e as soluções desenhadas a apresentar código por medir. A lista está em [pendentes do Bloco F](../delivery-todo.md#pendentes-deixados-pelo-bloco-f).
 
 ## Porque estão desligadas por omissão
 
@@ -91,8 +126,8 @@ As três estão desligadas por omissão e ligam-se em `run_mvp(max_receive_timeo
 
 ## Trabalho futuro (para o último diapositivo)
 
-1. Mais guardas e mais informadores: hoje só variámos patrulhas e sensores.
-2. Prioridade na fila: atender primeiro a ocorrência mais grave.
-3. Prazo que se ajusta sozinho aos tempos de resposta observados.
+1. Prazo de validade da ocorrência: não enviar ninguém a uma ameaça que já terminou.
+2. Mais guardas e mais informadores: hoje só variámos patrulhas e sensores.
+3. Ordem na fila: primeiro a ocorrência mais grave; em caso de empate, a que espera há mais tempo.
 4. Atrasos reais na rede XMPP: os atrasos só foram injetados no transporte local.
-5. Mais cenários e intervalos de confiança.
+5. Prazo que se ajusta sozinho aos tempos de resposta observados.
