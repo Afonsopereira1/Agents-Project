@@ -350,6 +350,7 @@ Medimos quatro tetos ([teto.csv](../results/stress/teto.csv), 5 execuções por 
 - Não há ordem de chegada nem prioridade. Ganha quem perguntar primeiro depois de o recurso ficar livre; uma ocorrência grave pode ficar atrás de uma ligeira.
 - O gargalo continua a ser o guarda único. A fila troca «não atendida» por «atendida mais tarde»; só um segundo guarda reduziria a espera.
 - O iniciador desiste ao fim de `queue_rounds` tentativas, e não verifica se a ameaça ainda lá está quando chega a sua vez.
+- O número de mensagens e o instante do último fecho variam até 2 % entre execuções iguais, porque a espera depende do relógio real; o número de ocorrências fechadas não varia.
 - Medido só no transporte local, com a política sem corroboração.
 
 ### Silêncio perante `ACCEPT` incoerente (antes e depois)
@@ -378,6 +379,33 @@ Medimos quatro tetos ([teto.csv](../results/stress/teto.csv), 5 execuções por 
 - Um `ACCEPT` de uma proposta desconhecida ou expirada continua a ter resposta (`proposal_not_correlated`), de propósito: um iniciador legítimo pode aceitar uma proposta que entretanto expirou.
 - Não é um amplificador no sentido estrito: cada mensagem inválida gera, no máximo, uma resposta.
 
+### Como funcionam as três opções juntas
+
+O que o iniciador faz em cada missão, com `max_receive_timeout`, `queue_rounds` e `silent_invalid` ligados:
+
+```mermaid
+flowchart TD
+    A[Iniciador envia CFP aos candidatos] --> B{Chegou alguma proposta<br/>em 0,5 s?}
+    B -- sim --> C[Escolhe a melhor e envia ACCEPT]
+    B -- não --> D{Chegou alguma proposta<br/>até ao teto de 2,0 s?}
+    D -- sim --> C
+    D -- não --> E{Alguém recusou<br/>por estar ocupado?}
+    E -- não --> X[Não resolvida:<br/>no_eligible_proposals]
+    E -- sim --> F{Fila: ainda há<br/>tentativas?}
+    F -- não --> X
+    F -- sim --> G[Espera 5 s simulados] --> A
+    C --> H{O ACCEPT bate com<br/>a proposta do recurso?}
+    H -- não --> I[Recurso não responde<br/>silent_invalid]
+    H -- sim --> J{STATUS até ao teto?}
+    J -- reserved --> M[Missão em curso]
+    J -- reservation_failed --> F
+    J -- silêncio --> Y[Não resolvida:<br/>confirmation_unknown]
+```
+
+- **Prazo dinâmico** são os dois losangos de cima e o do `STATUS`: prazo curto com uma proposta na mão, teto sem nenhuma.
+- **Fila** é o caminho que volta ao início: recurso ocupado ou reserva falhada dão nova tentativa, em vez de fim.
+- **Silêncio** é o ramo do recurso: um `ACCEPT` que não bate com a proposta não tem resposta. Um iniciador legítimo nunca chega a esse ramo.
+
 ### O que fica por investigar
 
 1. **Prazo que se ajusta sozinho:** estimar o teto a partir dos tempos de resposta observados, em vez de o fixar.
@@ -393,4 +421,4 @@ Medimos quatro tetos ([teto.csv](../results/stress/teto.csv), 5 execuções por 
 - Os iniciadores adicionais não corroboram nem atualizam a reputação.
 - `cfp_limit` usa a posição base dos recursos, não a atual.
 - Os valores de tempo real e o limite das mensagens inválidas dependem da máquina e da carga: com o prazo fixo, entre 300 e 2000; com o prazo dinâmico, entre 5000 e 8000.
-- Repetição (17-11-2026, mesma máquina): o F1 foi corrido duas vezes com as mesmas sementes e depois os três scripts num clone limpo do commit. Os nove CSV de então saíram iguais em todas as colunas, exceto `tempo_real_s` e `rss_pico_kb`, com uma exceção: o ponto de 1000 inválidas, que falhou na primeira execução e passou no clone (ver acima). Os CSV `prazo`, `teto`, `fila` e `silencio` só foram corridos uma vez.
+- Repetição (17-11-2026, mesma máquina): o F1 foi corrido duas vezes com as mesmas sementes e depois os três scripts num clone limpo do commit. Os nove CSV de então saíram iguais em todas as colunas, exceto `tempo_real_s` e `rss_pico_kb`, com uma exceção: o ponto de 1000 inválidas, que falhou na primeira execução e passou no clone (ver acima). Os grupos novos do F2 (`prazo`, `teto`, `fila`, `silencio`) foram repetidos num segundo clone limpo: `teto` e `silencio` saíram iguais; no `prazo`, as ocorrências fechadas são as mesmas e só muda o motivo de uma falha em 300 execuções; na `fila`, as ocorrências fechadas são as mesmas (40 de 40 e 80 de 80), mas as mensagens e o instante do último fecho variam até 2 %, porque a espera da fila depende do relógio real.
