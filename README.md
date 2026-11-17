@@ -14,7 +14,7 @@ A partir da raiz, com Python 3.12. Nenhum passo precisa de servidor XMPP.
 python3 -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
 
-# 2. Testes: 490, OK, cerca de 1 min (16-11-2026)
+# 2. Testes: 493, OK, cerca de 1 min (16-11-2026)
 PYTHONPATH=src python -m unittest discover -s tests
 
 # 3. MVP: uma ocorrência completa, relatório JSON
@@ -31,6 +31,11 @@ PYTHONPATH=src python -m isia.evaluation.collector config/scenarios/*.json --out
 # 6. P3, escalabilidade (grava results/scalability/*.csv)
 PYTHONPATH=src python scripts/scale.py
 PYTHONPATH=src python scripts/dist.py
+
+# 7. Testes de stress, opcional (grava results/stress/*.csv; cerca de 15 min no total)
+PYTHONPATH=src python scripts/stress_f1.py     # perda, latência, cascata, autonomia, falhas combinadas
+PYTHONPATH=src python scripts/stress_f2.py     # ocorrências em paralelo, mensagens inválidas, N patrulhas
+PYTHONPATH=src python scripts/stress_long.py   # 1000 execuções com a mesma reputação
 ```
 
 **Entregar com `.git`.** O coletor do passo 5 grava o commit em `manifest.json` e recusa correr sem repositório Git. Numa cópia sem `.git` (por exemplo, um ZIP do GitHub), os passos 1–4 e 6 funcionam, o passo 5 falha e a suite passa com 4 testes `skipped`, por dependerem do Git. Os resultados publicados em `results/` continuam válidos. Para entregar com o histórico: `git bundle create isia.bundle --all` ou um ZIP do clone com a pasta `.git`.

@@ -86,9 +86,16 @@ class TestFaults(unittest.IsolatedAsyncioTestCase):
 
     def test_invalid_fault_settings_are_rejected(self):
         for faults in ({"loss": 2}, {"unknown": 1}, {"seed": "1"}, {"delay": {"CFP": -1}},
-                       {"drop": "CFP"}):
+                       {"drop": "CFP"}, {"flood": -1}, {"flood": 1.5}):
             with self.assertRaises(ValueError):
                 fault_settings(faults)
+
+    async def test_flood_of_invalid_messages_keeps_the_result(self):
+        clean, flooded = await run_mvp(), await run_mvp(faults={"flood": 5})
+        self.assertEqual((flooded["incident_status"], flooded["reason"]),
+                         (clean["incident_status"], clean["reason"]))
+        self.assertEqual(len(executions(flooded, "ranger")), len(executions(clean, "ranger")))
+        self.assertTrue(any(entry["fault"] == "flood" for entry in flooded["fault_log"]))
 
 
 if __name__ == "__main__":

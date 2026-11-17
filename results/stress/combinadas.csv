@@ -1,0 +1,2 @@
+caso,runs,alerta,mobilizou,confirmou,closed,unresolved,motivos,msgs_mean,perdidas_mean,recusas_REJECT,vencedor_patrulha,duplas_reservas,fechos_duplicados,tempo_real_s
+loss=0.2 + MISSION_RESULT duplicado + drone ocupado,20,19,12,6,0,12,mission_result_unknown=2 insufficient_corroboration=7 confirmation_unknown=8 no_eligible_proposals=2 no_alert=1,7.5,1.5,4,vehicle=7 None=13,0,0,80.7

@@ -33,10 +33,15 @@ class IncidentSensorAgent(SensorAgent):
     """O sensor corrobora, negoceia, recebe resultados e encerra a ocorrência."""
 
     def configure_mvp(self, patrols, rangers, *, receive_timeout=2.0, max_attempts=2,
-                      selection_weights=None):
+                      selection_weights=None, base_positions=None, cfp_limit=None):
+        """base_positions ({jid: Position}) e cfp_limit=K ativam C1: CFP só aos K mais próximos."""
         if type(max_attempts) is not int or max_attempts < 1:
             raise ValueError("max_attempts deve ser positivo.")
+        if cfp_limit is not None and (type(cfp_limit) is not int or cfp_limit < 1):
+            raise ValueError("cfp_limit deve ser um inteiro positivo.")
         from isia.simulation.movement import nonnegative
+        self.base_positions = {bare(jid): position for jid, position in (base_positions or {}).items()}
+        self.cfp_limit = cfp_limit
         nonnegative(receive_timeout, "receive_timeout")
         if receive_timeout == 0:
             raise ValueError("receive_timeout deve ser positivo.")
@@ -121,6 +126,12 @@ class IncidentSensorAgent(SensorAgent):
 
         async def allocate(self, mission, candidates, attempt):
             agent = self.agent
+            if agent.cfp_limit is not None and all(jid in agent.base_positions for jid in candidates):
+                # C1: só os K mais próximos da base ao alvo; cada nova ronda alarga a K * ronda.
+                # shortcut: usa a posição base, não a atual; trocar quando os recursos a anunciarem.
+                from isia.simulation.movement import distance
+                nearest = sorted(candidates, key=lambda jid: distance(agent.base_positions[jid], mission.target))
+                candidates = {jid: candidates[jid] for jid in nearest[:agent.cfp_limit * attempt]}
             # Um único resultado, apenas durante a confirmação deste ACCEPT.
             self._pending_mission_result = None
             cfp = build_cfp_message(mission, agent.simulated_time,

@@ -16,6 +16,7 @@ Com `--xmpp`, `--faults` é recusado.
 | `duplicate` | Tipos entregues duas vezes, ex. `["MISSION_RESULT"]` |
 | `unavailable_agents` | Agentes (parte local do JID) sem envio nem receção durante a execução |
 | `occupied_after_proposal` | Recursos reservados por outra missão logo após a sua `PROPOSAL` |
+| `flood` | Por cada mensagem real, entrega ao mesmo destinatário N cópias inválidas de cada tipo: JSON partido, IDs trocados e data fora de prazo (o `CFP` não leva a de IDs trocados, que seria um pedido válido). As respostas ao lixo não geram mais lixo. Medido em [scalability.md](scalability.md#testes-de-stress-bloco-f) |
 
 O relatório JSON regista `faults` (já validado e completo), `scenario_seed` e
 `fault_log`, com cada mensagem perdida, atrasada, duplicada ou recurso ocupado.

@@ -1,8 +1,8 @@
 # Ata de aprovação — parâmetros e contratos
 
-> Preparada para a reunião de 15 minutos do [Bloco E](delivery-todo.md#bloco-e--fecho-do-plano). Cada linha só passa a «Aprovado» com a data e as iniciais dos três elementos. Se um valor mudar, abrir uma issue e não alterar o código durante a reunião.
+> Preparada para o [Bloco E](delivery-todo.md#bloco-e--fecho-do-plano). Basta um elemento aprovar cada linha, com a data e o nome. Se um valor mudar, abrir uma issue em vez de alterar o código no momento.
 
-**Data:** ____ · **Presentes:** ____ · ____ · ____
+**Data:** ____ · **Aprovado por:** ____
 
 **Itens em exploração:** 4.1, 4.3, 5.1, 5.2 e 7.1–7.6 só se decidem depois de medido o efeito de dois valores alternativos ([Bloco G](delivery-todo.md#bloco-g--sensibilidade-dos-parâmetros-no-final)).
 
@@ -14,7 +14,7 @@
 |---|---|---|---|
 | 0.1 | Documentação em `docs/` aceite como base da entrega | `main` atual | [ ] |
 | 0.2 | Versões | Python 3.12, SPADE 4.1.4 ([requirements.txt](../requirements.txt)) | [ ] |
-| 0.3 | Instalação testada em cada computador: `PYTHONPATH=src python -m unittest discover -s tests` dá 490 testes OK | Elemento 1 [ ] · 2 [ ] · 3 [ ] | [ ] |
+| 0.3 | Instalação testada: `PYTHONPATH=src python -m unittest discover -s tests` dá 493 testes OK | num computador | [ ] |
 
 ## Etapa 1 — contratos (fecha [development-plan.md:91](development-plan.md#L91))
 
@@ -47,9 +47,9 @@ Valores de [config/agents.json](../config/agents.json).
 | 7.5 | Adjudicação de uma missão | distância ≤ 1 célula, atraso ≤ 30 s | [ ] |
 | 7.6 | Os limiares são *scores* de engenharia, não probabilidades calibradas | [reputation-policy.md](reputation-policy.md) | [ ] |
 
-## Depois da reunião
+## Depois de aprovar
 
-1. Preencher a data, os presentes e as caixas desta ata, e fazer commit.
+1. Preencher a data, quem aprovou e as caixas desta ata, e fazer commit.
 2. No [plano](development-plan.md), assinalar as tarefas citadas acima com a ligação para esta ata.
 3. Na [checklist de marcos](development-plan.md#checklist-de-marcos), fechar as Etapas 0–1, 4–5 e 7.
 4. Qualquer «não» vira uma issue com o valor proposto. Se o valor mudar, a recolha da Etapa 9 tem de ser repetida.

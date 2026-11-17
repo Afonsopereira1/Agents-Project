@@ -1,0 +1,6 @@
+flood_por_mensagem,runs,lixo_injetado_mean,resultado_igual_a_referencia,excecoes,estados,msgs_mean,respostas_a_lixo_mean,tempo_real_s
+0,10,0.0,10,0,closed/confirmed=10,15.0,0.0,2.0
+10,10,420.0,10,0,closed/confirmed=10,65.0,50.0,2.2
+100,10,4200.0,10,0,closed/confirmed=10,515.0,500.0,4.9
+300,10,12600.0,10,0,closed/confirmed=10,1515.0,1500.0,11.2
+1000,10,17200.0,0,0,unresolved/confirmation_unknown=1 unresolved/no_eligible_proposals=9,1206.4,1200.0,13.8

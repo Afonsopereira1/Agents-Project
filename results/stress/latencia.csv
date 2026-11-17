@@ -1,0 +1,13 @@
+caso,runs,alerta,mobilizou,confirmou,closed,unresolved,motivos,msgs_mean,perdidas_mean,recusas_REJECT,vencedor_patrulha,duplas_reservas,fechos_duplicados,tempo_real_s
+PROPOSAL delay=0.1s,10,10,8,8,8,0,confirmed=8 insufficient_corroboration=2,12.4,0.0,0,vehicle=8 None=2,0,0,3.0
+PROPOSAL delay=0.3s,10,10,8,8,8,0,confirmed=8 insufficient_corroboration=2,12.4,0.0,0,vehicle=8 None=2,0,0,6.3
+PROPOSAL delay=0.4s,10,10,8,8,8,0,confirmed=8 insufficient_corroboration=2,12.4,0.0,0,vehicle=8 None=2,0,0,7.9
+PROPOSAL delay=0.5s,10,10,8,0,0,8,no_eligible_proposals=8 insufficient_corroboration=2,5.2,0.0,0,None=10,0,0,4.1
+PROPOSAL delay=0.6s,10,10,8,0,0,8,no_eligible_proposals=8 insufficient_corroboration=2,5.2,0.0,0,None=10,0,0,4.1
+PROPOSAL delay=1.0s,10,10,8,0,0,8,no_eligible_proposals=8 insufficient_corroboration=2,5.2,0.0,0,None=10,0,0,4.1
+STATUS delay=0.1s,10,10,8,8,8,0,confirmed=8 insufficient_corroboration=2,12.4,0.0,0,vehicle=8 None=2,0,0,1.9
+STATUS delay=0.3s,10,10,8,8,8,0,confirmed=8 insufficient_corroboration=2,12.4,0.0,0,vehicle=8 None=2,0,0,4.9
+STATUS delay=0.4s,10,10,8,8,8,0,confirmed=8 insufficient_corroboration=2,12.4,0.0,0,vehicle=8 None=2,0,0,6.5
+STATUS delay=0.5s,10,10,8,0,0,8,confirmation_unknown=8 insufficient_corroboration=2,8.4,0.0,0,vehicle=8 None=2,0,0,4.1
+STATUS delay=0.6s,10,10,8,0,0,8,confirmation_unknown=8 insufficient_corroboration=2,8.4,0.0,0,vehicle=8 None=2,0,0,4.1
+STATUS delay=1.0s,10,10,8,0,0,8,confirmation_unknown=8 insufficient_corroboration=2,8.4,0.0,0,vehicle=8 None=2,0,0,4.1

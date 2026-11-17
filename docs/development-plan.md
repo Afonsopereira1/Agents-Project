@@ -104,7 +104,7 @@ posteriores.
 
 **Testes a realizar:** serializar/desserializar objetos; validar limites (posição fora do mapa, energia negativa, identificador vazio); rejeitar transições inválidas; idempotência de uma mensagem repetida.
 
-**Critérios de conclusão:** modelos e contratos documentados, testados e aprovados pelos três elementos; cada componente sabe que objetos recebe e devolve.
+**Critérios de conclusão:** modelos e contratos documentados, testados e aprovados por um elemento ([ata](approvals.md)); cada componente sabe que objetos recebe e devolve.
 
 **Resultado esperado:** biblioteca mínima de dados consistente, sem agentes nem simulação completos.
 
@@ -516,7 +516,7 @@ merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
 
 **Objetivo:** identificar os limites de escala, medir o seu efeito e avaliar as correções mais simples antes da apresentação.
 
-**Origem e estado:** análise de P3 feita a 13-11-2026 em notas locais e repetida a 16-11-2026 com os scripts versionados [`scripts/scale.py`](../scripts/scale.py) e [`scripts/dist.py`](../scripts/dist.py), que gravam [`results/scalability/`](../results/scalability/). Resultados, estado de C1–C8 e correções em [scalability.md](scalability.md). **Fechada como análise:** C2 e C7 medidos; C1, C4, C5, C6 e C8 (reputação) propostos; C3 e C8 (processos) adiados.
+**Origem e estado:** análise de P3 feita a 13-11-2026 em notas locais e repetida a 16-11-2026 com os scripts versionados [`scripts/scale.py`](../scripts/scale.py) e [`scripts/dist.py`](../scripts/dist.py), que gravam [`results/scalability/`](../results/scalability/). Resultados, estado de C1–C8 e correções em [scalability.md](scalability.md). **Fechada como análise:** C2 e C7 medidos; C1 implementado e medido, C4 com o mínimo implementado e C8 (reputação) medido no [Bloco F](scalability.md#testes-de-stress-bloco-f); C5 e C6 propostos; C3 e C8 (processos) adiados.
 
 **Pré-requisitos:** Etapa 9; cenários, métricas e registos de referência disponíveis.
 
@@ -546,8 +546,8 @@ merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
 **Tarefas concretas:**
 
 - [x] Preservar scripts, configurações e resultados de P3 em caminhos versionados ou com proveniência registada; repetir a referência antes de comparar alterações. — `scripts/`, `results/scalability/`, repetida a 16-11-2026.
-- [ ] Medir mensagens, tempo real, tempo simulado e crescimento dos históricos ao variar sensores, recursos e ocorrências; C4 é necessário para testar mais drones por configuração. — **Parcial:** mensagens e tempos medidos ao retirar recursos e juntar caçadores; variar N e o crescimento dos históricos ficam adiados até C4.
-- [ ] Começar pela avaliação de C1, C5 e da persistência da reputação em C8, comparando custo e decisões antes/depois; medir também a espera de C2. — **C2 medido.** C1 sem efeito sem C4; C5 sem ganho mensurável (feed lido uma vez); C8 parte testes que usam `book.history`. Ficam propostos.
+- [ ] Medir mensagens, tempo real, tempo simulado e crescimento dos históricos ao variar sensores, recursos e ocorrências; C4 é necessário para testar mais drones por configuração. — **Parcial:** mensagens e tempos medidos ao retirar recursos e juntar caçadores; variar N e o crescimento dos históricos ficaram medidos no [Bloco F](scalability.md#testes-de-stress-bloco-f) (`escala.csv` e `longa.csv`); variar sensores continua por fazer.
+- [ ] Começar pela avaliação de C1, C5 e da persistência da reputação em C8, comparando custo e decisões antes/depois; medir também a espera de C2. — **C2 medido.** C1 implementado e medido no [Bloco F](scalability.md#testes-de-stress-bloco-f) (`cfp_limit`: 57 mensagens contra 15 com 16 patrulhas). C5 sem ganho mensurável (feed lido uma vez); C8 parte testes que usam `book.history`: o crescimento ficou medido (1824 registos em 1000 execuções), a persistência fica proposta.
 - [ ] Avaliar C6, C7 e a possibilidade de qualquer sensor iniciar, evitando ocorrências duplicadas para a mesma ameaça. — **Adiado:** C7 e o ponto cego medidos; correções propostas em [scalability.md](scalability.md).
 - [x] Acrescentar métricas por ameaça/ocorrência: cobertura, confirmações, atendimento e casos não resolvidos, mantendo a comparação com a métrica por execução. — `attended()` em `scripts/dist.py`; coluna `atendidos/ameacas` ao lado das contagens por execução.
 - [ ] **Adiado (depende de C7):** depois de suportar várias ocorrências, avaliar uma fila por gravidade e a proporção recursos/ameaças, preservando a reserva exclusiva. A contenção entre várias ocorrências é uma hipótese a testar, não um resultado destes ensaios.
