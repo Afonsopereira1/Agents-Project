@@ -1,0 +1,17 @@
+caso,teto_s,runs,fechadas,estados,tempo_real_por_execucao_s
+PROPOSAL delay=0.6s,0.5,5,0,unresolved/no_eligible_proposals=5,0.51
+PROPOSAL delay=0.6s,1.0,5,5,closed/confirmed=5,1.37
+PROPOSAL delay=0.6s,2.0,5,5,closed/confirmed=5,1.38
+PROPOSAL delay=0.6s,4.0,5,5,closed/confirmed=5,1.37
+PROPOSAL delay=1.5s,0.5,5,0,unresolved/no_eligible_proposals=5,0.51
+PROPOSAL delay=1.5s,1.0,5,0,unresolved/no_eligible_proposals=5,1.01
+PROPOSAL delay=1.5s,2.0,5,5,closed/confirmed=5,3.17
+PROPOSAL delay=1.5s,4.0,5,5,closed/confirmed=5,3.18
+PROPOSAL delay=3.0s,0.5,5,0,unresolved/no_eligible_proposals=5,0.51
+PROPOSAL delay=3.0s,1.0,5,0,unresolved/no_eligible_proposals=5,1.01
+PROPOSAL delay=3.0s,2.0,5,0,unresolved/no_eligible_proposals=5,2.01
+PROPOSAL delay=3.0s,4.0,5,5,closed/confirmed=5,6.18
+-drone -vehicle,0.5,5,0,unresolved/no_eligible_proposals=5,0.51
+-drone -vehicle,1.0,5,0,unresolved/no_eligible_proposals=5,1.01
+-drone -vehicle,2.0,5,0,unresolved/no_eligible_proposals=5,2.01
+-drone -vehicle,4.0,5,0,unresolved/no_eligible_proposals=5,4.01

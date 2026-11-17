@@ -17,7 +17,7 @@ class TestFaultSettingsRegressions(unittest.TestCase):
         self.assertIsNone(fault_settings(None))
         self.assertEqual(fault_settings({}), {
             "seed": 0, "loss": 0.0, "delay": {}, "drop": [], "duplicate": [],
-            "unavailable_agents": [], "occupied_after_proposal": [],
+            "unavailable_agents": [], "occupied_after_proposal": [], "flood": 0,
         })
 
     def test_message_contract_names_are_valid_for_all_message_selectors(self):

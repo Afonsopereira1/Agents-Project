@@ -1,5 +1,6 @@
 """Ciclo local de um incidente iniciado pelo próprio sensor, sem despachante."""
 
+import asyncio
 from dataclasses import replace
 import logging
 from time import monotonic
@@ -23,6 +24,7 @@ from isia.reasoning.reputation import EvaluationResult
 
 
 logger = logging.getLogger(__name__)
+QUEUE_INTERVAL_SECONDS = 5.0  # tempo simulado entre dois pedidos a um recurso ocupado
 
 
 def bare(value):
@@ -33,13 +35,33 @@ class IncidentSensorAgent(SensorAgent):
     """O sensor corrobora, negoceia, recebe resultados e encerra a ocorrência."""
 
     def configure_mvp(self, patrols, rangers, *, receive_timeout=2.0, max_attempts=2,
-                      selection_weights=None):
+                      selection_weights=None, base_positions=None, cfp_limit=None,
+                      max_receive_timeout=None, queue_rounds=0):
+        """base_positions ({jid: Position}) e cfp_limit=K ativam C1: CFP só aos K mais próximos.
+
+        max_receive_timeout ativa o prazo dinâmico: sem nenhuma proposta ao fim de
+        receive_timeout, o iniciador espera até este teto; o STATUS espera sempre até ao teto.
+        queue_rounds ativa a fila: com os recursos ocupados, o iniciador espera
+        QUEUE_INTERVAL_SECONDS simulados e volta a pedir, até queue_rounds vezes.
+        """
         if type(max_attempts) is not int or max_attempts < 1:
             raise ValueError("max_attempts deve ser positivo.")
+        if cfp_limit is not None and (type(cfp_limit) is not int or cfp_limit < 1):
+            raise ValueError("cfp_limit deve ser um inteiro positivo.")
         from isia.simulation.movement import nonnegative
+        self.base_positions = {bare(jid): position for jid, position in (base_positions or {}).items()}
+        self.cfp_limit = cfp_limit
         nonnegative(receive_timeout, "receive_timeout")
         if receive_timeout == 0:
             raise ValueError("receive_timeout deve ser positivo.")
+        if max_receive_timeout is not None:
+            nonnegative(max_receive_timeout, "max_receive_timeout")
+            if max_receive_timeout < receive_timeout:
+                raise ValueError("max_receive_timeout não pode ser inferior a receive_timeout.")
+        self.max_receive_timeout = max_receive_timeout or receive_timeout
+        if type(queue_rounds) is not int or queue_rounds < 0:
+            raise ValueError("queue_rounds deve ser um inteiro não negativo.")
+        self.queue_rounds = queue_rounds
         self.patrols, self.rangers = dict(patrols), dict(rangers)
         self.receive_timeout, self.max_attempts = receive_timeout, max_attempts
         self.selection_weights = dict(selection_weights or {})
@@ -51,6 +73,12 @@ class IncidentSensorAgent(SensorAgent):
         self.incident_observations = ()
         self.cycle_done = False
         self.close_reason = None
+
+    @property
+    def severity_level(self):
+        """Gravidade em três níveis, para a prioridade da missão: 0 leve, 1 média, 2 grave."""
+        severe = self.response_policy.severe_threshold if self.response_policy else 0.8
+        return 2 if self.severity >= severe else 1 if self.severity >= severe / 2 else 0
 
     def record(self, event, **details):
         self.timeline.append({"time": self.simulated_time, "event": event, **details})
@@ -121,6 +149,12 @@ class IncidentSensorAgent(SensorAgent):
 
         async def allocate(self, mission, candidates, attempt):
             agent = self.agent
+            if agent.cfp_limit is not None and all(jid in agent.base_positions for jid in candidates):
+                # C1: só os K mais próximos da base ao alvo; cada nova ronda alarga a K * ronda.
+                # shortcut: usa a posição base, não a atual; trocar quando os recursos a anunciarem.
+                from isia.simulation.movement import distance
+                nearest = sorted(candidates, key=lambda jid: distance(agent.base_positions[jid], mission.target))
+                candidates = {jid: candidates[jid] for jid in nearest[:agent.cfp_limit * attempt]}
             # Um único resultado, apenas durante a confirmação deste ACCEPT.
             self._pending_mission_result = None
             cfp = build_cfp_message(mission, agent.simulated_time,
@@ -129,8 +163,11 @@ class IncidentSensorAgent(SensorAgent):
                 await self.send_body(jid, cfp, "cfp")
             responses = {}
             deadline = monotonic() + agent.receive_timeout
+            ceiling = deadline - agent.receive_timeout + agent.max_receive_timeout
             while len(responses) < len(candidates):
-                received = await self.receive_until(deadline)
+                # Prazo dinâmico: com uma proposta na mão vale o prazo curto; sem nenhuma, o teto.
+                received = await self.receive_until(deadline if any(
+                    r.message_type is MessageType.PROPOSAL for r in responses.values()) else ceiling)
                 if received is None:
                     break
                 incoming, body = received
@@ -158,6 +195,7 @@ class IncidentSensorAgent(SensorAgent):
             selection = select_best_proposal(cfp, responses.values(), **agent.selection_weights)
             winner = selection.winner
             if winner is None:
+                self._busy = any(r.payload.get("reason") in ("resource_unavailable", "waiting_turn") for r in responses.values())
                 return None, "no_eligible_proposals"
             winner_jid = next(jid for jid, body in responses.items() if body.message_id == winner.message_id)
             accept = build_accept_message(cfp, winner, agent.simulated_time, source_id=bare(agent.jid))
@@ -171,7 +209,8 @@ class IncidentSensorAgent(SensorAgent):
                         logger.warning("REJECT não enviado a %s para a missão %s: %s",
                                        jid, mission.mission_id, error)
             assignment = (winner_jid, accept, winner.source_id)
-            deadline = monotonic() + agent.receive_timeout
+            # Depois do ACCEPT não há alternativa: desistir cedo só dá confirmation_unknown.
+            deadline = monotonic() + agent.max_receive_timeout
             confirmed = False
             try:
                 while True:
@@ -217,8 +256,21 @@ class IncidentSensorAgent(SensorAgent):
         async def execute_task(self, mission, candidates):
             agent = self.agent
             remaining = {bare(jid): resource for jid, resource in candidates.items()}
+            rounds = 0
             for attempt in range(1, agent.max_attempts + 1):
-                assignment, failure = await self.allocate(mission, remaining, attempt)
+                for wait in range(agent.queue_rounds + 1):
+                    rounds += 1
+                    self._busy = False
+                    assignment, failure = await self.allocate(mission, remaining, rounds)
+                    # Fila: recurso ocupado não é falha; esperar tempo simulado e voltar a pedir.
+                    # shortcut: sem ordem de chegada nem prioridade; trocar por fila no recurso se for preciso.
+                    if (assignment is not None or wait == agent.queue_rounds
+                            or not (self._busy or failure == "reservation_rejected")):
+                        break
+                    # Relógio parado (ninguém em missão): o prazo real evita esperar para sempre.
+                    until, limit = agent.simulated_time + QUEUE_INTERVAL_SECONDS, monotonic() + agent.receive_timeout
+                    while agent.simulated_time < until and monotonic() < limit:
+                        await asyncio.sleep(0.01)
                 if assignment is None:
                     agent.close_reason = failure
                     if failure == "reservation_rejected" and attempt < agent.max_attempts:
@@ -262,7 +314,8 @@ class IncidentSensorAgent(SensorAgent):
                 agent.decision = self.validated_close_decision(initial, incident_id)
             agent.record("corroboration", decision=agent.decision)
             agent.transition(IncidentStatus.ASSESSING)
-            mission = MissionRegistry().create_from_decision(Incident(incident_id, observations), agent.decision)
+            mission = MissionRegistry().create_from_decision(
+                Incident(incident_id, observations), agent.decision, priority=agent.severity_level)
             if agent.decision.get("decision") == "close":
                 agent.close_reason = agent.decision["reason"]
                 agent.transition(IncidentStatus.CLOSED)

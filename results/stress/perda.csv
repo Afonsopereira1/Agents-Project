@@ -1,0 +1,6 @@
+caso,runs,alerta,mobilizou,confirmou,closed,unresolved,motivos,msgs_mean,perdidas_mean,recusas_REJECT,vencedor_patrulha,duplas_reservas,fechos_duplicados,tempo_real_s
+loss=0.0,20,19,17,17,17,0,confirmed=17 insufficient_corroboration=2 no_alert=1,12.95,0.0,0,vehicle=17 None=3,0,0,3.3
+loss=0.1,20,19,15,13,7,8,confirmed=7 insufficient_corroboration=4 mission_result_unknown=1 no_eligible_proposals=2 confirmation_unknown=5 no_alert=1,9.6,1.0,0,vehicle=9 None=6 drone=5,0,0,44.8
+loss=0.2,20,19,12,8,1,11,mission_result_unknown=2 insufficient_corroboration=7 no_eligible_proposals=4 confirmed=1 confirmation_unknown=5 no_alert=1,6.8,1.35,0,vehicle=5 None=11 drone=4,0,0,79.2
+loss=0.3,20,19,10,4,0,10,mission_result_unknown=3 insufficient_corroboration=9 no_eligible_proposals=6 confirmation_unknown=1 no_alert=1,4.95,1.3,0,vehicle=3 None=14 drone=3,0,0,100.8
+loss=0.5,20,19,4,0,0,4,no_eligible_proposals=2 insufficient_corroboration=15 confirmation_unknown=2 no_alert=1,2.0,1.1,0,None=20,0,0,152.6

@@ -1,0 +1,6 @@
+caso,runs,alerta,mobilizou,confirmou,closed,unresolved,motivos,msgs_mean,perdidas_mean,recusas_REJECT,vencedor_patrulha,duplas_reservas,fechos_duplicados,tempo_real_s
+todos,10,10,8,8,8,0,confirmed=8 insufficient_corroboration=2,12.4,0.0,0,vehicle=8 None=2,0,0,1.5
+-drone,10,10,8,8,8,0,confirmed=8 insufficient_corroboration=2,10.8,0.8,0,vehicle=8 None=2,0,0,5.5
+-drone -vehicle,10,10,8,0,0,8,no_eligible_proposals=8 insufficient_corroboration=2,3.6,1.6,0,None=10,0,0,4.1
+-ranger,10,10,8,8,0,8,no_eligible_proposals=8 insufficient_corroboration=2,9.2,0.8,0,vehicle=8 None=2,0,0,4.6
+-drone -vehicle -ranger,10,10,8,0,0,8,no_eligible_proposals=8 insufficient_corroboration=2,3.6,1.6,0,None=10,0,0,4.1

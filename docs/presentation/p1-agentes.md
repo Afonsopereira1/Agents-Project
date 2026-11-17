@@ -20,9 +20,9 @@
 
 ## Corpo (direita): onde está a autonomia
 
-1. **Decide se propõe:** o recurso avalia o CFP com o seu próprio estado — [mobile.py:104](../../src/isia/agents/mobile.py#L104).
-2. **Energia de ida e volta:** recusa se não consegue regressar — [mobile.py:116](../../src/isia/agents/mobile.py#L116).
-3. **Pode recusar depois do `ACCEPT`:** `STATUS` ≠ `reserved` e o iniciador não o obriga — [incident.py:190](../../src/isia/agents/incident.py#L190).
+1. **Decide se propõe:** o recurso avalia o CFP com o seu próprio estado — [mobile.py:127](../../src/isia/agents/mobile.py#L127).
+2. **Energia de ida e volta:** recusa se não consegue regressar — [mobile.py:139](../../src/isia/agents/mobile.py#L139).
+3. **Pode recusar depois do `ACCEPT`:** `STATUS` ≠ `reserved` e o iniciador não o obriga — [incident.py:229](../../src/isia/agents/incident.py#L229).
 
 ## Rodapé
 

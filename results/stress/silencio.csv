@@ -1,0 +1,7 @@
+flood_por_mensagem,silent_invalid,runs,fechadas,lixo_injetado_mean,respostas_a_lixo_mean,respostas_por_remetente,msgs_mean
+10,False,10,10,420.0,50.0,sensor-peer=10 vehicle=20 ranger=20,65.0
+10,True,10,10,420.0,10.0,sensor-peer=10,25.0
+100,False,10,10,4200.0,500.0,sensor-peer=100 vehicle=200 ranger=200,515.0
+100,True,10,10,4200.0,100.0,sensor-peer=100,115.0
+300,False,10,10,12600.0,1500.0,sensor-peer=300 vehicle=600 ranger=600,1515.0
+300,True,10,10,12600.0,300.0,sensor-peer=300,315.0
