@@ -159,17 +159,17 @@ A tabela descreve o que o código envia hoje (verificado em 16-11-2026).
 
 | Tipo lógico | Performative enviada | Emissor → destinatário | Resposta esperada | Código |
 |---|---|---|---|---|
-| `ALERT` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:304](../src/isia/agents/incident.py#L304) |
+| `ALERT` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:310](../src/isia/agents/incident.py#L310) |
 | `VERIFY_REQUEST` | `request` | Iniciador (`sensor-1`) → uma fonte par (`informant_jid`) | `VERIFY_RESPONSE` ou timeout | [sensor.py:179](../src/isia/agents/sensor.py#L179) |
 | `VERIFY_RESPONSE` | `inform` (nunca `refuse`) | Fonte → iniciador | `status`: `observations_available`, `no_data` ou `informative_absence` | [informant.py:119](../src/isia/agents/informant.py#L119) |
-| `CFP` | `cfp` | Iniciador → recursos candidatos | `PROPOSAL` ou `REJECT` | [incident.py:157](../src/isia/agents/incident.py#L157) |
-| `PROPOSAL` | `propose` | Recurso → iniciador | `ACCEPT` ou `REJECT` | [mobile.py:257](../src/isia/agents/mobile.py#L257) |
-| `REJECT` (recusa do CFP) | `refuse` | Recurso → iniciador | Nenhuma | [mobile.py:259](../src/isia/agents/mobile.py#L259) |
-| `ACCEPT` | `accept-proposal` | Iniciador → recurso vencedor | `STATUS` | [incident.py:196](../src/isia/agents/incident.py#L196) |
-| `REJECT` (perdedores) | `reject-proposal` | Iniciador → outros proponentes | Nenhuma | [incident.py:201](../src/isia/agents/incident.py#L201) |
-| `STATUS` | `inform` | Recurso vencedor → iniciador | `reserved` ou `reservation_failed` | [mobile.py:368](../src/isia/agents/mobile.py#L368) |
-| `MISSION_RESULT` | `inform` (também com `outcome=failed`; nunca `failure`) | Recurso → iniciador | Nenhuma | [mobile.py:167](../src/isia/agents/mobile.py#L167) |
-| `INCIDENT_CLOSED` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:335](../src/isia/agents/incident.py#L335) |
+| `CFP` | `cfp` | Iniciador → recursos candidatos | `PROPOSAL` ou `REJECT` | [incident.py:163](../src/isia/agents/incident.py#L163) |
+| `PROPOSAL` | `propose` | Recurso → iniciador | `ACCEPT` ou `REJECT` | [mobile.py:289](../src/isia/agents/mobile.py#L289) |
+| `REJECT` (recusa do CFP) | `refuse` | Recurso → iniciador | Nenhuma | [mobile.py:291](../src/isia/agents/mobile.py#L291) |
+| `ACCEPT` | `accept-proposal` | Iniciador → recurso vencedor | `STATUS` | [incident.py:202](../src/isia/agents/incident.py#L202) |
+| `REJECT` (perdedores) | `reject-proposal` | Iniciador → outros proponentes | Nenhuma | [incident.py:207](../src/isia/agents/incident.py#L207) |
+| `STATUS` | `inform` | Recurso vencedor → iniciador | `reserved` ou `reservation_failed` | [mobile.py:408](../src/isia/agents/mobile.py#L408) |
+| `MISSION_RESULT` | `inform` (também com `outcome=failed`; nunca `failure`) | Recurso → iniciador | Nenhuma | [mobile.py:188](../src/isia/agents/mobile.py#L188) |
+| `INCIDENT_CLOSED` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:342](../src/isia/agents/incident.py#L342) |
 
 `ALERT` e `INCIDENT_CLOSED` existem em `MessageType` para quando houver vários iniciadores a avisar vizinhos; nenhuma execução atual os envia.
 
@@ -448,7 +448,7 @@ No Contract Net clássico, `accept-proposal` vale como compromisso. Entre propor
 | Fonte sem dados | `refuse` ou `failure` | `inform` com `status=no_data` | «Não vi» é informação, não recusa |
 | Conteúdo | FIPA-SL | JSON validado | Compatível com SPADE e testável sem XMPP; não é conformidade FIPA-ACL integral |
 
-**Corrigido a 16-11-2026:** o recurso recusava o CFP com `reject-proposal`, que no FIPA é a performativa do iniciador para as propostas não escolhidas. Passou a enviar `refuse` ([mobile.py:259](../src/isia/agents/mobile.py#L259)), e o iniciador valida-a ([incident.py:177](../src/isia/agents/incident.py#L177)). O tipo de domínio continua `REJECT` nos dois casos.
+**Corrigido a 16-11-2026:** o recurso recusava o CFP com `reject-proposal`, que no FIPA é a performativa do iniciador para as propostas não escolhidas. Passou a enviar `refuse` ([mobile.py:291](../src/isia/agents/mobile.py#L291)), e o iniciador valida-a ([incident.py:183](../src/isia/agents/incident.py#L183)). O tipo de domínio continua `REJECT` nos dois casos.
 
 ## 10. Checklist de aprovação
 

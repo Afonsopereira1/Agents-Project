@@ -71,7 +71,7 @@ As três estão desligadas por omissão e ligam-se em `run_mvp(max_receive_timeo
 1. **O que encontrámos.** Com 8 ocorrências ao mesmo tempo, só 1 fechava. As outras 7 terminavam como não resolvidas, porque encontravam o guarda ocupado e ninguém o voltava a chamar.
 2. **O que fizemos.** Uma fila: recurso ocupado deixa de ser falha; o iniciador espera e volta a pedir. Passaram a fechar as 8, sem reservas duplas.
 3. **O que a fila revelou.** Atender todas não é o mesmo que atender a tempo. Medimos com ameaças que duram pouco ([espera.csv](../../results/stress/espera.csv)).
-4. **O que propomos.** Cinco mitigações, cada uma para um problema medido (tabela abaixo).
+4. **O que propomos.** Cinco mitigações, cada uma para um problema medido (tabela abaixo). Uma já está feita: a ordem por gravidade.
 
 **Frase para dizer:** «A fila troca "não atendida" por "atendida mais tarde". O passo seguinte é garantir "atendida a tempo".»
 
@@ -92,8 +92,23 @@ Com ameaças de 30 s, só 20 das 80 ocorrências têm o guarda no local a tempo.
 | A ameaça já lá não está quando chega a vez | Com ameaças de 30 s, 41 de 80 patrulhas chegam em vão | **Prazo de validade:** antes de voltar a pedir, o iniciador relê o seu sensor; se já não vê a ameaça, desiste | ~1,5 h |
 | O guarda único é o gargalo | O último fecho passa de 12 s para 80 s com 8 ocorrências | **Mais guardas:** medir 1, 2 e 4 guardas | ~2 h |
 | Tráfego de quem espera | 352 mensagens contra 123; pede-se o guarda de 5 em 5 s | **O recurso diz quando fica livre:** a recusa leva a hora prevista e o iniciador espera até lá | ~2 h |
-| Sem ordem nem prioridade | Uma ocorrência chega a pedir o guarda 15 vezes (média 2,9); a gravidade não conta | **Ordem na fila:** primeiro a mais grave; em caso de empate, a que espera há mais tempo | ~3 h |
+| Sem ordem nem prioridade | Uma ocorrência chega a pedir o guarda 15 vezes (média 2,9); a gravidade não conta | **Ordem na fila:** primeiro a mais grave; em caso de empate, a que espera há mais tempo | **Feito** (ver abaixo) |
 | O guarda volta à base entre missões | Cerca de 10 s simulados a mais por cada ocorrência à frente | **Encadear missões:** aceitar a seguinte durante o regresso | ~3 h |
+
+### Feito: fila ordenada por gravidade
+
+- **Três níveis:** grave (gravidade a partir de 0,8), média (a partir de 0,4) e leve.
+- **Como funciona:** cada recurso guarda a lista de quem espera e só faz proposta ao primeiro: o mais grave e, em caso de empate, o que espera há mais tempo. Os outros recebem uma recusa, mesmo com o recurso livre. Não há mensagens novas.
+- **Resultado** (2 graves, 3 médias e 3 leves ao mesmo tempo, [prioridade.csv](../../results/stress/prioridade.csv)):
+
+| Gravidade | Fecho médio antes | Fecho médio depois |
+|---|---|---|
+| Grave | 73,5 s | **22,8 s** |
+| Média | 46,7 s | 46,7 s |
+| Leve | 27,3 s | 75,9 s |
+
+- **O que dizer:** «as graves fecham três vezes mais cedo, com as mesmas mensagens; quem paga são as leves».
+- **O que não faz:** não interrompe uma missão em curso, e, com graves a chegar sem parar, as leves ficam à espera para sempre.
 
 **Um limite do simulador que convém dizer:** a intervenção do guarda dá sempre «confirmada», mesmo que a ameaça já tenha terminado. As 19 intervenções tardias foram contadas pelo relógio, não pelo resultado. Corrigir isto é o primeiro passo das mitigações.
 
@@ -128,6 +143,6 @@ Com ameaças de 30 s, só 20 das 80 ocorrências têm o guarda no local a tempo.
 
 1. Prazo de validade da ocorrência: não enviar ninguém a uma ameaça que já terminou.
 2. Mais guardas e mais informadores: hoje só variámos patrulhas e sensores.
-3. Ordem na fila: primeiro a ocorrência mais grave; em caso de empate, a que espera há mais tempo.
+3. Interromper uma missão leve quando chega uma ocorrência grave, e não deixar as leves à espera para sempre.
 4. Atrasos reais na rede XMPP: os atrasos só foram injetados no transporte local.
 5. Prazo que se ajusta sozinho aos tempos de resposta observados.

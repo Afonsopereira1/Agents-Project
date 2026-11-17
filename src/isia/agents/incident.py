@@ -74,6 +74,12 @@ class IncidentSensorAgent(SensorAgent):
         self.cycle_done = False
         self.close_reason = None
 
+    @property
+    def severity_level(self):
+        """Gravidade em três níveis, para a prioridade da missão: 0 leve, 1 média, 2 grave."""
+        severe = self.response_policy.severe_threshold if self.response_policy else 0.8
+        return 2 if self.severity >= severe else 1 if self.severity >= severe / 2 else 0
+
     def record(self, event, **details):
         self.timeline.append({"time": self.simulated_time, "event": event, **details})
 
@@ -189,7 +195,7 @@ class IncidentSensorAgent(SensorAgent):
             selection = select_best_proposal(cfp, responses.values(), **agent.selection_weights)
             winner = selection.winner
             if winner is None:
-                self._busy = any(r.payload.get("reason") == "resource_unavailable" for r in responses.values())
+                self._busy = any(r.payload.get("reason") in ("resource_unavailable", "waiting_turn") for r in responses.values())
                 return None, "no_eligible_proposals"
             winner_jid = next(jid for jid, body in responses.items() if body.message_id == winner.message_id)
             accept = build_accept_message(cfp, winner, agent.simulated_time, source_id=bare(agent.jid))
@@ -308,7 +314,8 @@ class IncidentSensorAgent(SensorAgent):
                 agent.decision = self.validated_close_decision(initial, incident_id)
             agent.record("corroboration", decision=agent.decision)
             agent.transition(IncidentStatus.ASSESSING)
-            mission = MissionRegistry().create_from_decision(Incident(incident_id, observations), agent.decision)
+            mission = MissionRegistry().create_from_decision(
+                Incident(incident_id, observations), agent.decision, priority=agent.severity_level)
             if agent.decision.get("decision") == "close":
                 agent.close_reason = agent.decision["reason"]
                 agent.transition(IncidentStatus.CLOSED)

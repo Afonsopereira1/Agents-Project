@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import asyncio
+from time import monotonic
 
 from isia.simulation.movement import MissionExecution, distance, nonnegative
 
@@ -39,6 +40,10 @@ logger = logging.getLogger(__name__)
 # Prazo local para aceitar uma proposta após terminar a recolha do CFP.
 # Não altera o deadline inclusivo para emissão de PROPOSAL.
 PROPOSAL_ACCEPTANCE_WINDOW_SECONDS = 10.0
+# Fila ordenada: um pedido que não é renovado em duas esperas do iniciador (2 x 5 s simulados) sai da lista.
+WAITING_TTL_SECONDS = 10.0
+# shortcut: com o relógio simulado parado só o tempo real retira um pedido; rever se o relógio passar a avançar sempre.
+WAITING_TTL_REAL_SECONDS = 5.0
 
 
 def _bare_jid(value: object) -> str:
@@ -54,6 +59,7 @@ class MobileResourceAgent(Agent):
     """
 
     silent_invalid = False  # True: um ACCEPT que não bate com a proposta fica sem resposta
+    ordered_queue = False  # True: com vários pedidos em espera, só o primeiro da fila recebe proposta
 
     def __init__(
         self,
@@ -80,6 +86,8 @@ class MobileResourceAgent(Agent):
         self.reservation = LocalResourceReservation(resource)
         self._proposal_context: dict[str, tuple[Message, Message, str]] = {}
         self._closed_cfp_ids: set[str] = set()
+        # (iniciador, missão) -> (-prioridade, espera desde, idem em tempo real, último pedido, idem em tempo real)
+        self._waiting = {}
         self._latest_cfp_times: dict[tuple[str, str], float] = {}
         self._latest_cfp_rounds: dict[tuple[str, str], tuple[int, str]] = {}
         self._accepted_proposal_ids: set[str] = set()
@@ -102,6 +110,19 @@ class MobileResourceAgent(Agent):
         self.execution_options = dict(world=world, inspect=inspect, speed=speed,
                                       energy_per_cell=energy_per_cell, service_seconds=service_seconds,
                                       minimum_energy=self.minimum_autonomy_percent)
+
+    def is_turn(self, requester, priority):
+        """Fila ordenada: regista quem pede e diz se é a sua vez.
+
+        Primeiro a ocorrência mais grave; em caso de empate, a que espera há mais tempo.
+        """
+        now, real = self.simulated_time, monotonic()
+        self._waiting = {key: entry for key, entry in self._waiting.items()
+                         if now - entry[3] <= WAITING_TTL_SECONDS and real - entry[4] <= WAITING_TTL_REAL_SECONDS}
+        since = self._waiting.get(requester, (0, now, real))[1:3]
+        self._waiting[requester] = (-priority, *since, now, real)
+        # A ordem só usa o que não muda entre pedidos; o último pedido serve apenas para a validade.
+        return min(self._waiting, key=lambda key: self._waiting[key][:3]) == requester
 
     def evaluate_request(self, cfp):
         eta, energy = self.eta_seconds, self.energy_cost_percent
@@ -233,6 +254,17 @@ class MobileResourceAgent(Agent):
                     ):
                         return
                 response = existing[1] if existing is not None else agent.evaluate_request(cfp)
+                if agent.ordered_queue and existing is None and (
+                        response.message_type is MessageType.PROPOSAL
+                        or response.payload.get("reason") == "resource_unavailable"):
+                    # Ocupado ou livre, o pedido entra na fila; livre, só o primeiro recebe proposta.
+                    if not agent.is_turn(negotiation, cfp.payload["priority"]) and (
+                            response.message_type is MessageType.PROPOSAL):
+                        response = Message(
+                            f"reject-{cfp.message_id}-{agent.resource.resource_id}", MessageType.REJECT,
+                            agent.simulated_time, {"cfp_message_id": cfp.message_id, "reason": "waiting_turn"},
+                            mission_id=cfp.mission_id, incident_id=cfp.incident_id,
+                            conversation_id=cfp.conversation_id, source_id=agent.resource.resource_id)
                 agent._latest_cfp_times[negotiation] = cfp.created_at
                 if round_number is not None:
                     agent._latest_cfp_rounds[negotiation] = (round_number, cfp.message_id)
@@ -326,6 +358,7 @@ class MobileResourceAgent(Agent):
                             and proposal.message_id not in agent._accepted_proposal_ids
                         ):
                             agent._invalidate_proposal(proposal.message_id)
+                            agent._waiting.pop((_bare_jid(initiator), cfp.mission_id), None)
                     return
                 if accept.message_id in agent._completed_accepts:
                     return  # Uma missão terminada nunca volta a reservar por replay.
@@ -357,6 +390,12 @@ class MobileResourceAgent(Agent):
                             accept.mission_id,
                             "accept_correlation_invalid",
                         )
+                    elif (agent.ordered_queue and proposal.message_id not in agent._accepted_proposal_ids
+                          and not agent.is_turn((_bare_jid(initiator), cfp.mission_id), cfp.payload["priority"])):
+                        # Entre a proposta e o ACCEPT pediu alguém mais grave: a reserva fica para esse.
+                        result = ReservationResult(
+                            ReservationStatus.RESOURCE_OCCUPIED, agent.reservation.resource_state,
+                            accept.mission_id, "waiting_turn")
                     else:
                         result = agent.reservation.reserve(
                             accept.mission_id,
@@ -365,6 +404,7 @@ class MobileResourceAgent(Agent):
                         agent.resource = result.resource_state
                         if result.confirmed:
                             agent._accepted_proposal_ids.add(proposal.message_id)
+                            agent._waiting.pop((_bare_jid(initiator), cfp.mission_id), None)
                 status = build_reservation_status_message(
                     accept,
                     result,

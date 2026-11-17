@@ -14,7 +14,7 @@
 |---|---|---|---|
 | 0.1 | Documentação em `docs/` aceite como base da entrega | `main` atual | [ ] |
 | 0.2 | Versões | Python 3.12, SPADE 4.1.4 ([requirements.txt](../requirements.txt)) | [ ] |
-| 0.3 | Instalação testada: `PYTHONPATH=src python -m unittest discover -s tests` dá 496 testes OK | num computador | [ ] |
+| 0.3 | Instalação testada: `PYTHONPATH=src python -m unittest discover -s tests` dá 497 testes OK | num computador | [ ] |
 
 ## Etapa 1 — contratos (fecha [development-plan.md:91](development-plan.md#L91))
 

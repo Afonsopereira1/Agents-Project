@@ -98,7 +98,7 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                   response_settings=None, reputation=None, faults=None,
                   scenario=None, corroborate=True, selection_weights=None, run_id=None,
                   extra_initiators=None, extra_patrols=None, cfp_limit=None, max_receive_timeout=None,
-                  queue_rounds=0, silent_invalid=False):
+                  queue_rounds=0, silent_invalid=False, queue_priority=False):
     """O runner só fornece ambiente, relógio e transporte; agentes decidem.
 
     inspection_outcomes e interrupt_resource permitem testes determinísticos.
@@ -127,6 +127,9 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     por omissão o prazo é fixo, como nos resultados recolhidos.
     queue_rounds ativa a fila do iniciador (ver configure_mvp). silent_invalid faz os
     recursos ignorarem um ACCEPT incoerente em vez de responderem reservation_failed.
+    queue_priority ordena a fila em cada recurso: primeiro a ocorrência mais grave e,
+    em caso de empate, a que espera há mais tempo. A gravidade de cada iniciador vem de
+    response_settings["severity"] ou, por fonte, de response_settings["severity_by_source"].
     extra_patrols (C4 mínimo) associa novos IDs de patrulha a posições base; são
     drones com 100 % de autonomia. cfp_limit=K (C1) faz cada iniciador enviar o
     CFP só às K patrulhas com base mais próxima do alvo.
@@ -169,11 +172,12 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     if response_settings is not None:
         if reputation is None:
             reputation = ReputationBook(**response_settings["reputation"])
-        for initiator in initiators:
+        for source_id, initiator in zip(("sensor-1", *extras), initiators):
             initiator.set_response_policy(
                 ResponsePolicy(**response_settings["policy"]),
                 reputation.snapshot(world.sensors), response_settings["sources"],
-                severity=response_settings["severity"],
+                severity=response_settings.get("severity_by_source", {}).get(
+                    source_id, response_settings["severity"]),
                 default_reputation=reputation.score("sensor-1"),
             )
     peer.set_local_observation_feed(scenario.source("sensor-2"), "sensor-2", 0.0)
@@ -196,7 +200,7 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         outcome = (inspection_outcomes or {}).get(name)
         inspect = scenario.inspect if outcome is None else lambda position, now, task, value=outcome: value
         agent.configure_execution(world, inspect)
-        agent.silent_invalid = silent_invalid
+        agent.silent_invalid, agent.ordered_queue = silent_invalid, queue_priority
         mobiles.append(agent)
     for initiator in initiators:
         initiator.configure_mvp({str(a.jid): a.resource.resource_id for a in mobiles if a is not mobiles[2]},

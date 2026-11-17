@@ -8,6 +8,7 @@ Uso, a partir da raiz: PYTHONPATH=src python scripts/stress_f2.py [grupo ...]
 Grupos: paralelo (1, 2, 4 e 8 ocorrências) invalidas escala (C4 mínimo + C1)
         prazo (prazo fixo contra prazo dinâmico, max_receive_timeout) teto (vários tetos)
         fila (queue_rounds) silencio (silent_invalid) espera (fila com ameaças que duram pouco)
+        prioridade (queue_priority)
 """
 import asyncio, collections, copy, csv, logging, sys, time
 from pathlib import Path
@@ -42,8 +43,10 @@ def setup(count):
               for key, p in {"sensor-1": Position(2, 2), **extra}.items()]
     return extra, sources, settings, events
 
-async def run(count, rep, flood=0, faults=None, duration=None, **options):
+async def run(count, rep, flood=0, faults=None, duration=None, severities=None, **options):
     extra, sources, settings, events = setup(count)
+    if severities is not None:
+        settings["severity_by_source"] = severities
     if duration is not None:
         events = [{**event, "duration": duration} for event in events]
     return await run_mvp(
@@ -240,6 +243,31 @@ async def espera():
         print(out[-1], flush=True)
     return fields, out
 
+async def prioridade():
+    """Antes e depois da fila ordenada: 8 ocorrências (2 graves, 3 médias, 3 leves) com queue_rounds=60."""
+    fields = ["fila", "gravidade", "ocorrencias", "fechadas", "t_fecho_sim_mean", "t_fecho_sim_max",
+              "msgs_mean", "duplas_reservas"]
+    names = {0.2: "leve", 0.5: "média", 0.9: "grave"}  # limiar grave da política: 0,8; média a partir de 0,4
+    levels = dict(zip(("sensor-1", *EXTRA), (0.2, 0.2, 0.2, 0.5, 0.5, 0.5, 0.9, 0.9)))
+    out = []
+    for label, order in (("sem ordem", False), ("por gravidade", True)):
+        times, total, msgs, doubles = collections.defaultdict(list), collections.Counter(), [], 0
+        for rep in range(REPS):
+            report = await run(8, rep, severities=levels, queue_rounds=60, queue_priority=order)
+            closed_at = {e.get("initiator", "sensor-1"): e["time"] for e in report["timeline"]
+                         if e["event"] == "INCIDENT_CLOSED"}
+            for key, view in {"sensor-1": report, **report["extra_initiators"]}.items():
+                total[names[levels[key]]] += 1
+                if view["incident_status"] == "closed":
+                    times[names[levels[key]]].append(closed_at[key])
+            msgs.append(len(report["messages"])); doubles += double_bookings(report)
+        for level in ("grave", "média", "leve"):
+            out.append({"fila": label, "gravidade": level, "ocorrencias": total[level], "fechadas": len(times[level]),
+                        "t_fecho_sim_mean": mean(times[level]), "t_fecho_sim_max": max(times[level], default=None),
+                        "msgs_mean": mean(msgs), "duplas_reservas": doubles})
+            print(out[-1], flush=True)
+    return fields, out
+
 async def silencio():
     """Antes e depois de silent_invalid: quantas respostas os agentes dão às mensagens inválidas."""
     fields = ["flood_por_mensagem", "silent_invalid", "runs", "fechadas", "lixo_injetado_mean",
@@ -272,4 +300,4 @@ async def go(groups):
         print("gravado:", path.relative_to(ROOT), flush=True)
 
 if __name__ == "__main__":
-    asyncio.run(go(sys.argv[1:] or ["paralelo", "invalidas", "escala", "prazo", "teto", "fila", "silencio", "espera"]))
+    asyncio.run(go(sys.argv[1:] or ["paralelo", "invalidas", "escala", "prazo", "teto", "fila", "silencio", "espera", "prioridade"]))
