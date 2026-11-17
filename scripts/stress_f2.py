@@ -6,6 +6,7 @@ política sem corroboração, para que cada iniciador trate só a sua ameaça e 
 Cada grupo grava results/stress/<grupo>.csv; tempo_real_s depende da máquina.
 Uso, a partir da raiz: PYTHONPATH=src python scripts/stress_f2.py [grupo ...]
 Grupos: paralelo (1, 2, 4 e 8 ocorrências) invalidas escala (C4 mínimo + C1)
+        prazo (prazo fixo contra prazo dinâmico, max_receive_timeout)
 """
 import asyncio, collections, copy, csv, logging, sys, time
 from pathlib import Path
@@ -40,11 +41,11 @@ def setup(count):
               for key, p in {"sensor-1": Position(2, 2), **extra}.items()]
     return extra, sources, settings, events
 
-async def run(count, rep, flood=0, **options):
+async def run(count, rep, flood=0, faults=None, **options):
     extra, sources, settings, events = setup(count)
     return await run_mvp(
         response_settings=settings, reputation=ReputationBook(**settings["reputation"]),
-        corroborate=False, extra_initiators=extra, faults={"flood": flood} if flood else None, **options,
+        corroborate=False, extra_initiators=extra, faults=faults or ({"flood": flood} if flood else None), **options,
         max_seconds=120.0, scenario={"run_id": f"f2-{rep}", "seed": 1000 + rep, "sources": sources,
                                      "events": events, "resources": base["resources"]})
 
@@ -139,14 +140,39 @@ async def escala():
             print(out[-1], flush=True)
     return fields, out
 
+async def prazo():
+    """Antes e depois do prazo dinâmico: as mesmas falhas com o prazo fixo (0,5 s) e com teto de 2,0 s."""
+    fields = ["caso", "prazo", "runs", "fechadas", "estados", "tempo_real_por_execucao_s"]
+    off = lambda *names: {"unavailable_agents": [f"{n}-mvp" for n in names]}
+    cases = [("sem falhas", None),
+             *((f"{kind} delay={d}s", {"delay": {kind: d}})
+               for kind, delays in (("PROPOSAL", (0.4, 0.6, 1.5, 2.5)), ("STATUS", (0.6, 1.5, 2.5))) for d in delays),
+             ("-drone", off("drone")), ("-drone -vehicle", off("drone", "vehicle")), ("-ranger", off("ranger")),
+             *((f"flood={n}", {"flood": n}) for n in (1000, 2000, 5000, 8000))]
+    out = []
+    for name, faults in cases:
+        for label, ceiling in (("fixo 0.5 s", None), ("dinâmico 0.5 a 2.0 s", 2.0)):
+            states, t0 = collections.Counter(), time.monotonic()
+            for rep in range(REPS):
+                try:
+                    report = await run(1, rep, faults=faults, max_receive_timeout=ceiling)
+                    states[f"{report['incident_status']}/{report['reason']}"] += 1
+                except Exception as error:
+                    states[type(error).__name__] += 1
+            out.append({"caso": name, "prazo": label, "runs": REPS, "fechadas": states["closed/confirmed"],
+                        "estados": " ".join(f"{k}={v}" for k, v in states.items()),
+                        "tempo_real_por_execucao_s": round((time.monotonic() - t0) / REPS, 2)})
+            print(out[-1], flush=True)
+    return fields, out
+
 async def go(groups):
     OUT.mkdir(parents=True, exist_ok=True)
     for group in groups:
-        fields, out = await {"paralelo": paralelo, "invalidas": invalidas, "escala": escala}[group]()
+        fields, out = await {"paralelo": paralelo, "invalidas": invalidas, "escala": escala, "prazo": prazo}[group]()
         path = OUT / f"{group}.csv"
         with path.open("w", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fields, lineterminator="\n"); w.writeheader(); w.writerows(out)
         print("gravado:", path.relative_to(ROOT), flush=True)
 
 if __name__ == "__main__":
-    asyncio.run(go(sys.argv[1:] or ["paralelo", "invalidas", "escala"]))
+    asyncio.run(go(sys.argv[1:] or ["paralelo", "invalidas", "escala", "prazo"]))

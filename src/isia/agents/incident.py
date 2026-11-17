@@ -33,8 +33,13 @@ class IncidentSensorAgent(SensorAgent):
     """O sensor corrobora, negoceia, recebe resultados e encerra a ocorrência."""
 
     def configure_mvp(self, patrols, rangers, *, receive_timeout=2.0, max_attempts=2,
-                      selection_weights=None, base_positions=None, cfp_limit=None):
-        """base_positions ({jid: Position}) e cfp_limit=K ativam C1: CFP só aos K mais próximos."""
+                      selection_weights=None, base_positions=None, cfp_limit=None,
+                      max_receive_timeout=None):
+        """base_positions ({jid: Position}) e cfp_limit=K ativam C1: CFP só aos K mais próximos.
+
+        max_receive_timeout ativa o prazo dinâmico: sem nenhuma proposta ao fim de
+        receive_timeout, o iniciador espera até este teto; o STATUS espera sempre até ao teto.
+        """
         if type(max_attempts) is not int or max_attempts < 1:
             raise ValueError("max_attempts deve ser positivo.")
         if cfp_limit is not None and (type(cfp_limit) is not int or cfp_limit < 1):
@@ -45,6 +50,11 @@ class IncidentSensorAgent(SensorAgent):
         nonnegative(receive_timeout, "receive_timeout")
         if receive_timeout == 0:
             raise ValueError("receive_timeout deve ser positivo.")
+        if max_receive_timeout is not None:
+            nonnegative(max_receive_timeout, "max_receive_timeout")
+            if max_receive_timeout < receive_timeout:
+                raise ValueError("max_receive_timeout não pode ser inferior a receive_timeout.")
+        self.max_receive_timeout = max_receive_timeout or receive_timeout
         self.patrols, self.rangers = dict(patrols), dict(rangers)
         self.receive_timeout, self.max_attempts = receive_timeout, max_attempts
         self.selection_weights = dict(selection_weights or {})
@@ -140,8 +150,11 @@ class IncidentSensorAgent(SensorAgent):
                 await self.send_body(jid, cfp, "cfp")
             responses = {}
             deadline = monotonic() + agent.receive_timeout
+            ceiling = deadline - agent.receive_timeout + agent.max_receive_timeout
             while len(responses) < len(candidates):
-                received = await self.receive_until(deadline)
+                # Prazo dinâmico: com uma proposta na mão vale o prazo curto; sem nenhuma, o teto.
+                received = await self.receive_until(deadline if any(
+                    r.message_type is MessageType.PROPOSAL for r in responses.values()) else ceiling)
                 if received is None:
                     break
                 incoming, body = received
@@ -182,7 +195,8 @@ class IncidentSensorAgent(SensorAgent):
                         logger.warning("REJECT não enviado a %s para a missão %s: %s",
                                        jid, mission.mission_id, error)
             assignment = (winner_jid, accept, winner.source_id)
-            deadline = monotonic() + agent.receive_timeout
+            # Depois do ACCEPT não há alternativa: desistir cedo só dá confirmation_unknown.
+            deadline = monotonic() + agent.max_receive_timeout
             confirmed = False
             try:
                 while True:

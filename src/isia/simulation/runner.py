@@ -97,7 +97,7 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                   interrupt_resource=None, max_seconds=None,
                   response_settings=None, reputation=None, faults=None,
                   scenario=None, corroborate=True, selection_weights=None, run_id=None,
-                  extra_initiators=None, extra_patrols=None, cfp_limit=None):
+                  extra_initiators=None, extra_patrols=None, cfp_limit=None, max_receive_timeout=None):
     """O runner só fornece ambiente, relógio e transporte; agentes decidem.
 
     inspection_outcomes e interrupt_resource permitem testes determinísticos.
@@ -122,6 +122,8 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     ganha um sensor no mapa e um IncidentSensorAgent próprio, que só trata o que
     a sua fonte deteta. O runner não escolhe quem trata cada ameaça. Os campos
     de topo do relatório continuam a ser os do sensor-mvp.
+    max_receive_timeout ativa o prazo dinâmico do iniciador (ver configure_mvp);
+    por omissão o prazo é fixo, como nos resultados recolhidos.
     extra_patrols (C4 mínimo) associa novos IDs de patrulha a posições base; são
     drones com 100 % de autonomia. cfp_limit=K (C1) faz cada iniciador enviar o
     CFP só às K patrulhas com base mais próxima do alvo.
@@ -196,6 +198,7 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         initiator.configure_mvp({str(a.jid): a.resource.resource_id for a in mobiles if a is not mobiles[2]},
                                 {str(mobiles[2].jid): "ranger"}, receive_timeout=0.5 if not xmpp else 2.0,
                                 selection_weights=selection_weights, cfp_limit=cfp_limit,
+                                max_receive_timeout=max_receive_timeout,
                                 base_positions={str(a.jid): a.resource.position for a in mobiles})
     initial_resources = [model_to_dict(agent.resource) for agent in mobiles]
     if max_seconds is None:
@@ -203,7 +206,8 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         # Há, no máximo, verificação móvel e intervenção do guarda, mais margem
         # para o regresso e o encerramento depois dos timeouts operacionais.
         max_seconds = (sensor_module.RESPONSE_TIMEOUT_SECONDS
-                       + 2 * sensor.max_attempts * sensor.receive_timeout * 12 + 1.0)
+                       + 2 * sensor.max_attempts
+                       * (2 * sensor.max_receive_timeout + 10 * sensor.receive_timeout) + 1.0)
     agents = [*mobiles, peer, *initiators]
     tasks, started, transcript, fault_log = [], [], [], []
     rng = random.Random(faults["seed"] if faults else 0)

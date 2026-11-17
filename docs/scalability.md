@@ -92,13 +92,13 @@ Mensagens por missão com N candidatos: N CFP + N respostas + 1 `ACCEPT` + até 
 
 | Ref. | Limite | Onde | Estado | Justificação |
 |---|---|---|---|---|
-| C1 | CFP enviado a todos os candidatos: O(N) por missão | [incident.py:139](../src/isia/agents/incident.py#L139) | **Implementado e medido (Bloco F)** | `cfp_limit=K` envia o CFP só às K patrulhas com base mais próxima do alvo. Com 16 patrulhas: 57 → 15 mensagens por ocorrência, mesma decisão. Opcional: sem `cfp_limit`, o comportamento é o anterior. Usa a posição base, não a atual |
-| C2 | Candidato calado obriga a esperar o prazo inteiro | [incident.py:142](../src/isia/agents/incident.py#L142) | **Medido** | 1,5 s → 5,5 s reais nesta máquina. Proposta: não voltar a chamar quem ficou calado na ronda seguinte |
-| C3 | Prazos reais com tempo simulado | [runner.py:215](../src/isia/simulation/runner.py#L215), [incident.py:142](../src/isia/agents/incident.py#L142) | Adiado | Obriga a avançar o relógio simulado durante a negociação; trabalho futuro |
-| C4 | Recursos e sensores fixos no runner | [runner.py:66](../src/isia/simulation/runner.py#L66), [:82](../src/isia/simulation/runner.py#L82), [:176](../src/isia/simulation/runner.py#L176) | **Mínimo implementado (Bloco F)** | `run_mvp(extra_patrols=..., extra_initiators=...)` acrescenta drones e sensores iniciadores sem mudar o código. Os ficheiros de cenário continuam com os três recursos fixos |
+| C1 | CFP enviado a todos os candidatos: O(N) por missão | [incident.py:149](../src/isia/agents/incident.py#L149) | **Implementado e medido (Bloco F)** | `cfp_limit=K` envia o CFP só às K patrulhas com base mais próxima do alvo. Com 16 patrulhas: 57 → 15 mensagens por ocorrência, mesma decisão. Opcional: sem `cfp_limit`, o comportamento é o anterior. Usa a posição base, não a atual |
+| C2 | Candidato calado obriga a esperar o prazo inteiro | [incident.py:152](../src/isia/agents/incident.py#L152) | **Medido** | 1,5 s → 5,5 s reais nesta máquina. Proposta: não voltar a chamar quem ficou calado na ronda seguinte |
+| C3 | Prazos reais com tempo simulado | [runner.py:219](../src/isia/simulation/runner.py#L219), [incident.py:152](../src/isia/agents/incident.py#L152) | Adiado | Obriga a avançar o relógio simulado durante a negociação; trabalho futuro |
+| C4 | Recursos e sensores fixos no runner | [runner.py:66](../src/isia/simulation/runner.py#L66), [:82](../src/isia/simulation/runner.py#L82), [:178](../src/isia/simulation/runner.py#L178) | **Mínimo implementado (Bloco F)** | `run_mvp(extra_patrols=..., extra_initiators=...)` acrescenta drones e sensores iniciadores sem mudar o código. Os ficheiros de cenário continuam com os três recursos fixos |
 | C5 | `ObservationFeed.recent()` percorre todo o histórico, O(H) | [scenario.py:98](../src/isia/simulation/scenario.py#L98) | Proposto | O feed é lido uma vez por execução; o ganho não é mensurável neste sistema. Proposta: `bisect` ou `deque` da janela |
-| C6 | Corroboração com um único par fixo | [runner.py:153](../src/isia/simulation/runner.py#L153) | Proposto | Perguntar aos k vizinhos com alcance e decidir com as respostas até ao prazo |
-| C7 | Uma ocorrência por janela, ancorada na primeira observação | [incident.py:265](../src/isia/agents/incident.py#L265), [allocation.py:804](../src/isia/reasoning/allocation.py#L804) | **Medido** | 8/10, 8/20, 8/30 atendidos. Proposta: agrupar observações por proximidade e criar uma ocorrência por grupo |
+| C6 | Corroboração com um único par fixo | [runner.py:155](../src/isia/simulation/runner.py#L155) | Proposto | Perguntar aos k vizinhos com alcance e decidir com as respostas até ao prazo |
+| C7 | Uma ocorrência por janela, ancorada na primeira observação | [incident.py:279](../src/isia/agents/incident.py#L279), [allocation.py:804](../src/isia/reasoning/allocation.py#L804) | **Medido** | 8/10, 8/20, 8/30 atendidos. Proposta: agrupar observações por proximidade e criar uma ocorrência por grupo |
 | C8 (reputação) | Histórico da reputação cresce em memória | [reputation.py:128](../src/isia/reasoning/reputation.py#L128) | **Medido (Bloco F)** | 1000 execuções: 1824 registos, 1,3 MB serializados, crescimento linear (~1,3 kB por execução). Irrelevante à escala do projeto; a proposta de truncar ou gravar em JSONL mantém-se para execuções muito longas |
 | C8 (processos) | Todos os agentes num processo | [runner.py](../src/isia/simulation/runner.py) | Adiado | Um processo por agente ligado ao XMPP; mudança grande, trabalho futuro |
 
@@ -106,7 +106,7 @@ Mensagens por missão com N candidatos: N CFP + N respostas + 1 `ACCEPT` + até 
 
 ## Correções a afirmações anteriores
 
-- **C1 — o iniciador não conhece a posição base dos recursos.** `candidates` só tem `{jid: resource_id}` ([runner.py:195](../src/isia/simulation/runner.py#L195)). Filtrar pelos K mais próximos obriga o runner a passar as posições ou os recursos a anunciá-las; a posição só chega ao iniciador na `PROPOSAL`, depois do CFP. **Resolvido no Bloco F** pela primeira via: o runner passa as posições base em `configure_mvp(base_positions=...)`.
+- **C1 — o iniciador não conhece a posição base dos recursos.** `candidates` só tem `{jid: resource_id}` ([runner.py:197](../src/isia/simulation/runner.py#L197)). Filtrar pelos K mais próximos obriga o runner a passar as posições ou os recursos a anunciá-las; a posição só chega ao iniciador na `PROPOSAL`, depois do CFP. **Resolvido no Bloco F** pela primeira via: o runner passa as posições base em `configure_mvp(base_positions=...)`.
 - **C2 — o fator de lentidão não é constante.** A análise de 13-11 indicava «3,4×» (1,6 s → 5,5 s); a medição de 16-11 deu 1,5 s → 5,5 s. Reportam-se os tempos e a máquina, não um fator.
 - **Recursos — «menos recursos só prejudica com falhas» é forte demais.** Sem perdas, retirar todas as patrulhas elegíveis já impede qualquer confirmação; e a diferença 13/20 contra 9/20 vem de 20 repetições sem intervalo de confiança.
 
@@ -123,13 +123,42 @@ Onde o sistema deixa de atender, em várias dimensões. Os números vêm de [`re
 
 ```bash
 PYTHONPATH=src python scripts/stress_f1.py     # ~8 min: perda, latencia, cascata, autonomia, combinadas
-PYTHONPATH=src python scripts/stress_f2.py     # ~1 min: paralelo, invalidas, escala
+PYTHONPATH=src python scripts/stress_f2.py     # ~10 min: paralelo, invalidas, escala, prazo (só o prazo: ~8,5 min)
 PYTHONPATH=src python scripts/stress_long.py   # ~3 min: longa
 ```
 
 - **F1** usa o cenário A (1 caçador em (3,2), fontes com ruído) e a variante `full`, com reputação nova em cada execução. Em 10 execuções, 2 param na corroboração; por isso o máximo é 8/10 (17/20 com 20 execuções).
 - **F2** usa fontes sem ruído (alcance 1) e política sem corroboração, com um caçador na célula de cada sensor iniciador. Assim, a única variável é a disputa pelos recursos.
 - **«Fechadas»** = ocorrências em que a patrulha confirmou e o guarda interveio (`closed`). **«Confirmadas»** = só a verificação pela patrulha.
+
+### Para que serviu este bloco
+
+Antes dizíamos «o sistema foi desenhado para aguentar falhas». Agora dizemos «aguenta até aqui e deixa de funcionar aqui», com números.
+
+**1. Deu respostas medidas às perguntas da defesa.**
+
+| Pergunta | Resposta medida |
+|---|---|
+| E se a rede perder mensagens? | Fecha 17 de 20 ocorrências sem perda, 7 com 10 % de perda e nenhuma a partir de 30 % |
+| E se a rede for lenta? | Funciona até 0,4 s de atraso; a partir de 0,5 s deixa de negociar |
+| E se faltarem recursos? | Sem o drone, o resultado é igual, só mais lento. Sem patrulhas, nada é confirmado. Sem o guarda, nada é fechado |
+| E se houver várias ocorrências ao mesmo tempo? | Em cada janela confirma 2 e fecha 1, porque só há um guarda |
+| E se alguém enviar mensagens falsas? | Milhares de mensagens inválidas não mudam nenhuma decisão nem fazem parar nenhum agente |
+
+**2. Mostrou três fraquezas que não se viam.**
+
+- O prazo de espera fixo (0,5 s) é frágil: não há degradação gradual, o sistema passa de «funciona sempre» para «nunca funciona». Foi isto que motivou o [prazo dinâmico](#prazo-dinâmico-antes-e-depois).
+- O único guarda é o gargalo: com 2, 4 ou 8 ocorrências, só uma fecha por janela.
+- Os agentes respondem a parte das mensagens inválidas. As respostas estão corretas, mas multiplicam o tráfego de quem ataca.
+
+**3. Provou duas garantias que eram só alegações.**
+
+- **Nenhuma reserva dupla.** O risco: duas ocorrências pedem o mesmo drone e o drone aceita as duas. O sistema evita-o com o `STATUS`: depois de escolher o drone, o iniciador espera que ele confirme a reserva; se o drone já foi reservado por outra ocorrência, responde que não e o iniciador procura outro recurso. Provocámos esta situação de propósito e contámos zero reservas duplas.
+- **Nenhuma exceção.** Enviámos milhares de mensagens com defeito e nenhum agente parou.
+
+**4. Fechou duas pontas soltas da escalabilidade.** O C1 passou a ter «antes e depois» (57 mensagens contra 15, com 16 patrulhas) e o C8 deixou de estar «não medido» (1,3 kB por execução).
+
+**5. Repete-se.** Com as mesmas sementes e num clone limpo, os resultados saem iguais. A única exceção depende da velocidade do computador e está explicada [abaixo](#limites-destes-testes).
 
 ### Mapa de limites
 
@@ -143,6 +172,7 @@ PYTHONPATH=src python scripts/stress_long.py   # ~3 min: longa
 | Ocorrências em paralelo e rajada | [paralelo.csv](../results/stress/paralelo.csv) | Por janela, o sistema fecha 1 ocorrência (1 guarda) e confirma 2 (2 patrulhas), sejam 2, 4 ou 8 as ocorrências. 0 duplas reservas |
 | Mensagens inválidas | [invalidas.csv](../results/stress/invalidas.csv) | Até 300 mensagens inválidas de cada tipo por mensagem real (12 600 por execução), resultado igual em 10/10. Com 1000, depende da carga da máquina: 0/10 na primeira execução e 10/10 no clone limpo. Nenhuma exceção |
 | Execução longa | [longa.csv](../results/stress/longa.csv) | Não deixa de atender em 1000 execuções; o histórico da reputação cresce 1,3 kB por execução |
+| Prazo fixo contra prazo dinâmico | [prazo.csv](../results/stress/prazo.csv) | Atraso: o limite passa de 0,5 s para 2,0 s. Mensagens inválidas: passa de 1000 para 5000 por mensagem real. Ver [antes e depois](#prazo-dinâmico-antes-e-depois) |
 | Mensagens em função de N (C4 + C1) | [escala.csv](../results/stress/escala.csv) | Sem limite: 15, 21, 33 e 57 mensagens com 2, 4, 8 e 16 patrulhas. Com K = 2: 15 em todos os casos |
 
 ### F1 — só parâmetros
@@ -202,7 +232,7 @@ PYTHONPATH=src python scripts/stress_long.py   # ~3 min: longa
 | 1000 | 17 200 | 0/10 | 0 | 13,8 s |
 
 - A validação aguenta a carga: nenhum agente termina com exceção e nenhuma mensagem inválida muda uma decisão.
-- Com 1000, a negociação legítima falhou por tempo, não por erro: processar o lixo demorou mais do que o prazo de 0,5 s. No clone limpo, com a máquina menos carregada, o mesmo ponto deu 10/10 (42 000 inválidas por execução, 17,8 s). O limite está entre 300 e 1000 e depende do CPU, não do código.
+- Com 1000, a negociação legítima falhou por tempo, não por erro: processar o lixo demorou mais do que o prazo de 0,5 s. No clone limpo, com a máquina menos carregada, o mesmo ponto deu 10/10 (42 000 inválidas por execução, 17,8 s). O limite depende do CPU, não do código: na medição do [prazo dinâmico](#prazo-dinâmico-antes-e-depois), com a máquina sem carga, o prazo fixo aguentou 1000 e falhou com 2000.
 - **Achado:** os agentes respondem a parte do lixo (5 respostas por unidade de `flood`). O `InformantAgent` responde a um `VERIFY_REQUEST` com data no futuro, e os recursos respondem `reservation_failed` a um `ACCEPT` de missão desconhecida. São respostas corretas, mas dão a um atacante um amplificador de tráfego.
 
 **Execução longa.** 1000 execuções com o mesmo `ReputationBook` em 176 s: 1824 registos em `book.history`, 1,3 MB serializados. O pico de memória do processo passou de 85 MB para 104 MB, dos quais 12 MB nas primeiras 100 execuções. A reputação do sensor-1 estabiliza em 0,998.
@@ -218,11 +248,62 @@ PYTHONPATH=src python scripts/stress_long.py   # ~3 min: longa
 
 Cada patrulha a mais custa 3 mensagens (CFP, `PROPOSAL`, `REJECT`). Com K = 2, o custo é constante e as 10 ocorrências fecham no mesmo tempo simulado (12 s).
 
+### Prazo dinâmico (antes e depois)
+
+**O problema.** O iniciador esperava sempre 0,5 s pelas propostas e 0,5 s pelo `STATUS`. Uma resposta que chegasse aos 0,6 s era tratada como se nunca tivesse chegado.
+
+**A ideia.** Esperar pouco quando há alternativa e esperar mais quando desistir significa falhar.
+
+- **Propostas:** ao fim de 0,5 s, se já chegou pelo menos uma proposta, o iniciador avança com ela, como antes. Se não chegou nenhuma, continua à espera até um teto de 2,0 s.
+- **`STATUS`:** o iniciador espera até ao teto. Depois do `ACCEPT` não há alternativa: desistir dá `confirmation_unknown`, que não permite escolher outro recurso.
+
+**Como ligar.** `run_mvp(max_receive_timeout=2.0)` ([incident.py:153](../src/isia/agents/incident.py#L153) e [:199](../src/isia/agents/incident.py#L199)). Está desligado por omissão, porque os resultados da Etapa 9 e do F1 foram recolhidos com o prazo fixo; ligá-lo por omissão obrigaria a repeti-los. A decisão fica no item 5.1 da [ata](approvals.md).
+
+**Resultados** ([prazo.csv](../results/stress/prazo.csv), 17-11-2026, montagem do F2, 10 execuções por célula; ocorrências fechadas e tempo real por execução):
+
+| Caso | Prazo fixo (0,5 s) | Prazo dinâmico (0,5 a 2,0 s) |
+|---|---|---|
+| Sem falhas | 10/10 · 0,20 s | 10/10 · 0,20 s |
+| `PROPOSAL` com 0,4 s de atraso | 10/10 · 0,99 s | 10/10 · 0,99 s |
+| `PROPOSAL` com 0,6 s | 0/10 · 0,51 s | **10/10** · 1,37 s |
+| `PROPOSAL` com 1,5 s | 0/10 · 0,51 s | **10/10** · 3,17 s |
+| `PROPOSAL` com 2,5 s | 0/10 · 0,51 s | 0/10 · 2,01 s |
+| `STATUS` com 0,6 s | 0/10 · 0,51 s | **10/10** · 1,21 s |
+| `STATUS` com 1,5 s | 0/10 · 0,51 s | **10/10** · 3,01 s |
+| `STATUS` com 2,5 s | 0/10 · 0,51 s | 0/10 · 2,01 s |
+| Sem o drone | 10/10 · 0,70 s | 10/10 · 0,69 s |
+| Sem as duas patrulhas | 0/10 · 0,51 s | 0/10 · 2,01 s |
+| Sem o guarda | 0/10 · 0,56 s | 0/10 · 2,06 s |
+| 1000 inválidas por mensagem | 10/10 · 1,68 s | 10/10 · 1,68 s |
+| 2000 inválidas | 0/10 · 1,78 s | **10/10** · 3,17 s |
+| 5000 inválidas | 0/10 · 2,10 s | **10/10** · 7,68 s |
+| 8000 inválidas | 0/10 · 3,48 s | 0/10 · 6,70 s |
+
+**Vantagens**
+
+- O sistema aguenta atrasos quatro vezes maiores: o limite passou de 0,5 s para 2,0 s.
+- Aguenta cinco vezes mais mensagens inválidas nesta máquina: de 1000 para 5000 por mensagem real.
+- Não custa nada quando tudo corre bem: sem falhas e sem o drone, o tempo é igual.
+- É pequeno: cerca de dez linhas no iniciador, sem mensagens novas e sem mudar o protocolo.
+
+**Desvantagens**
+
+- Falhar demora quatro vezes mais. Quando ninguém responde (sem patrulhas ou sem guarda), a ocorrência só é dada como não resolvida ao fim de 2,0 s, em vez de 0,5 s.
+- Há mais um valor para escolher e justificar (o teto).
+
+**Limitações**
+
+- O limite não desapareceu, mudou de sítio: com 2,5 s de atraso falha nos dois casos. O teto continua a ser um número fixo; o iniciador não aprende com os tempos que observa. Um prazo que se ajusta sozinho, como o do TCP, fica como trabalho futuro.
+- Uma proposta lenta continua a perder: se uma proposta chega dentro de 0,5 s, o iniciador não espera pelas outras, mesmo que fossem melhores. Já era assim.
+- O prazo continua a ser em tempo real. Por isso, o limite das mensagens inválidas depende do computador: os valores 5000 e 8000 são desta máquina, sem carga.
+- Só muda a espera por propostas e pelo `STATUS`. A espera pelo `VERIFY_RESPONSE` (10 s) e pelo `MISSION_RESULT` (dez prazos) fica igual.
+- Medido só no transporte local, com a política sem corroboração e 10 execuções por célula.
+
 ### Limites destes testes
 
 - 10 a 20 execuções por ponto, sem intervalos de confiança; um cenário.
 - Tudo no transporte local; nada disto valida a rede XMPP.
 - Os iniciadores adicionais não corroboram nem atualizam a reputação.
 - `cfp_limit` usa a posição base dos recursos, não a atual.
-- Os valores de tempo real e o limite das mensagens inválidas (entre 300 e 1000) dependem da máquina.
-- Repetição (17-11-2026, mesma máquina): o F1 foi corrido duas vezes com as mesmas sementes e depois os três scripts num clone limpo do commit. Os nove CSV saíram iguais em todas as colunas, exceto `tempo_real_s` e `rss_pico_kb`, com uma exceção: o ponto de 1000 inválidas, que falhou na primeira execução e passou no clone (ver acima).
+- Os valores de tempo real e o limite das mensagens inválidas dependem da máquina e da carga: com o prazo fixo, entre 300 e 2000; com o prazo dinâmico, entre 5000 e 8000.
+- Repetição (17-11-2026, mesma máquina): o F1 foi corrido duas vezes com as mesmas sementes e depois os três scripts num clone limpo do commit. Os nove CSV de então saíram iguais em todas as colunas, exceto `tempo_real_s` e `rss_pico_kb`, com uma exceção: o ponto de 1000 inválidas, que falhou na primeira execução e passou no clone (ver acima). O `prazo.csv` só foi corrido uma vez.

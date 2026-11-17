@@ -56,6 +56,16 @@ class TestStressExtensions(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):
                 await run_mvp(**invalid)
 
+    async def test_dynamic_deadline_survives_slow_proposals(self):
+        slow = {"delay": {"PROPOSAL": 0.6}}
+        fixed = await run_mvp(faults=slow)
+        dynamic = await run_mvp(faults=slow, max_receive_timeout=2.0)
+        # Propostas a 0,6 s: o prazo fixo de 0,5 s desiste; o dinâmico espera porque não tem nenhuma.
+        self.assertEqual((fixed["incident_status"], fixed["reason"]), ("unresolved", "no_eligible_proposals"))
+        self.assertEqual(dynamic["incident_status"], "closed")
+        with self.assertRaises(ValueError):
+            await run_mvp(max_receive_timeout=0.1)
+
 
 if __name__ == "__main__":
     unittest.main()

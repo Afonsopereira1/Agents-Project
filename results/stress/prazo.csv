@@ -1,0 +1,31 @@
+caso,prazo,runs,fechadas,estados,tempo_real_por_execucao_s
+sem falhas,fixo 0.5 s,10,10,closed/confirmed=10,0.2
+sem falhas,dinâmico 0.5 a 2.0 s,10,10,closed/confirmed=10,0.2
+PROPOSAL delay=0.4s,fixo 0.5 s,10,10,closed/confirmed=10,0.99
+PROPOSAL delay=0.4s,dinâmico 0.5 a 2.0 s,10,10,closed/confirmed=10,0.99
+PROPOSAL delay=0.6s,fixo 0.5 s,10,0,unresolved/no_eligible_proposals=10,0.51
+PROPOSAL delay=0.6s,dinâmico 0.5 a 2.0 s,10,10,closed/confirmed=10,1.37
+PROPOSAL delay=1.5s,fixo 0.5 s,10,0,unresolved/no_eligible_proposals=10,0.51
+PROPOSAL delay=1.5s,dinâmico 0.5 a 2.0 s,10,10,closed/confirmed=10,3.17
+PROPOSAL delay=2.5s,fixo 0.5 s,10,0,unresolved/no_eligible_proposals=10,0.51
+PROPOSAL delay=2.5s,dinâmico 0.5 a 2.0 s,10,0,unresolved/no_eligible_proposals=10,2.01
+STATUS delay=0.6s,fixo 0.5 s,10,0,unresolved/confirmation_unknown=10,0.51
+STATUS delay=0.6s,dinâmico 0.5 a 2.0 s,10,10,closed/confirmed=10,1.21
+STATUS delay=1.5s,fixo 0.5 s,10,0,unresolved/confirmation_unknown=10,0.51
+STATUS delay=1.5s,dinâmico 0.5 a 2.0 s,10,10,closed/confirmed=10,3.01
+STATUS delay=2.5s,fixo 0.5 s,10,0,unresolved/confirmation_unknown=10,0.51
+STATUS delay=2.5s,dinâmico 0.5 a 2.0 s,10,0,unresolved/confirmation_unknown=10,2.01
+-drone,fixo 0.5 s,10,10,closed/confirmed=10,0.7
+-drone,dinâmico 0.5 a 2.0 s,10,10,closed/confirmed=10,0.69
+-drone -vehicle,fixo 0.5 s,10,0,unresolved/no_eligible_proposals=10,0.51
+-drone -vehicle,dinâmico 0.5 a 2.0 s,10,0,unresolved/no_eligible_proposals=10,2.01
+-ranger,fixo 0.5 s,10,0,unresolved/no_eligible_proposals=10,0.56
+-ranger,dinâmico 0.5 a 2.0 s,10,0,unresolved/no_eligible_proposals=10,2.06
+flood=1000,fixo 0.5 s,10,10,closed/confirmed=10,1.68
+flood=1000,dinâmico 0.5 a 2.0 s,10,10,closed/confirmed=10,1.68
+flood=2000,fixo 0.5 s,10,0,unresolved/confirmation_unknown=10,1.78
+flood=2000,dinâmico 0.5 a 2.0 s,10,10,closed/confirmed=10,3.17
+flood=5000,fixo 0.5 s,10,0,unresolved/no_eligible_proposals=10,2.1
+flood=5000,dinâmico 0.5 a 2.0 s,10,10,closed/confirmed=10,7.68
+flood=8000,fixo 0.5 s,10,0,unresolved/no_eligible_proposals=10,3.48
+flood=8000,dinâmico 0.5 a 2.0 s,10,0,unresolved/confirmation_unknown=10,6.7

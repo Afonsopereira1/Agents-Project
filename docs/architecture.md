@@ -120,7 +120,7 @@ classDiagram
 | Agente | Comportamentos | O que faz | Código |
 |---|---|---|---|
 | `SensorAgent` | `VerificationBehaviour` (OneShot) | Lê o feed local, envia `VERIFY_REQUEST`, espera até 10 s, avalia a evidência e decide | [sensor.py:129](../src/isia/agents/sensor.py#L129) |
-| `IncidentSensorAgent` | `IncidentBehaviour` (OneShot; estende o anterior) | Depois da decisão, cria a missão, conduz o Contract Net, espera o resultado e fecha a ocorrência | [incident.py:67](../src/isia/agents/incident.py#L67), `run()` em [:259](../src/isia/agents/incident.py#L259) |
+| `IncidentSensorAgent` | `IncidentBehaviour` (OneShot; estende o anterior) | Depois da decisão, cria a missão, conduz o Contract Net, espera o resultado e fecha a ocorrência | [incident.py:77](../src/isia/agents/incident.py#L77), `run()` em [:273](../src/isia/agents/incident.py#L273) |
 | `InformantAgent` | `VerificationBehaviour` (Cyclic) | Responde a pedidos de verificação só com as observações do seu feed | [informant.py:66](../src/isia/agents/informant.py#L66) |
 | `MobileResourceAgent` | `ContractNetBehaviour`, `AcceptBehaviour`, `ExecutionBehaviour` (todos Cyclic) | Responde a CFP; trata ACCEPT/REJECT e reserva-se; avança a missão e envia o resultado | [mobile.py:196](../src/isia/agents/mobile.py#L196), [:285](../src/isia/agents/mobile.py#L286), [:137](../src/isia/agents/mobile.py#L138); `setup()` em [:385](../src/isia/agents/mobile.py#L386) |
 | `DroneAgent`, `VehicleAgent`, `RangerAgent` | herdados | Classes **vazias**: só mudam a capacidade, a posição e a energia, definidas pelo cenário | [drone.py](../src/isia/agents/drone.py), [vehicle.py](../src/isia/agents/vehicle.py), [ranger.py](../src/isia/agents/ranger.py) |
@@ -136,9 +136,9 @@ O `ExecutionBehaviour` só é registado quando o recurso recebe `configure_execu
 | `drone-mvp`, `vehicle-mvp` | `DroneAgent`, `VehicleAgent` | `mobile_verification` |
 | `ranger-mvp` | `RangerAgent` | `incident_response` |
 
-Criação em [runner.py:148-199](../src/isia/simulation/runner.py#L148-L199); fontes por cenário em [config/scenarios/](../config/scenarios/).
+Criação em [runner.py:150-202](../src/isia/simulation/runner.py#L150-L202); fontes por cenário em [config/scenarios/](../config/scenarios/).
 
-> **Informador = `sensor-2` visual.** O enunciado pede informadores (fontes humanas). No código, o `InformantAgent` é o papel de **quem responde a pedidos de verificação**, e nas execuções medidas esse papel é desempenhado pelo `sensor-2`, uma câmara (fonte `visual`), ligado em [runner.py:174](../src/isia/simulation/runner.py#L174). O tipo de fonte `human` existe no simulador ([scenario.py:16-19](../src/isia/simulation/scenario.py#L16-L19)), mas **nenhum dos cenários A, B ou C tem uma fonte `human`**. Não há, por isso, resultados medidos sobre informadores humanos.
+> **Informador = `sensor-2` visual.** O enunciado pede informadores (fontes humanas). No código, o `InformantAgent` é o papel de **quem responde a pedidos de verificação**, e nas execuções medidas esse papel é desempenhado pelo `sensor-2`, uma câmara (fonte `visual`), ligado em [runner.py:176](../src/isia/simulation/runner.py#L176). O tipo de fonte `human` existe no simulador ([scenario.py:16-19](../src/isia/simulation/scenario.py#L16-L19)), mas **nenhum dos cenários A, B ou C tem uma fonte `human`**. Não há, por isso, resultados medidos sobre informadores humanos.
 
 ### 3.3 Porquê assim: sete decisões, com alternativas
 
@@ -174,13 +174,13 @@ Criação em [runner.py:148-199](../src/isia/simulation/runner.py#L148-L199); fo
 - ❌ Mais código de validação; é o maior volume do projeto ([allocation.py](../src/isia/reasoning/allocation.py) tem 810 linhas, [corroboration.py](../src/isia/reasoning/corroboration.py) tem 876).
 
 **Decisão 7 — Os agentes nunca veem o `ground_truth`.**
-- **Porquê:** se o vissem, não haveria problema de agentes. A verdade serve só ao **avaliador**, que mede TP, FP, TN e FN e atualiza a reputação **depois** da execução ([runner.py:320-326](../src/isia/simulation/runner.py#L320-L326)). O sensor recebe apenas uma cópia dos pesos (`snapshot`) no início.
+- **Porquê:** se o vissem, não haveria problema de agentes. A verdade serve só ao **avaliador**, que mede TP, FP, TN e FN e atualiza a reputação **depois** da execução ([runner.py:324-330](../src/isia/simulation/runner.py#L324-L330)). O sensor recebe apenas uma cópia dos pesos (`snapshot`) no início.
 
 ### 3.4 Onde está a autonomia
 
 1. **O recurso decide localmente se propõe.** `evaluate_request` ([mobile.py:104](../src/isia/agents/mobile.py#L104)) chama `evaluate_cfp` ([allocation.py:498](../src/isia/reasoning/allocation.py#L498)) com o estado do **próprio** recurso. Recusa por estar ocupado, por falta de capacidade ou por energia insuficiente.
 2. **A energia conta a ida e a volta.** O custo é `2 × células × energia_por_célula` ([mobile.py:116](../src/isia/agents/mobile.py#L116)); o recurso recusa se ficar abaixo da autonomia mínima.
-3. **O recurso pode recusar a reserva depois do `ACCEPT`.** Se o `STATUS` não for `reserved`, o iniciador regista `reservation_rejected` e não o consegue obrigar ([incident.py:201](../src/isia/agents/incident.py#L201)).
+3. **O recurso pode recusar a reserva depois do `ACCEPT`.** Se o `STATUS` não for `reserved`, o iniciador regista `reservation_rejected` e não o consegue obrigar ([incident.py:215](../src/isia/agents/incident.py#L215)).
 
 O informador também decide o que responder com base **só** nas suas observações; o iniciador não lhe impõe conteúdo.
 
