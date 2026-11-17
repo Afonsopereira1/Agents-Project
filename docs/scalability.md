@@ -260,7 +260,7 @@ Cada patrulha a mais custa 3 mensagens (CFP, `PROPOSAL`, `REJECT`). Com K = 2, o
 - **Propostas:** ao fim de 0,5 s, se já chegou pelo menos uma proposta, o iniciador avança com ela, como antes. Se não chegou nenhuma, continua à espera até um teto de 2,0 s.
 - **`STATUS`:** o iniciador espera até ao teto. Depois do `ACCEPT` não há alternativa: desistir dá `confirmation_unknown`, que não permite escolher outro recurso.
 
-**Como ligar.** `run_mvp(max_receive_timeout=2.0)` ([incident.py:160](../src/isia/agents/incident.py#L160) e [:207](../src/isia/agents/incident.py#L207)). Está desligado por omissão, porque os resultados da Etapa 9 e do F1 foram recolhidos com o prazo fixo; ligá-lo por omissão obrigaria a repeti-los. A decisão fica no item 5.1 da [ata](approvals.md).
+**Como ligar.** `run_mvp(max_receive_timeout=2.0)` ([incident.py:160](../src/isia/agents/incident.py#L160) e [:207](../src/isia/agents/incident.py#L207)). Está desligado por omissão até o grupo decidir o item 5.1 da [ata](approvals.md). Ligar as três opções não muda os resultados oficiais: a recolha da Etapa 9 repetida com elas ligadas (17-11-2026) deu `summary.csv` e `runs.csv` iguais, byte a byte, porque cada execução tem uma só ocorrência, nenhuma mensagem inválida, e as perdas do cenário C não se resolvem esperando. Mudariam 4 testes que verificam o comportamento antigo e as curvas do F1, que passam a ser o «antes».
 
 **Resultados** ([prazo.csv](../results/stress/prazo.csv), 17-11-2026, montagem do F2, 10 execuções por célula; ocorrências fechadas e tempo real por execução):
 
@@ -324,7 +324,7 @@ Medimos quatro tetos ([teto.csv](../results/stress/teto.csv), 5 execuções por 
 
 **A ideia.** Um recurso ocupado não é uma falha. O iniciador espera 5 s simulados e volta a enviar o `CFP`, até um número máximo de vezes. Vale para o guarda e para as patrulhas.
 
-**Como ligar.** `run_mvp(queue_rounds=60)` ([incident.py:259](../src/isia/agents/incident.py#L259)). Está desligada por omissão, pela mesma razão do prazo dinâmico. A decisão é de cada iniciador; o runner continua sem despachante.
+**Como ligar.** `run_mvp(queue_rounds=60)` ([incident.py:259](../src/isia/agents/incident.py#L259)). Está desligada por omissão, pela mesma razão do prazo dinâmico; também não muda a Etapa 9. A decisão é de cada iniciador; o runner continua sem despachante.
 
 **Resultados** ([fila.csv](../results/stress/fila.csv), 10 execuções por linha):
 

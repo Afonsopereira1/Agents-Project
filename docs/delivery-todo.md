@@ -289,6 +289,21 @@ Os parâmetros já existem e estão validados em [runner.py:36](../src/isia/simu
 
 ---
 
+## Pendentes deixados pelo Bloco F
+
+O que ficou por investigar depois do prazo dinâmico, da fila e do silêncio ([scalability.md](scalability.md#o-que-fica-por-investigar)). Opcional; fazer só depois do Bloco G e dos diapositivos.
+
+- [ ] **Prioridade na fila** (opcional, ~3 h) — hoje, quando o guarda fica livre, ganha o iniciador cujo `ACCEPT` chega primeiro. Uma ocorrência grave pode esperar atrás de uma ligeira, e uma ocorrência pode perder todas as disputas até esgotar `queue_rounds`.
+  1. Ligar a gravidade à missão: `create_from_decision` aceita `priority`, mas o iniciador nunca a passa (fica sempre 0), e a gravidade é uma só por cenário (`response_settings.severity`). Passar a gravidade por ameaça ou por sensor.
+  2. Escolher uma de duas formas: **(a)** o intervalo de espera da fila depende da prioridade (uma ocorrência grave volta a perguntar mais cedo); não precisa de mensagens novas, mas não garante a ordem. **(b)** O recurso ocupado guarda uma lista de espera e, quando fica livre, avisa o primeiro; garante a ordem, mas acrescenta um passo ao protocolo e estado ao recurso.
+  3. Medir com 8 ocorrências (2 graves e 6 ligeiras), antes e depois: tempo até ao fecho das graves, maior número de tentativas de uma só ocorrência e duplas reservas (tem de dar zero). Gravar `results/stress/prioridade.csv` e uma linha no mapa de limites.
+- [ ] **Atrasos reais na rede XMPP** (opcional, ~2 h) — os atrasos só foram injetados no transporte local; o runner recusa `faults` com `xmpp=True`. Não se sabe a latência real nem se os prazos chegam na rede.
+  1. Medir sem injeção: no servidor local (`spade run`), os tempos de `CFP` a `PROPOSAL` e de `ACCEPT` a `STATUS` em 20 execuções (mediana e máximo). É a base para justificar o teto.
+  2. Injetar atraso real na interface local: `sudo tc qdisc add dev lo root netem delay 300ms` (o atraso conta nos dois sentidos) e, no fim, `sudo tc qdisc del dev lo root`. O `tc` existe no WSL2; falta confirmar que o kernel tem o `netem`. Alternativa: o servidor XMPP noutra máquina.
+  3. Repetir o prazo fixo contra o dinâmico. **Atenção:** no XMPP o prazo fixo já é 2,0 s, por isso o teto do dinâmico tem de ser maior (por exemplo, 8 s). Gravar `results/stress/xmpp.csv` e uma linha no mapa de limites.
+
+---
+
 ## Pendentes deixados pelo Bloco D
 
 O que ficou por fazer ou por verificar depois das quatro tarefas obrigatórias do Bloco D (16-11-2026).
