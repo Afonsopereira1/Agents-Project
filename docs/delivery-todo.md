@@ -337,6 +337,8 @@ O que ficou por fazer ou por verificar depois das quatro tarefas obrigatórias d
 
 **Objetivo:** explicar o impacto de cada configuração na solução do problema, medindo dois valores alternativos por parâmetro contra o valor atual. Serve também para decidir os itens ainda abertos da [ata](approvals.md).
 
+**Estado da recolha final:** o âmbito executável está concluído: **25 alternativas válidas × A/B/C = 75 combinações, 3500 execuções alternativas**, com referências separadas e análise científica. O fecho literal das 26 alternativas continua condicionado a `source_diversity=1/1`, bloqueada por `ResponsePolicy` e não executada. Nenhuma aprovação foi marcada. Evidência: [sensibilidade](sensitivity.md), [manifesto de conclusão](../results/sensitivity/completion-manifest.json), [resumos](../results/sensitivity/summary.csv) e [bloqueios](../results/sensitivity/blocked-configurations.csv).
+
 **Pré-requisitos:** Blocos A a E fechados; `run_scenario` do coletor e `scripts/scale.py` como modelo.
 
 **Ficheiros envolvidos:** `scripts/sensitivity.py` (novo), `results/sensitivity/summary.csv` (novo), `docs/sensitivity.md` (novo), `src/isia/simulation/runner.py` (só para 4.1 e 5.1), `docs/presentation/roteiro.md`.
@@ -345,11 +347,11 @@ O que ficou por fazer ou por verificar depois das quatro tarefas obrigatórias d
 
 **Tarefas concretas:**
 
-- [ ] **Escrever `scripts/sensitivity.py`** (obrigatório para o bloco, ~2 h) — um ciclo sobre `(parametro, valor)` que copia o cenário, altera o valor e chama `run_scenario(config, "full")`. Inclui um self-check de que o valor atual reproduz a linha `full` de `results/experiments/summary.csv`.
-- [ ] **Expor 4.1 e 5.1 ao cenário** (obrigatório para o bloco, ~1 h) — hoje estão fixos no runner: `set_corroboration_context(..., 3.0, 2.0, 1)` e `receive_timeout=0.5`. Passar a lê-los do cenário, mantendo os valores atuais como omissão.
-- [ ] **Medir os nove parâmetros e calibrar os scores (7.6)** (obrigatório para o bloco, ~1,5 h de execução) — 26 configurações (algumas linhas da tabela têm dois subparâmetros) × 3 cenários, cerca de 3500 execuções; a calibração usa os relatórios da Etapa 9 (`results/experiments/runs/`, não versionados: regenerar com o coletor se faltarem).
-- [ ] **Escrever `docs/sensitivity.md`** (obrigatório para o bloco, ~2 h) — uma secção por parâmetro: o que controla no problema, a tabela dos três valores e uma frase sobre o compromisso medido.
-- [ ] **Um diapositivo de sensibilidade no roteiro** (obrigatório para o bloco, ~1 h) — os dois parâmetros com maior efeito, em gráfico ou tabela.
+- [x] **Escrever `scripts/sensitivity.py`** (obrigatório para o bloco, ~2 h) — cópias independentes e chamadas a `run_scenario(config, "full")`, com valores por omissão preservados. O self-check completo reproduziu as **140 linhas individuais e os três agregados `full`**, sem diferenças: [comparação](../results/sensitivity/20261117T205436Z-475d73da/self-check/comparison.json). Recolha em lotes e consolidação validadas em [scripts/](../scripts/).
+- [x] **Expor 4.1 e 5.1 ao cenário** (obrigatório para o bloco, ~1 h) — `runner_options` permite variar distância, janela e prazo-base sem alterar os JSON oficiais nem ativar o prazo dinâmico do Bloco F. Mantêm-se as omissões 3,0 células / 2,0 s / 0,5 s local. Também estão expostos os pesos e a autonomia mínima. Valores efetivos e aplicação dos 75 overrides conferidos na [auditoria](../results/sensitivity/g-final-analysis-20261117/application-audit.csv).
+- [ ] **Medir os parâmetros e calibrar os scores (7.6)** (obrigatório para o bloco, ~1,5 h de execução) — **parcial face às 26 alternativas originais:** as 25 válidas dos 13 fatores foram medidas nos três cenários, com 3500 execuções alternativas e nenhuma combinação válida em falta. A alternativa `1/1` continua bloqueada; não há resultados inventados para ela. Calibração descritiva concluída para **78 perfis**, com [intervalos](../results/sensitivity/calibration.csv), [cobertura](../results/sensitivity/calibration-coverage.csv) e explicação do viés de seleção. A tabela original de 26 alternativas só poderá ficar integralmente medida após decisão sobre o bloqueio.
+- [x] **Escrever `docs/sensitivity.md`** (obrigatório para o bloco, ~2 h) — [documento](sensitivity.md) com metodologia, 13 secções de resultados, diferenças absolutas/relativas, reamostragem emparelhada descritiva, aplicação dos parâmetros, calibração e limitações. As 114 linhas numéricas das tabelas foram conferidas contra o CSV: [verificação](../results/sensitivity/g-final-validation-20261117/documentation-check.json).
+- [x] **Um diapositivo de sensibilidade no roteiro** (obrigatório para o bloco, ~1 h) — [diapositivo 11](presentation/roteiro.md#sensibilidade--bloco-g-diapositivo-11): os dois maiores efeitos absolutos nas taxas de classificação, patrulha 0,35 em B (Δrecall −0,55) e gravidade 0,9 em B (ΔFPR +0,50), com TP/FP, energia e intervalos descritivos. Fonte: [comparações](../results/sensitivity/g-final-analysis-20261117/comparisons.csv) e [efeitos](../results/sensitivity/g-final-analysis-20261117/effects.csv).
 
 **Valores a comparar:**
 
@@ -357,7 +359,7 @@ O que ficou por fazer ou por verificar depois das quatro tarefas obrigatórias d
 |---|---|---|---|---|---|
 | 4.1 | Distância de compatibilidade | 3,0 células | 1,0 · 5,0 | Quão perto duas observações têm de estar para serem a mesma ameaça | Recall e FPR em B (erro de posição ±1) |
 | 4.1 | Janela temporal | 2,0 s | 0,5 · 5,0 s | Quão simultâneas têm de ser | Recall em A; `expired` por falta de corroboração |
-| 4.3 | Qualidade das fontes | as de A | ideal (FP = FN = 0) · ruidosa (FP = FN = 0,3) | Quanto do resultado se deve ao sensor e não aos agentes | Precision, recall e FPR em A |
+| 4.3 | Qualidade das fontes | as do próprio cenário | ideal (FP = FN = 0) · noisy (FP = FN = 0,3) | Quanto do resultado se deve ao sensor e não aos agentes; `noisy` não é necessariamente pior do que B | Precision, recall e FPR em A/B/C |
 | 5.1 | Prazo de espera | 0,5 s | 0,1 · 2,0 s | Rapidez contra tolerância a atrasos | Tempo real; `no_eligible_proposals` e `confirmation_unknown` em C |
 | 5.2 | Pesos do custo (ETA, energia, carga) | 1, 1, 1 | 0, 1, 0 (só energia) · 1, 1, 5 (carga pesada) | Que recurso é escolhido e o que custa | Patrulha escolhida, t de verificação, energia gasta (o «só ETA» já é `nearest`) |
 | 5.2 | Autonomia mínima | 10 % | 5 · 30 % | Margem de segurança contra recursos disponíveis | Recusas `autonomy_insufficient`; ocorrências sem proposta em C |
@@ -375,6 +377,8 @@ O que ficou por fazer ou por verificar depois das quatro tarefas obrigatórias d
 **Testes a realizar:** o self-check do valor atual; repetir uma configuração e conferir que o CSV é igual (registar a diferença, se a perda em C a provocar).
 
 **Critérios de conclusão:** `results/sensitivity/summary.csv` com as 26 configurações e a tabela de calibração do 7.6; `docs/sensitivity.md` com uma frase de impacto medido por parâmetro; diapositivo no roteiro.
+
+**Verificação dos critérios:** existem resultados canónicos, calibração e análise de todas as alternativas válidas. O consolidado contém 75 grupos alternativos e 41 referências por lote, sem duplicar alternativas; [manifesto](../results/sensitivity/g-final-consolidated-20261117/manifest.json) com `selection_complete=true`. O requisito literal de medir a alternativa 26 continua pendente pelo bloqueio explícito acima. A suite completa passou **572 testes**, incluindo compatibilidade F: [log](../results/sensitivity/g-final-validation-20261117/unittest-full.log). Não houve alteração dos dados publicados, cenários oficiais ou aprovações.
 
 **Resultado esperado:** para cada parâmetro, uma frase como «subir o limiar de patrulha de 0,25 para 0,35 baixa o FPR em B de X para Y e o recall de Z para W».
 
