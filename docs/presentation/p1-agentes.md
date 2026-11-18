@@ -1,35 +1,44 @@
-# Diapositivo P1 — Como os agentes são construídos
+# P1 — Como os agentes são construídos
 
-> Conteúdo do diapositivo. O formato final e a ordem na apresentação ficam para o roteiro do Bloco D.
+Folha de estudo para a primeira pergunta do professor. É o diapositivo 5 do [roteiro](roteiro.md). A explicação completa, com diagramas, está em [architecture.md](../architecture.md).
 
-## Título
+## Em resumo
 
-**Agentes SPADE finos, decisões em funções puras**
+- Cada agente é uma subclasse de `spade.agent.Agent` com **comportamentos** filtrados por **Templates**.
+- Os comportamentos só comunicam. As **decisões** são **funções puras**, testadas sem servidor (560 testes, 45 s).
+- Drone, veículo e guarda são **a mesma classe**; só muda a capacidade, a posição e a energia.
+- A **autonomia** está no recurso: é ele que decide se propõe.
 
-## Corpo (esquerda): três camadas
+## Resposta de 30 segundos
 
-1. **SPADE — comunicação e tempo:** `setup()` regista comportamentos; cada um filtra mensagens por performativa, ontologia e protocolo.
-2. **Raciocínio — funções puras:** corroboração, política, `evaluate_cfp`, escolha da proposta, reputação. Testadas sem servidor (579 testes).
-3. **Domínio — dados imutáveis e validados:** `Observation`, `Mission`, `Bid`, `Message`.
+«Cada agente é uma subclasse de `Agent` do SPADE. No `setup()` regista comportamentos, cada um com um Template que filtra as mensagens pela performativa, pela ontologia e pelo protocolo. Os comportamentos só comunicam; as decisões estão em funções puras, por isso testamos tudo sem servidor. Drone, veículo e guarda são a mesma classe e só mudam a capacidade. A autonomia está no recurso: decide se propõe, conta a energia de ida e volta e pode negar a reserva mesmo depois de aceite.»
 
-| Agente | Comportamentos |
-|---|---|
-| `IncidentSensorAgent` (`sensor-1`) | 1 OneShot: verifica, negoceia, fecha |
-| `InformantAgent` (`sensor-2`, visual) | 1 Cyclic: responde a pedidos |
-| Drone / veículo / guarda | **Mesma classe**, 3 Cyclic: CFP, ACCEPT, execução |
+## Três camadas
 
-## Corpo (direita): onde está a autonomia
+| Camada | O que tem | Onde |
+|---|---|---|
+| 1. SPADE: comunicação e tempo | `setup()`, comportamentos e Templates | `src/isia/agents/` |
+| 2. Raciocínio: funções puras | corroboração, política, `evaluate_cfp`, escolha da proposta, reputação | `src/isia/reasoning/` |
+| 3. Domínio: dados imutáveis e validados | `Observation`, `Mission`, `Bid`, `Message` | `src/isia/domain/`, `src/isia/communication/` |
 
-1. **Decide se propõe:** o recurso avalia o CFP com o seu próprio estado — [mobile.py:138](../../src/isia/agents/mobile.py#L138).
-2. **Energia de ida e volta:** recusa se não consegue regressar — [mobile.py:153](../../src/isia/agents/mobile.py#L153).
-3. **Pode recusar depois do `ACCEPT`:** `STATUS` ≠ `reserved` e o iniciador não o obriga — [incident.py:243](../../src/isia/agents/incident.py#L243).
+## Os agentes
 
-## Rodapé
+| Agente | Comportamentos | O que faz |
+|---|---|---|
+| `IncidentSensorAgent` | 1 `OneShotBehaviour` | Conduz uma ocorrência, do alerta ao fecho |
+| `InformantAgent` | 1 `CyclicBehaviour` | Responde só com as suas observações |
+| `MobileResourceAgent` | 3 `CyclicBehaviour` | Responde a CFP; trata aceites e rejeições; executa a missão |
+| `DroneAgent`, `VehicleAgent`, `RangerAgent` | herdados | Classes vazias: a mesma lógica com capacidades diferentes |
 
-Híbrido reativo + utilidade, não BDI completo. Os agentes nunca veem o `ground_truth`. Informador humano: os cenários A, B e C não o usam; está medido nos testes de stress (`humano.csv`) e no cenário E.
+## Onde está a autonomia
 
-## Notas do orador (30 s)
+1. **Decide se propõe:** `MobileResourceAgent.evaluate_request` chama `evaluate_cfp` com o estado do próprio recurso ([mobile.py](../../src/isia/agents/mobile.py), [allocation.py](../../src/isia/reasoning/allocation.py)).
+2. **Energia de ida e volta:** recusa (`autonomy_insufficient`) se não consegue ir, regressar e ficar com 10 % de reserva.
+3. **Pode negar a reserva depois do `ACCEPT`:** responde `STATUS` diferente de `reserved`; o iniciador não o obriga e renegoceia uma vez (`IncidentBehaviour.allocate` em [incident.py](../../src/isia/agents/incident.py)).
 
-«Cada agente é uma subclasse de `Agent` do SPADE com comportamentos filtrados por templates FIPA. Os comportamentos só comunicam; as decisões estão em funções puras, por isso testamos tudo sem servidor. Drone, veículo e guarda são a mesma classe e só mudam a capacidade. A autonomia está no recurso: decide se propõe, conta a energia de ida e volta e pode recusar a reserva mesmo depois de aceite.»
+## Limites a admitir
 
-Fontes: [architecture.md, secção 3](../architecture.md#3-como-os-agentes-são-construídos).
+- É um híbrido de reativo e utilidade, não um interpretador BDI.
+- Cada iniciador trata uma ocorrência por execução.
+- Todos os recursos se movem da mesma maneira na grelha (primeiro em x, depois em y).
+- Os agentes nunca veem o `ground_truth`; só o avaliador, no fim.

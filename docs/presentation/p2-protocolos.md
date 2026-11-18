@@ -1,30 +1,53 @@
-# Diapositivo P2 — Protocolos e arquitetura
+# P2 — Protocolos e arquitetura
 
-> Conteúdo do diapositivo. O formato final e a ordem na apresentação ficam para o roteiro do Bloco D.
+Folha de estudo para a segunda pergunta do professor. São os diapositivos 3 (arquitetura) e 6 (protocolos) do [roteiro](roteiro.md). A explicação completa está em [protocols.md](../protocols.md) e [architecture.md](../architecture.md).
 
-## Título
+## Em resumo
 
-**Porquê B1 + FIPA Request + Contract Net?**
+- **FIPA Request** para pedir corroboração; **FIPA Contract Net** para escolher o recurso, duas vezes numa ameaça confirmada (patrulha, depois guarda).
+- **Extensão nossa:** depois do `accept-proposal`, o recurso confirma a reserva com `STATUS`.
+- **Arquitetura:** quem deteta coordena a sua ocorrência. Não há despachante.
+- **Preço assumido:** escolha gulosa por ocorrência, sem ótimo global.
 
-## Corpo (esquerda): o que usamos
+## Resposta de 30 segundos
 
-1. **Verificação — FIPA Request:** `sensor-1` → `request` → `sensor-2` → `inform`.
-2. **Atribuição — Contract Net:** `cfp` → `propose` / `refuse` → `accept-proposal` (ou `reject-proposal` aos perdedores) → `STATUS` → `MISSION_RESULT`. Corre duas vezes numa ameaça confirmada (patrulha, depois guarda).
-3. **Arquitetura B1:** o sensor que deteta coordena só a sua ocorrência; não há despachante.
+«Usamos dois protocolos FIPA: Request para pedir corroboração e Contract Net para escolher o recurso. Não há despachante: quem deteta coordena, e cada recurso decide se propõe. Uma missão custa no máximo 3N + 2 mensagens. Acrescentámos uma confirmação de reserva, o `STATUS`, para evitar duas missões no mesmo recurso. O preço é a escolha gulosa: não garantimos a melhor atribuição global.»
 
-## Corpo (direita): prós e contras
+## As mensagens
 
-| | Pró | Contra **medido** |
+| Protocolo | Sequência (performativas) |
+|---|---|
+| Verificação (FIPA Request) | `request` → `inform` |
+| Atribuição (FIPA Contract Net) | `cfp` → `propose` ou `refuse` → `accept-proposal` ao vencedor e `reject-proposal` aos outros → `inform` (`STATUS`) → `inform` (`MISSION_RESULT`) |
+
+Numa ocorrência completa são **15 mensagens**: 2 de verificação, 8 para a patrulha (2 candidatos) e 5 para o guarda (1 candidato).
+
+Dois pormenores que caem em perguntas:
+
+- Quem recusa um CFP é o **recurso**, com `refuse`. `reject-proposal` é do **iniciador**, para as propostas que não escolheu.
+- `ALERT` só é enviado entre iniciadores vizinhos, no cenário E. `INCIDENT_CLOSED` nunca é enviado: é um registo na linha temporal.
+
+## Prós e contras, com números
+
+| Escolha | Ganho | Preço medido |
 |---|---|---|
-| Contract Net | Recursos decidem sozinhos; uma ronda | Drone silencioso: **1,5 s → 5,5 s** em 10 execuções (espera pelo prazo) |
-| Corroboração | Cenário B: FPR **0,75 → 0,25** | Cenário B: recall **0,80 → 0,65** |
+| Contract Net | Uma ronda; o recurso decide | Um candidato calado faz a ronda esperar o prazo: 1,5 s → 5,5 s reais em 10 execuções |
+| `STATUS` | 0 reservas duplas em todos os testes, com até 16 ameaças juntas | Mais 1 mensagem por missão |
+| Corroboração | Cenário B: FPR 0,75 → 0,25 | Cenário B: recall 0,80 → 0,65 |
+| Quem deteta coordena | Sem centro; 6 e 16 ocorrências em paralelo em D e E | Sem ótimo global |
 
-## Rodapé
+## Alternativas descartadas
 
-Descartadas: despachante central (contraria o tema), votação/consenso (O(n²), fontes correlacionadas), leilões de várias rondas. Paralelismo de ocorrências: **o desenho permite; não medido**.
+| Alternativa | Porque não |
+|---|---|
+| Despachante central | Ponto único de falha; o enunciado pede «without a central authority» |
+| Votação ou consenso entre todos | O(n²) mensagens; fontes correlacionadas enganam a maioria |
+| Atribuição direta («drone, vai») | O iniciador teria de saber o estado de todos: um despachante disfarçado |
+| Leilões de várias rondas | Mais mensagens e mais tempo |
+| Vickrey / VCG | Só garantem verdade com pagamentos; os nossos agentes são cooperativos |
 
-## Notas do orador (30 s)
+## Limites a admitir
 
-«Usamos dois protocolos FIPA: Request para pedir corroboração e Contract Net para escolher o recurso. Não há despachante: quem deteta coordena. O preço está medido: o Contract Net espera pelo prazo quando um recurso não responde, e a corroboração corta falsos positivos de 0,75 para 0,25 mas perde recall. Desvio assumido: o recurso confirma a reserva com `STATUS` depois do `accept-proposal`, para evitar duas missões no mesmo recurso.»
-
-Fontes: [architecture.md](../architecture.md#porquê-b1-e-não-outras-arquiteturas-do-sistema), [protocols.md](../protocols.md#9-porquê-estes-protocolos-alternativas-prós-e-contras), [experiments.md](../experiments.md).
+- É FIPA nas performativas e nos protocolos; o conteúdo é JSON nosso, não FIPA-SL.
+- O mecanismo não é *strategy-proof*.
+- As falhas foram injetadas só no transporte local, não num servidor XMPP.

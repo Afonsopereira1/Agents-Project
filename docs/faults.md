@@ -1,71 +1,134 @@
-# Falhas, atrasos e escassez — Etapa 8
+# Falhas, atrasos e escassez
 
-A injeção de falhas existe **apenas no transporte local** do runner
-(`run_mvp(faults=...)` ou `--faults config/faults.json`). Os agentes, os contratos
-e os timeouts são os mesmos do MVP; não se altera nem se valida o servidor XMPP.
-Com `--xmpp`, `--faults` é recusado.
+[README](../README.md) · [Arquitetura](architecture.md) · [Protocolos](protocols.md) · [Escalabilidade](scalability.md)
 
-## Parâmetros
+> **Em resumo**
+>
+> - As falhas são injetadas **só no transporte local** de `run_mvp`: perda, atraso, duplicação, agente indisponível, recurso ocupado e mensagens inválidas. Os agentes não mudam.
+> - Uma falha nunca deixa a ocorrência pendurada: acaba num estado explícito (`unresolved` ou `expired`) com um motivo.
+> - Por omissão não há reenvio. Com `retransmit=1` e 10 % de perda, fecham 17 de 20 ocorrências em vez de 7.
+> - Não há recuperação se o iniciador desaparecer, e a queda do servidor XMPP não é simulada.
 
-| Chave | Efeito |
-|-------|--------|
-| `seed` | Semente do gerador da perda aleatória |
-| `loss` | Probabilidade de perder cada mensagem, em `[0, 1]` |
-| `delay` | Atraso real em segundos por tipo, ex. `{"PROPOSAL": 0.05}` |
-| `drop` | Tipos sempre perdidos, ex. `["CFP"]` |
-| `duplicate` | Tipos entregues duas vezes, ex. `["MISSION_RESULT"]` |
-| `unavailable_agents` | Agentes (parte local do JID) sem envio nem receção durante a execução |
-| `occupied_after_proposal` | Recursos reservados por outra missão logo após a sua `PROPOSAL` |
-| `flood` | Por cada mensagem real, entrega ao mesmo destinatário N cópias inválidas de cada tipo: JSON partido, IDs trocados e data fora de prazo (o `CFP` não leva a de IDs trocados, que seria um pedido válido). As respostas ao lixo não geram mais lixo. Medido em [scalability.md](scalability.md#testes-de-stress-bloco-f) |
+Verificado contra o código em 18-11-2026 (branch `fix/auditoria-correcoes`).
 
-O relatório JSON regista `faults` (já validado e completo), `scenario_seed` e
-`fault_log`, com cada mensagem perdida, atrasada, duplicada ou recurso ocupado.
-Os seletores são exatos e sensíveis a maiúsculas: os tipos seguem `MessageType`,
-os agentes usam a parte local do JID (por exemplo `drone-mvp`) e a ocupação usa
-o ID do recurso (`drone`). Nomes desconhecidos ou vazios são recusados. Cada
-configuração normalizada tem coleções próprias, incluindo as fornecidas pelo
-chamador, e não altera os defaults das execuções seguintes.
-
-## Estados resultantes
-
-| Falha | Estado | `reason` |
-|-------|--------|----------|
-| `CFP` perdido, nenhuma patrulha disponível ou propostas tardias | `unresolved` | `no_eligible_proposals` |
-| `ACCEPT` perdido | `unresolved` | `confirmation_unknown` |
-| `MISSION_RESULT` perdido | `unresolved` | `mission_result_unknown` |
-| Sensor par indisponível | `expired` | decisão `timeout` |
-| Recurso ocupado após proposta | renegociação, `closed` com outro recurso | — |
-| `MISSION_RESULT`/`ACCEPT` duplicado | `closed`, um efeito por missão | — |
-
-**Retransmissões:** por omissão, os agentes não retransmitem mensagens; uma perda leva ao
-timeout e a um estado explícito. Com `retransmit=N` em `run_mvp` (18-11-2026), o iniciador
-volta a enviar o mesmo `VERIFY_REQUEST`, `CFP` ou `ACCEPT`, com o mesmo `message_id`, até N
-vezes, e o destinatário repete a resposta já dada. Com 10 % de perda e um reenvio fecham
-17 de 20 ocorrências em vez de 7 ([escalabilidade](scalability.md#reenvio-de-mensagens-antes-e-depois)). As rondas de negociação estão limitadas por
-`max_attempts` (2 no MVP).
-
-O limite global por omissão inclui os prazos reais da verificação e das
-tentativas de negociação e resultado das duas fases de missão, com margem
-para terminar. Não compete com o timeout de verificação. `max_seconds` explícito
-continua a impor o watchdog do chamador. O movimento usa tempo simulado;
-atrasos de entrega e esperas usam tempo real. Um resultado antecipado válido
-fica retido apenas para o ACCEPT ativo e só é aplicado depois de STATUS válido;
-timeout, rejeição ou cancelamento limpam essa retenção.
-
-**Recuperação quando falha o iniciador:** não há despachante nem tomada de
-controlo por outro sensor. Depois de um `ACCEPT` confirmado, o recurso executa,
-regressa e liberta a reserva sem depender do iniciador. O incidente fica
-`unresolved` e visível no relatório. Só se simula a perda da ligação com o
-iniciador, não a queda do processo.
-
-**Escassez:** a energia insuficiente e o esgotamento já são tratados pela
-Etapa 6 (`tests/scenarios/test_mvp.py`); aqui acrescenta-se o recurso ocupado.
+## Como injetar
 
 ```bash
 PYTHONPATH=src python -m isia.simulation.runner --faults config/faults.json > /tmp/isia-faults.json
 PYTHONPATH=src python -m unittest tests.integration.test_faults -v
 ```
 
-**Limites:** a indisponibilidade dura toda a execução do MVP, que tem uma única
-janela. A perda aleatória é reprodutível com a mesma semente e a mesma ordem de
-envios, mas a ordem depende do escalonamento `asyncio`.
+Em código: `run_mvp(faults={...})`. Com `--xmpp`, `--faults` é recusado: a injeção não toca no servidor XMPP nem o valida.
+
+O ficheiro de exemplo ([config/faults.json](../config/faults.json)) deixa o drone indisponível, atrasa as propostas 0,05 s e duplica os resultados. A ocorrência fecha na mesma (`closed` / `confirmed`), com o veículo no lugar do drone.
+
+## Parâmetros
+
+| Chave | Efeito | Omissão |
+|---|---|---|
+| `seed` | Semente da perda aleatória | 0 |
+| `loss` | Probabilidade de perder cada mensagem, em `[0, 1]` | 0 |
+| `delay` | Atraso real em segundos por tipo, em `[0, 60[`. Exemplo: `{"PROPOSAL": 0.05}` | `{}` |
+| `drop` | Tipos sempre perdidos. Exemplo: `["CFP"]` | `[]` |
+| `duplicate` | Tipos entregues duas vezes. Exemplo: `["MISSION_RESULT"]` | `[]` |
+| `unavailable_agents` | Agentes que não enviam nem recebem durante toda a execução | `[]` |
+| `occupied_after_proposal` | Recursos que são reservados por outra missão logo depois de proporem | `[]` |
+| `flood` | Por cada mensagem real, entrega ao mesmo destinatário N cópias inválidas de cada variante: JSON partido, IDs trocados e data fora de prazo | 0 |
+
+Regras dos nomes (validadas em `fault_settings`, [runner.py](../src/isia/simulation/runner.py)); nomes desconhecidos são recusados:
+
+- Os tipos são os de `MessageType`, em maiúsculas: `CFP`, `PROPOSAL`, `ACCEPT`, ...
+- `unavailable_agents` usa a parte local do JID e só aceita os cinco agentes base: `sensor-mvp`, `sensor-peer-mvp`, `drone-mvp`, `vehicle-mvp`, `ranger-mvp`.
+- `occupied_after_proposal` usa o ID do recurso e só aceita `drone`, `vehicle` e `ranger`.
+
+Os agentes adicionais dos cenários D e E não podem, portanto, ser desligados nem ocupados individualmente; `loss`, `delay`, `drop` e `duplicate` aplicam-se a todos.
+
+Pormenores do `flood`: o `CFP` não leva a variante de IDs trocados, porque seria um pedido válido. As respostas ao lixo não geram mais lixo. Medição em [scalability.md](scalability.md#testes-de-stress-bloco-f).
+
+O relatório JSON regista `faults` (a configuração completa), `scenario_seed` e `fault_log`, com cada mensagem perdida, atrasada, duplicada, inundada ou recurso ocupado.
+
+## O que acontece em cada falha
+
+Medido no MVP sem argumentos, uma falha de cada vez (18-11-2026). Os testes correspondentes estão em [test_faults.py](../tests/integration/test_faults.py).
+
+| Falha | Estado final | Motivo (`reason`) | O que acontece aos recursos |
+|---|---|---|---|
+| `CFP` ou `PROPOSAL` perdido; nenhuma patrulha disponível | `unresolved` | `no_eligible_proposals` | Nada é reservado |
+| `ACCEPT` perdido | `unresolved` | `confirmation_unknown` | Nada é reservado |
+| `STATUS` perdido | `unresolved` | `confirmation_unknown` | O recurso **executa a missão** e volta à base, mas o iniciador já desistiu |
+| `MISSION_RESULT` perdido | `unresolved` | `mission_result_unknown` | O recurso volta à base e liberta-se |
+| `VERIFY_REQUEST` ou `VERIFY_RESPONSE` perdido; fonte indisponível | `expired` | `insufficient_corroboration` (decisão `observe` / `timeout`) | Ninguém é enviado |
+| Uma patrulha indisponível | `closed` | `confirmed` | A outra patrulha faz a missão |
+| Recurso ocupado depois de propor | `closed` | `confirmed` | `STATUS(reservation_failed)`, nova ronda, outro recurso |
+| `MISSION_RESULT` ou `ACCEPT` duplicado | `closed` | `confirmed` | Um só efeito por missão |
+| Propostas atrasadas 1 s | `unresolved` com prazo fixo de 0,5 s; `closed` com o prazo dinâmico | `no_eligible_proposals` | — |
+| Mensagens inválidas (`flood`) | `closed` | `confirmed` | O lixo é ignorado |
+
+Duas leituras desta tabela:
+
+- **O ponto fraco é o `STATUS`.** É a única perda em que um recurso se desloca sem que ninguém aproveite o resultado. É o custo da confirmação extra ([porquê existe](protocols.md#porquê-o-status-depois-do-accept)).
+- **Fonte calada não é «não vi».** Sem resposta, o iniciador não mobiliza, mas também não conta a ausência contra a ameaça. Com a política ativa e uma ameaça grave (gravidade ≥ 0,8), a evidência local basta para pedir verificação mesmo sem a fonte.
+
+## Reenvio
+
+Por omissão os agentes não reenviam: uma perda leva ao prazo esgotado e a um estado explícito.
+
+Com `retransmit=N` em `run_mvp`:
+
+- O iniciador volta a enviar o mesmo `VERIFY_REQUEST`, `CFP` ou `ACCEPT`, com o **mesmo `message_id`**, até N vezes por pedido.
+- O destinatário reconhece a repetição e repete a resposta que já tinha dado, sem reavaliar nem reservar outra vez.
+- Enquanto espera o resultado da missão, o iniciador reenvia o `ACCEPT` como pergunta: o recurso repete o `STATUS` e, se já o tiver, o `MISSION_RESULT`.
+
+| Perda | Sem reenvio | 1 reenvio | 2 reenvios |
+|---|---|---|---|
+| 10 % | 7 de 20 fechadas | 17 | 17 |
+| 20 % | 1 | 10 | 16 |
+| 30 % | 0 | 3 | 9 |
+
+Fonte: `results/stress/reenvio.csv` (20 execuções por linha; 19 têm alerta). Análise em [scalability.md](scalability.md#reenvio-de-mensagens-antes-e-depois).
+
+O reenvio está ligado no cenário E (`retransmit: 1`) e desligado em todas as outras recolhas.
+
+## Prazos
+
+Há dois relógios, e não se misturam:
+
+| Relógio | O que mede | Avança quando |
+|---|---|---|
+| Simulado | Movimento, ETA, `created_at`, validade das leituras | Só enquanto houver uma missão em execução |
+| Real | Espera por respostas, atrasos injetados | Sempre |
+
+- Espera por propostas: 0,5 s reais no transporte local (2,0 s com XMPP). Com o prazo dinâmico, sem nenhuma proposta espera até `max_receive_timeout`.
+- Espera pelo `STATUS`: até `max_receive_timeout`.
+- Espera pelo resultado: 10 prazos de receção (5 s reais no transporte local).
+- Um `MISSION_RESULT` que chegue antes do `STATUS` fica retido e só é aplicado depois de um `STATUS` válido.
+- Há um limite global em tempo real que cobre todos estes prazos; `max_seconds` substitui-o.
+
+As rondas de negociação estão limitadas por `max_attempts` (2).
+
+## Falha do iniciador
+
+Não há despachante nem outro sensor que tome conta da ocorrência.
+
+- Se o iniciador desaparecer **depois** de um `ACCEPT` confirmado, o recurso executa, regressa e liberta a reserva sem depender dele. A ocorrência fica `unresolved` no relatório.
+- Se desaparecer **antes**, nada chega a ser reservado.
+
+Só se simula a perda de mensagens de e para o iniciador, não a queda do processo. Detetar a falha e passar a ocorrência a outro sensor ficou por fazer ([decisões pendentes](architecture.md#decisões-pendentes)).
+
+## Escassez
+
+| Situação | Tratamento |
+|---|---|
+| Energia insuficiente para ir e voltar com a reserva mínima (10 %) | O recurso recusa o CFP (`autonomy_insufficient`) |
+| Energia esgota-se a meio | `MISSION_RESULT` com `outcome=failed` e `reason=energy_exhausted`; o recurso fica `UNAVAILABLE` |
+| Todos os recursos ocupados | Sem fila: `unresolved`. Com fila (`queue_rounds`): o iniciador espera e volta a pedir |
+| Recurso ocupado entre a proposta e o `ACCEPT` | `STATUS(reservation_failed)` e nova ronda |
+
+Os testes de energia estão em [tests/scenarios/test_mvp.py](../tests/scenarios/test_mvp.py). O cenário C junta falhas e escassez: 10 % de perda, atrasos de 0,05 s, resultados duplicados e o drone com 15 % de autonomia ([config/scenarios/C.json](../config/scenarios/C.json)).
+
+## Limites
+
+- A indisponibilidade de um agente dura a execução inteira; não há falha a meio nem recuperação.
+- A perda aleatória é reprodutível com a mesma semente **e** a mesma ordem de envios, mas essa ordem depende do escalonamento do `asyncio`.
+- A injeção existe só no transporte local. Não demonstra tolerância a falhas de rede reais nem do servidor XMPP.
+- Não há recarga: um recurso sem energia fica parado até ao fim.

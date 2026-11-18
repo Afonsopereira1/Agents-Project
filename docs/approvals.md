@@ -1,5 +1,10 @@
 # Ata de aprovação — parâmetros e contratos
 
+> **Estado (18-11-2026).** Documento vivo: regista os valores que estão no código e quem os aprovou. Os valores abaixo foram conferidos com o código nesta data.
+> - **Aprovado:** 3 linhas (1.1, 1.2 e 4.2), a 16-11-2026. O item 5.3 deixou de se aplicar.
+> - **Em aberto:** 13 linhas (0.1 a 0.3, 4.1, 4.3, 5.1, 5.2 e 7.1 a 7.6); a data e o nome do cabeçalho estão em branco. Basta um elemento aprovar.
+> - **Para decidir:** o efeito medido de valores alternativos está em [sensitivity.md](sensitivity.md).
+
 > Preparada para o [Bloco E](delivery-todo.md#bloco-e--fecho-do-plano). Basta um elemento aprovar cada linha, com a data e o nome. Se um valor mudar, abrir uma issue em vez de alterar o código no momento.
 
 **Data:** ____ · **Aprovado por:** ____
@@ -8,15 +13,15 @@
 
 **Como decidir:** os valores abaixo são os que estão no código e produziram os resultados de `results/`. Alterar um valor obriga a repetir a recolha da Etapa 9. Por isso, a pergunta é «aceitamos estes valores para a entrega?», e não «são os ideais?».
 
-## Etapa 0 — ambiente (fecha [development-plan.md:49](development-plan.md#L49) e [:53](development-plan.md#L53))
+## Etapa 0 — ambiente (fecha as duas tarefas por assinalar da [Etapa 0](development-plan.md#etapa-0--auditoria-e-preparação) do plano)
 
 | # | Decisão | Valor atual | Aprovado |
 |---|---|---|---|
 | 0.1 | Documentação em `docs/` aceite como base da entrega | `main` atual | [ ] |
-| 0.2 | Versões | Python 3.12, SPADE 4.1.4 ([requirements.txt](../requirements.txt)) | [ ] |
-| 0.3 | Instalação testada: `PYTHONPATH=src python -m unittest discover -s tests` dá 579 testes OK (18-11-2026) | num computador | [ ] |
+| 0.2 | Versões | Python 3.12, SPADE 4.1.4 ([requirements.txt](../requirements.txt)). Com Python 3.14.4 a instalação falha: o SPADE 4.1.4 exige Python entre 3.10 e 3.14.0 | [ ] |
+| 0.3 | Instalação testada: `PYTHONPATH=src python -m unittest discover -s tests` dá 560 testes OK, em cerca de 45 s (18-11-2026) | num computador | [ ] |
 
-## Etapa 1 — contratos (fecha [development-plan.md:91](development-plan.md#L91))
+## Etapa 1 — contratos (fecha a revisão cruzada da [Etapa 1](development-plan.md#etapa-1--modelos-do-domínio-e-contratos-partilhados) do plano)
 
 | # | Decisão | Valor atual | Aprovado |
 |---|---|---|---|
@@ -34,7 +39,7 @@
 | 5.2 | Custo da proposta | ETA + energia + carga, pesos 1,0 cada; autonomia mínima de 10 % | [ ] |
 | 5.3 | ~~Desvio ao FIPA na recusa do CFP~~ | Corrigido a 16-11-2026: o recurso envia `refuse` ([protocols.md, secção 9](protocols.md#9-porquê-estes-protocolos-alternativas-prós-e-contras)) | Não se aplica |
 
-## Etapa 7 — reputação e política (fecha [development-plan.md:341](development-plan.md#L341))
+## Etapa 7 — reputação e política (fecha a tarefa «Aprovar formalmente os parâmetros» da [Etapa 7](development-plan.md#etapa-7--reputação-e-política-de-resposta) do plano)
 
 Valores de [config/agents.json](../config/agents.json).
 
@@ -50,7 +55,7 @@ Valores de [config/agents.json](../config/agents.json).
 ## Registo de alterações ao código
 
 - **18-11-2026 — três opções ligadas por omissão** (pendente C do [Bloco F](delivery-todo.md#pendentes-deixados-pelo-bloco-f)): `max_receive_timeout=2.0`, `queue_rounds=60` e `silent_invalid=True` em `run_mvp`. Afeta o MVP na linha de comandos e o modo `--xmpp`; não afeta as recolhas (Etapa 9, P3, Blocos F1 e G), que passam `PUBLISHED_CONDITIONS`. Seis testes que verificavam o comportamento antigo foram ajustados. O silêncio muda o contrato de mensagens: um `ACCEPT` incoerente deixa de ter resposta. Falta a aprovação do item 5.1 por um elemento; para desfazer, basta repor os três valores na assinatura de `run_mvp`.
-- **18-11-2026 — correções da auditoria ao código** (branch `fix/auditoria-correcoes`). (1) Aviso entre iniciadores: a espera pelos vizinhos gasta tempo real e o relógio simulado anda com as missões dos outros; o iniciador lia o feed outra vez, obtinha outra observação e o informador respondia `no_data`, por isso ameaças reais fechavam `expired`. Agora lê depois da espera, usa essa leitura e o mesmo incidente, e os pedidos de verificação levam a hora simulada atual. Sem leitura depois da espera fecha `expired/threat_expired`, em vez de pedir verificação de um evento de exemplo. (2) Segunda volta de `ALERT`: só se cede a um vizinho que fica com a ameaça. (3) Removidos `contract_net_demo.py` e o código que só os testes usavam (decisão `close`, `result_from_ground_truth`, `MessageDeduplicator`, `serialize_model`). (4) A espera por `VERIFY_RESPONSE` usa o prazo do iniciador; `requirements.txt` fixa `pyjabber` e `SQLAlchemy`. Afeta só as execuções com `alert_distance`: o cenário E e `alerta.csv` foram recolhidos de novo; A, B, C e D foram repetidos e não mudaram.
+- **18-11-2026 — correções da auditoria ao código** (branch `fix/auditoria-correcoes`). (1) Aviso entre iniciadores: a espera pelos vizinhos gasta tempo real e o relógio simulado anda com as missões dos outros; o iniciador lia o feed outra vez, obtinha outra observação e o informador respondia `no_data`, por isso ameaças reais fechavam `expired`. Agora lê depois da espera, usa essa leitura e o mesmo incidente, e os pedidos de verificação levam a hora simulada atual. Sem leitura depois da espera fecha `expired/threat_expired`, em vez de pedir verificação de um evento de exemplo. (2) Segunda volta de `ALERT`: só se cede a um vizinho que fica com a ameaça. (3) Removidos `contract_net_demo.py` e o código que só os testes usavam (decisão `close`, `result_from_ground_truth`, `MessageDeduplicator`, `serialize_model`). (4) A espera por `VERIFY_RESPONSE` usa o prazo do iniciador; `requirements.txt` fixa `pyjabber` e `SQLAlchemy`. Afeta só as execuções com `alert_distance`: o cenário E e `alerta.csv` foram recolhidos de novo; A, B, C e D foram repetidos e não mudaram. Nota de verificação (18-11-2026): os cenários D e E não se repetem byte a byte, porque a ordem na fila depende do relógio real. Em três repetições do D fecharam 44, 46 e 47 de 52 ocorrências; os ficheiros versionados de `results/scenario-d/` (45 de 52) são da recolha de `d81330f`, com `dirty: true`.
 
 ## Depois de aprovar
 

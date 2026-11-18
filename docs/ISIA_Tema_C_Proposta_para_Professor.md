@@ -1,5 +1,7 @@
 # ISIA — Trabalho 1 | Proposta para discussão com o docente
 
+> **Nota (18-11-2026):** documento histórico, de 5-11-2026, anterior à implementação. O conteúdo não foi alterado e descreve intenções dessa data, não o sistema entregue. Para a versão atual, ver o [README](../README.md) e a [arquitetura](architecture.md).
+
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027)  
 **Tema C:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*  
 **Grupo:** 3 estudantes  

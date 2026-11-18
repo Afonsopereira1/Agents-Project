@@ -1,5 +1,10 @@
 # Plano de desenvolvimento incremental — Etapas 0 a 10
 
+> **Estado (18-11-2026).** Registo histórico do plano por etapas, com a evidência de cada uma na data em que foi fechada. Já não é a lista de trabalho: essa é [delivery-todo.md](delivery-todo.md). Para correr o sistema e ver o estado atual: [README](../README.md).
+> - **Concluído:** Etapas 2–3, 6, 8, 9 e 9A. As Etapas 0–1, 4–5 e 7 estão implementadas e testadas; falta só a aprovação formal de 13 linhas da [ata](approvals.md).
+> - **Em aberto:** na Etapa 10, o ensaio do README por um colega, o PDF dos diapositivos e o pacote de entrega.
+> - **Números:** a suite tem hoje **560 testes**; as contagens citadas abaixo (249 a 489) são as de cada data.
+
 > **Roteiro de acompanhamento (revisto em 2026-11-13).** Este roteiro deriva da [estratégia](architecture.md#estratégia-técnica-e-algoritmos) e dos [requisitos](../README.md#requisitos-e-fontes). `- [x]` indica uma tarefa com implementação/evidência verificada; `- [ ]` indica trabalho pendente, parcialmente demonstrado ou aprovação ainda não comprovada. As listas de ficheiros são orientadoras e não implicam que todos existam.
 
 [README](../README.md) · [Arquitetura](architecture.md) · [Protocolos](protocols.md) · [Equipa](team-tasks.md) · [Avaliação](evaluation.md) · [Pendentes para a entrega](delivery-todo.md) · [Decisões](architecture.md#decisões-pendentes)
@@ -88,7 +93,7 @@ Alguma documentação e infraestrutura de testes da Etapa 10 podem começar ante
 - [x] Definir esquema JSON com `schema_version` e validação de campos obrigatórios.
 - [x] Especificar a deduplicação local por `message_id`; a reserva atómica e a prevenção de dupla missão permanecem para as etapas posteriores.
 - [x] Escrever exemplos válidos e inválidos.
-- [ ] Pedir revisão cruzada dos exemplos a quem implementará agentes e simulação.
+- [x] Pedir revisão cruzada dos exemplos a quem implementará agentes e simulação. — Aprovado na [ata](approvals.md), item 1.1 (16-11-2026).
 
 **Implementação integrada na `main`:** `IncidentState`, contratos JSON
 independentes de SPADE, serialização/desserialização dos modelos e
@@ -97,9 +102,9 @@ deduplicação por `message_id` estão implementados e testados (em 18-11-2026,
 nunca terem sido usados fora dos testes). O contrato
 estrutural de `CFP` exige missão, incidente, conversa, tarefa, destino,
 capacidade, prioridade e prazo. A retenção proposta de mensagens duplicadas é
-de 600 segundos simulados, sem expiração operacional nesta etapa. Mantêm-se
-pendentes a revisão cruzada e a aprovação formal dos contratos pelos três
-elementos; a reserva atómica e missões incompatíveis pertencem às etapas
+de 600 segundos simulados, sem expiração operacional nesta etapa. A revisão
+dos contratos e a retenção foram aprovadas na [ata](approvals.md) (itens 1.1 e
+1.2, 16-11-2026); a reserva atómica e missões incompatíveis pertencem às etapas
 posteriores.
 
 **Dependências:** Etapa 0. Bloqueia a integração das Etapas 2, 3, 4 e 5 até os contratos serem acordados.
@@ -212,7 +217,7 @@ de missões continuam nas Etapas 4 e 6.
 
 **Evidência (PR #9 integrado na `main`, 11-11-2026):** `reasoning/corroboration.py` associa leituras por distância euclidiana e janela temporal, seleciona fontes e implementa as categorias `compatible`, `contradictory`, `informative_absence` e `no_data`, além do resultado auxiliar conservador `inconclusive`. A deduplicação, a correlação, o histórico local e a decisão preliminar foram preservados, sem consulta a `ground_truth`. `agents/sensor.py`, `agents/informant.py` e `verification_demo.py` demonstraram o fluxo real simulador → observações locais → XMPP → evidências → decisão. A última suite local no Ubuntu, com SPADE, executou **249 testes, OK**. As demonstrações reais de verificação e Contract Net foram aprovadas no fluxo normal; contradição, ausência informativa, deduplicação e respetivos casos-limite foram validados por testes automatizados, não necessariamente por XMPP real. A associação é uma correlação candidata; a gestão completa do ciclo de vida do objeto `Incident` pertence ao MVP de etapas posteriores. O histórico é consultável **apenas durante a vida do agente**.
 
-**Pendência formal:** a implementação técnica da classificação está concluída e as correções recentes de ausência informativa e deduplicação foram validadas localmente nesta branch, mas a integração final no PR ainda está pendente. Continua dependente de aprovação formal do grupo a definição concreta das regras de incompatibilidade/compatibilidade, dos critérios de cobertura e janela de observação, da sensibilidade das fontes e da interpretação dos falsos negativos. Ausência de resposta, timeout ou falha de comunicação continuam a ser `no_data`, nunca ausência informativa.
+**Pendência formal:** a implementação está concluída e integrada na `main` (PR #9). Falta só a aprovação dos itens 4.1 (distância, janela e mínimo de fontes compatíveis) e 4.3 (sensibilidade e taxas de erro das fontes) da [ata](approvals.md). O item 4.2 está aprovado: ausência de resposta, timeout ou falha de comunicação são `no_data`, nunca ausência informativa.
 
 **Dependências:** Etapas 2 e 3. É base da Etapa 5 e do módulo de reputação na Etapa 7.
 
@@ -256,7 +261,7 @@ de missões continuam nas Etapas 4 e 6.
 **Auditoria da etapa:** a demonstração isolada `contract_net_demo.py` foi removida em 18-11-2026, por duplicar o iniciador real.
 A Etapa 6 integra `MissionRegistry` no `IncidentSensorAgent`, que herda a
 corroboração do `SensorAgent` e inicia a negociação da própria ocorrência.
-A aprovação formal dos contratos pelo grupo permanece pendente.
+Falta a aprovação dos itens 5.1 (prazo de espera) e 5.2 (custo da proposta) da [ata](approvals.md).
 
 **Erros prováveis/diagnóstico:** escolha antes do prazo, custo com unidades incompatíveis e corrida entre duas aceitações; usar testes de concorrência e logs de conversação.
 
@@ -307,7 +312,7 @@ prova de transporte de todas as mensagens pela rede.
 
 **Critérios de conclusão (MVP):** um alerta suscita corroboração; uma patrulha é escolhida por negociação, executa a missão e comunica resultado; a ocorrência chega a estado terminal sem despachante central.
 
-**Resultado obtido:** **MVP funcional demonstrável**. Ainda não é entrega final: reputação, falhas sistemáticas, cenários e visualização permanecem por completar.
+**Resultado obtido:** **MVP funcional demonstrável** (12-11-2026). A reputação, as falhas, os cenários e a visualização ficaram feitos nas Etapas 7 a 10.
 
 **Limites:** grelha sem obstáculos, inspeção local idealizada e intervenção do
 guarda simulada sem alterar os eventos globais. Até duas tentativas por tarefa;
@@ -518,7 +523,7 @@ merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
 
 **Objetivo:** identificar os limites de escala, medir o seu efeito e avaliar as correções mais simples antes da apresentação.
 
-**Origem e estado:** análise de P3 feita a 13-11-2026 em notas locais e repetida a 16-11-2026 com os scripts versionados [`scripts/scale.py`](../scripts/scale.py) e [`scripts/dist.py`](../scripts/dist.py), que gravam [`results/scalability/`](../results/scalability/). Resultados, estado de C1–C8 e correções em [scalability.md](scalability.md). **Fechada como análise:** C2 e C7 medidos; C1 implementado e medido, C4 com o mínimo implementado e C8 (reputação) medido no [Bloco F](scalability.md#testes-de-stress-bloco-f); C5 e C6 propostos; C3 e C8 (processos) adiados.
+**Origem e estado:** análise de P3 feita a 13-11-2026 em notas locais e repetida a 16-11-2026 com os scripts versionados [`scripts/scale.py`](../scripts/scale.py) e [`scripts/dist.py`](../scripts/dist.py), que gravam [`results/scalability/`](../results/scalability/). Resultados, estado de C1–C8 e correções em [scalability.md](scalability.md). **Fechada como análise.** Estado a 18-11-2026: C1 resolvido como opção (`cfp_limit`) e medido; C2 e C8 (reputação) medidos; C4 resolvido (chave `world` do cenário); C6 parcial (`extra_informants`); C7 contornado com vários iniciadores (`extra_initiators`); C3, C5 e C8 (processos) em aberto. A tabela abaixo é a análise inicial, de 13-11-2026.
 
 **Pré-requisitos:** Etapa 9; cenários, métricas e registos de referência disponíveis.
 
@@ -548,15 +553,15 @@ merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
 **Tarefas concretas:**
 
 - [x] Preservar scripts, configurações e resultados de P3 em caminhos versionados ou com proveniência registada; repetir a referência antes de comparar alterações. — `scripts/`, `results/scalability/`, repetida a 16-11-2026.
-- [ ] Medir mensagens, tempo real, tempo simulado e crescimento dos históricos ao variar sensores, recursos e ocorrências; C4 é necessário para testar mais drones por configuração. — **Parcial:** mensagens e tempos medidos ao retirar recursos e juntar caçadores; variar N e o crescimento dos históricos ficaram medidos no [Bloco F](scalability.md#testes-de-stress-bloco-f) (`escala.csv` e `longa.csv`); variar sensores continua por fazer.
+- [x] Medir mensagens, tempo real, tempo simulado e crescimento dos históricos ao variar sensores, recursos e ocorrências; C4 é necessário para testar mais drones por configuração. — Medido no [Bloco F](scalability.md#testes-de-stress-bloco-f), em [results/stress/](../results/stress/): recursos em `escala.csv` (2 a 16 patrulhas) e `guardas.csv`, ocorrências e iniciadores em `paralelo.csv` (1 a 8), informadores em `informadores.csv` (1, 2 e 4) e históricos em `longa.csv`.
 - [ ] Começar pela avaliação de C1, C5 e da persistência da reputação em C8, comparando custo e decisões antes/depois; medir também a espera de C2. — **C2 medido.** C1 implementado e medido no [Bloco F](scalability.md#testes-de-stress-bloco-f) (`cfp_limit`: 57 mensagens contra 15 com 16 patrulhas). C5 sem ganho mensurável (feed lido uma vez); C8 parte testes que usam `book.history`: o crescimento ficou medido (1824 registos em 1000 execuções), a persistência fica proposta.
 - [ ] Avaliar C6, C7 e a possibilidade de qualquer sensor iniciar, evitando ocorrências duplicadas para a mesma ameaça. — **Adiado nos cenários A, B e C:** C7 e o ponto cego medidos; correções propostas em [scalability.md](scalability.md). **Feito como opção (18-11-2026):** vários sensores iniciam (`extra_initiators`) e o aviso `ALERT` entre vizinhos evita ocorrências duplicadas (`alert_distance`, [alerta.csv](../results/stress/alerta.csv)).
 - [x] Acrescentar métricas por ameaça/ocorrência: cobertura, confirmações, atendimento e casos não resolvidos, mantendo a comparação com a métrica por execução. — `attended()` em `scripts/dist.py`; coluna `atendidos/ameacas` ao lado das contagens por execução.
-- [ ] **Adiado (depende de C7):** depois de suportar várias ocorrências, avaliar uma fila por gravidade e a proporção recursos/ameaças, preservando a reserva exclusiva. A contenção entre várias ocorrências é uma hipótese a testar, não um resultado destes ensaios.
+- [x] Depois de suportar várias ocorrências, avaliar uma fila por gravidade e a proporção recursos/ameaças, preservando a reserva exclusiva. — **Feito como opção (17 e 18-11-2026):** `fila.csv`, `prioridade.csv` e `guardas.csv`, com 0 duplas reservas. Não entra nos cenários A, B e C.
 - [ ] Repetir as comparações de cobertura, distância, autonomia e perdas com sementes comuns, número de repetições explícito e incerteza reportada. — **Parcial:** sementes comuns e repetições explícitas; incerteza não reportada (10–20 repetições).
 - [x] Registar quais correções foram implementadas e medidas e quais ficaram adiadas, incluindo C3 e a separação de processos de C8. — Tabela «Estado de C1–C8» em [scalability.md](scalability.md#estado-de-c1c8).
 
-**Limites da evidência:** amostras de 10–20 repetições, sem intervalos de confiança. O drone com 15% de autonomia continua a receber CFP, embora não seja elegível para verificar. Não se testou aumentar o número de drones. Os resultados não demonstram escalabilidade geral nem permitem concluir que menos recursos só prejudicam o sistema quando existem perdas.
+**Limites da evidência:** amostras de 10–20 repetições, sem intervalos de confiança. O drone com 15% de autonomia continua a receber CFP, embora não seja elegível para verificar. Nos ensaios de P3 não se testou aumentar o número de drones (o Bloco F mediu depois 2 a 16 patrulhas, em `escala.csv`). Os resultados não demonstram escalabilidade geral nem permitem concluir que menos recursos só prejudicam o sistema quando existem perdas.
 
 **Dependências:** Etapa 9. A Etapa 10 deve incorporar estas limitações e apenas os resultados efetivamente verificados.
 
@@ -578,9 +583,9 @@ merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
 - [x] Representar as mensagens principais e a passagem por estados do incidente. — mensagens por instante na repetição; gravações em [results/demo/](../results/demo/).
 - [x] Mostrar métricas acumuladas e resultado final do cenário. — energia por recurso e total de mensagens no fim da repetição.
 - [x] Garantir que o observador/visualizador não toma decisões por agentes. — a repetição só lê a `timeline` do relatório; não corre agentes.
-- [x] Documentar instalação, servidor XMPP, configuração e comando único de execução. — [README, «Comandos por ordem»](../README.md#comandos-por-ordem).
+- [x] Documentar instalação, servidor XMPP, configuração e comando único de execução. — [README](../README.md), reescrito e verificado a 18-11-2026.
 - [x] Descrever arquitetura, formatos de mensagem, protocolos, algoritmos, falhas e escolhas descartadas. — [architecture.md](architecture.md), [message-contract.md](message-contract.md), [protocols.md](protocols.md) e [faults.md](faults.md).
-- [x] Inserir dados verdadeiros dos três cenários, gráficos e limitações na apresentação. — 13 diapositivos e dois de reserva; cada número com a fonte no [roteiro](presentation/roteiro.md).
+- [x] Inserir dados verdadeiros dos três cenários, gráficos e limitações na apresentação. — cada número com a fonte no [roteiro](presentation/roteiro.md), que fixa a ordem e o número de diapositivos.
 - [ ] Fazer ensaio da demonstração com um colega a seguir apenas o `README`. — **Por fazer.** O ensaio de 18-11-2026 foi na mesma máquina e não conta ([delivery-todo.md](delivery-todo.md#pendentes-deixados-pelo-bloco-d)).
 - [x] Rever autorias, licenças e não publicar credenciais, dados privados nem materiais docentes sem autorização. — Verificado a 18-11-2026 nos ficheiros versionados: nenhuma credencial (as palavras-passe do README são marcadores e `local-demo` é a do servidor local de demonstração), `server.db` e `temp/` ignorados pelo Git, nenhum PDF nem enunciado dos docentes. O repositório não tem ficheiro de licença; os commits são dos três elementos do grupo.
 - [ ] Preparar demo interativa **ou** gravada e pacote de entrega segundo Moodle/docentes. — **Parcial:** demonstração gravada em [results/demo/](../results/demo/) (terminal e `mvp.mp4`). Falta o pacote: `git bundle create isia.bundle --all` ou ZIP do clone com `.git`, e o PDF dos diapositivos.
@@ -597,22 +602,14 @@ merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
 
 ---
 
-## Primeiro trabalho efetivo após aprovação
-
-1. Reabrir [decisões pendentes](architecture.md#decisões-pendentes), registar a aprovação do âmbito do MVP e dos contratos mínimos.
-2. Criar **Issue «Etapa 0 — auditoria e ambiente SPADE»** com as caixas desta etapa.
-3. Criar branch de implementação separada da branch de documentação.
-4. Auditar código já existente; **não presumir que a `main` continua vazia**.
-5. Preparar ambiente e executar teste de agente mínimo; publicar resultados no PR da Etapa 0.
-
 ## Checklist de marcos
 
-- [ ] Etapas 0–1: ambiente e contratos aceites pela equipa.
+- [ ] Etapas 0–1: ambiente e contratos aceites pela equipa. — Contratos aprovados (itens 1.1 e 1.2 da [ata](approvals.md)); faltam os itens 0.1 a 0.3.
 - [x] Etapas 2–3: simulador mínimo e comunicação real entre agentes.
-- [ ] Etapas 4–5: corroboração e negociação funcionais.
+- [ ] Etapas 4–5: corroboração e negociação funcionais. — Implementadas e testadas; faltam os itens 4.1, 4.3, 5.1 e 5.2 da ata.
 - [x] **Etapa 6: MVP validado em integração local dos comportamentos SPADE; demonstração ligada a XMPP também executada (agentes no mesmo processo).**
-- [ ] Etapa 7: implementação local testada, com adjudicação automática; aprovação dos parâmetros pendente.
+- [ ] Etapa 7: implementação local testada, com adjudicação automática; aprovação dos parâmetros pendente (itens 7.1 a 7.6 da ata).
 - [x] Etapa 8: falhas injetadas no transporte local com estados explícitos; queda de processo e XMPP não validados.
 - [x] Etapa 9: três cenários contrastantes medidos e analisados (transporte local; amostra pequena).
 - [x] Etapa 9A: escalabilidade computacional e situacional analisada, com medições reproduzíveis e correções ou adiamentos justificados ([scalability.md](scalability.md)).
-- [ ] Etapa 10: documentação e demonstração finais revistas.
+- [ ] Etapa 10: documentação e demonstração finais revistas. — Faltam o ensaio do README por um colega, o PDF dos diapositivos e o pacote de entrega.
