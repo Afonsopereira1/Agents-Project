@@ -191,7 +191,8 @@ class TestStressExtensions(unittest.IsolatedAsyncioTestCase):
         base = await run_mvp()
         self.assertEqual(resent(base), 0)
         # As primeiras mensagens de cada tipo perdem-se sempre (as duas propostas das patrulhas);
-        # só o reenvio as recupera. Sem reenvio, perder o VERIFY_RESPONSE custa 10 s reais: não se repete aqui.
+        # só o reenvio as recupera. Sem reenvio, perder o VERIFY_RESPONSE não tem um motivo próprio (decide-se só
+        # com a evidência local): não se compara aqui.
         for kind, count, reason in (("PROPOSAL", 2, "no_eligible_proposals"), ("STATUS", 1, "confirmation_unknown"),
                                     ("VERIFY_RESPONSE", 1, None)):
             with self.subTest(kind=kind):

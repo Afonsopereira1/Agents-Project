@@ -119,10 +119,10 @@ classDiagram
 
 | Agente | Comportamentos | O que faz | Código |
 |---|---|---|---|
-| `SensorAgent` | `VerificationBehaviour` (OneShot) | Lê o feed local, envia `VERIFY_REQUEST`, espera até 10 s, avalia a evidência e decide | [sensor.py:129](../src/isia/agents/sensor.py#L129) |
-| `IncidentSensorAgent` | `IncidentBehaviour` (OneShot; estende o anterior) | Depois da decisão, cria a missão, conduz o Contract Net, espera o resultado e fecha a ocorrência | [incident.py:96](../src/isia/agents/incident.py#L96), `run()` em [:314](../src/isia/agents/incident.py#L314) |
-| `InformantAgent` | `VerificationBehaviour` (Cyclic) | Responde a pedidos de verificação só com as observações do seu feed | [informant.py:66](../src/isia/agents/informant.py#L66) |
-| `MobileResourceAgent` | `ContractNetBehaviour`, `AcceptBehaviour`, `ExecutionBehaviour` (todos Cyclic) | Responde a CFP; trata ACCEPT/REJECT e reserva-se; avança a missão e envia o resultado | [mobile.py:245](../src/isia/agents/mobile.py#L245), [:319](../src/isia/agents/mobile.py#L346), [:160](../src/isia/agents/mobile.py#L190); `setup()` em [:431](../src/isia/agents/mobile.py#L463) |
+| `SensorAgent` | `VerificationBehaviour` (OneShot) | Lê o feed local, envia `VERIFY_REQUEST`, espera pela resposta (o prazo do iniciador; no máximo 10 s), avalia a evidência e decide | [sensor.py:131](../src/isia/agents/sensor.py#L131) |
+| `IncidentSensorAgent` | `IncidentBehaviour` (OneShot; estende o anterior) | Depois da decisão, cria a missão, conduz o Contract Net, espera o resultado e fecha a ocorrência | [incident.py:90](../src/isia/agents/incident.py#L90), `run()` em [:320](../src/isia/agents/incident.py#L320) |
+| `InformantAgent` | `VerificationBehaviour` (Cyclic) | Responde a pedidos de verificação só com as observações do seu feed | [informant.py:67](../src/isia/agents/informant.py#L67) |
+| `MobileResourceAgent` | `ContractNetBehaviour`, `AcceptBehaviour`, `ExecutionBehaviour` (todos Cyclic) | Responde a CFP; trata ACCEPT/REJECT e reserva-se; avança a missão e envia o resultado | [mobile.py:242](../src/isia/agents/mobile.py#L242), [:319](../src/isia/agents/mobile.py#L343), [:160](../src/isia/agents/mobile.py#L187); `setup()` em [:431](../src/isia/agents/mobile.py#L460) |
 | `DroneAgent`, `VehicleAgent`, `RangerAgent` | herdados | Classes **vazias**: só mudam a capacidade, a posição e a energia, definidas pelo cenário | [drone.py](../src/isia/agents/drone.py), [vehicle.py](../src/isia/agents/vehicle.py), [ranger.py](../src/isia/agents/ranger.py) |
 
 O `ExecutionBehaviour` só é registado quando o recurso recebe `configure_execution()`, o que acontece sempre em `run_mvp`. Sem ele, o recurso negoceia e reserva, mas não se desloca.
@@ -174,13 +174,13 @@ Criação em [runner.py:162-210](../src/isia/simulation/runner.py#L162-L235); fo
 - ❌ Mais código de validação; é o maior volume do projeto ([allocation.py](../src/isia/reasoning/allocation.py) tem 810 linhas, [corroboration.py](../src/isia/reasoning/corroboration.py) tem 876).
 
 **Decisão 7 — Os agentes nunca veem o `ground_truth`.**
-- **Porquê:** se o vissem, não haveria problema de agentes. A verdade serve só ao **avaliador**, que mede TP, FP, TN e FN e atualiza a reputação **depois** da execução ([runner.py:368-339](../src/isia/simulation/runner.py#L368-L374)). O sensor recebe apenas uma cópia dos pesos (`snapshot`) no início.
+- **Porquê:** se o vissem, não haveria problema de agentes. A verdade serve só ao **avaliador**, que mede TP, FP, TN e FN e atualiza a reputação **depois** da execução ([runner.py:371-339](../src/isia/simulation/runner.py#L371-L377)). O sensor recebe apenas uma cópia dos pesos (`snapshot`) no início.
 
 ### 3.4 Onde está a autonomia
 
-1. **O recurso decide localmente se propõe.** `evaluate_request` ([mobile.py:141](../src/isia/agents/mobile.py#L141)) chama `evaluate_cfp` ([allocation.py:498](../src/isia/reasoning/allocation.py#L498)) com o estado do **próprio** recurso. Recusa por estar ocupado, por falta de capacidade ou por energia insuficiente.
-2. **A energia conta a ida e a volta.** O custo é `2 × células × energia_por_célula` ([mobile.py:156](../src/isia/agents/mobile.py#L156)); o recurso recusa se ficar abaixo da autonomia mínima.
-3. **O recurso pode recusar a reserva depois do `ACCEPT`.** Se o `STATUS` não for `reserved`, o iniciador regista `reservation_rejected` e não o consegue obrigar ([incident.py:237](../src/isia/agents/incident.py#L237)).
+1. **O recurso decide localmente se propõe.** `evaluate_request` ([mobile.py:138](../src/isia/agents/mobile.py#L138)) chama `evaluate_cfp` ([allocation.py:477](../src/isia/reasoning/allocation.py#L477)) com o estado do **próprio** recurso. Recusa por estar ocupado, por falta de capacidade ou por energia insuficiente.
+2. **A energia conta a ida e a volta.** O custo é `2 × células × energia_por_célula` ([mobile.py:153](../src/isia/agents/mobile.py#L153)); o recurso recusa se ficar abaixo da autonomia mínima.
+3. **O recurso pode recusar a reserva depois do `ACCEPT`.** Se o `STATUS` não for `reserved`, o iniciador regista `reservation_rejected` e não o consegue obrigar ([incident.py:243](../src/isia/agents/incident.py#L243)).
 
 O informador também decide o que responder com base **só** nas suas observações; o iniciador não lhe impõe conteúdo.
 

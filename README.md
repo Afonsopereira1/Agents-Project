@@ -14,7 +14,7 @@ A partir da raiz, com Python 3.12. Nenhum passo precisa de servidor XMPP.
 python3 -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
 
-# 2. Testes: 581, OK, cerca de 75 s (18-11-2026)
+# 2. Testes: 560, OK, cerca de 45 s (18-11-2026)
 PYTHONPATH=src python -m unittest discover -s tests
 
 # 3. MVP: uma ocorrência completa, relatório JSON
@@ -77,7 +77,7 @@ O simulador mantém a verdade dos acontecimentos apenas para avaliação; os age
 | Mensagens e protocolos de comunicação | [docs/protocols.md](docs/protocols.md) |
 | Testes, métricas e três cenários | [docs/evaluation.md](docs/evaluation.md) |
 | Resultados medidos (Etapa 9) | [docs/experiments.md](docs/experiments.md) |
-| Demonstração Contract Net da Etapa 5 | [contract_net_demo.py](contract_net_demo.py) |
+| Contract Net sobre XMPP (Etapa 5) | `python -m isia.simulation.runner --xmpp`, ver [MVP da Etapa 6](#mvp-da-etapa-6) |
 | MVP completo da Etapa 6 | [runner.py](src/isia/simulation/runner.py) |
 | Política da Etapa 7 e limites da aprendizagem | [docs/reputation-policy.md](docs/reputation-policy.md) |
 | Organização flexível dos colegas | [docs/team-tasks.md](docs/team-tasks.md) e [Issues](https://github.com/Afonsopereira1/Agents-Project/issues) |
@@ -255,43 +255,25 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 Os testes de construção/parsing SPADE são ignorados quando SPADE não está
 instalado; para os executar, instale a versão fixada `spade==4.1.4`.
 
-### Demonstração da Etapa 5 — Contract Net e reserva
+### Etapa 5 — Contract Net e reserva
 
-Com um servidor XMPP local compatível com SPADE em execução, a demonstração
-[contract_net_demo.py](contract_net_demo.py) inicia um agente iniciador e dois
-recursos móveis. O cenário normal envia CFP, recolhe `PROPOSAL`/`REJECT`,
-seleciona deterministicamente a melhor proposta, envia `ACCEPT`, aguarda o
-`STATUS/inform` de reserva e só então altera a missão para `RESERVED`.
+O iniciador da ocorrência ([incident.py](src/isia/agents/incident.py)) envia CFP,
+recolhe `PROPOSAL`/`REJECT`, seleciona deterministicamente a melhor proposta,
+envia `ACCEPT`, aguarda o `STATUS/inform` de reserva e só então considera a
+missão reservada. Para o ver sobre XMPP, usar `--xmpp` no
+[MVP da Etapa 6](#mvp-da-etapa-6). A demonstração isolada `contract_net_demo.py`
+foi removida em 18-11-2026: tinha um segundo iniciador, com as mesmas regras
+escritas outra vez.
 
 Os prazos em `CFP` são instantes absolutos em **segundos simulados**. O tempo
 de espera por mensagens XMPP é um timeout de parede independente. O limite do
 CFP é inclusivo: `created_at == deadline` é válido; apenas propostas posteriores
 são tardias.
 
-As palavras-passe devem ser fornecidas apenas por variáveis de ambiente:
-
-```bash
-export CONTRACT_INITIATOR_JID=initiator@localhost
-export CONTRACT_INITIATOR_PASSWORD='password-da-conta'
-export CONTRACT_RESOURCE_ONE_JID=drone@localhost
-export CONTRACT_RESOURCE_ONE_PASSWORD='password-da-conta'
-export CONTRACT_RESOURCE_TWO_JID=vehicle@localhost
-export CONTRACT_RESOURCE_TWO_PASSWORD='password-da-conta'
-export CONTRACT_MAX_ROUNDS=2
-export CONTRACT_RECEIVE_TIMEOUT_SECONDS=10
-PYTHONPATH=src python3 contract_net_demo.py
-```
-
-`CONTRACT_MAX_ROUNDS` aceita `1` ou `2` e impede ciclos infinitos. Uma recusa
-explícita de reserva pode iniciar a ronda seguinte com novos IDs de CFP e
-conversa, mantendo `mission_id` e `incident_id`. Um timeout depois de `ACCEPT`
-produz `confirmation_unknown`; não provoca outro `ACCEPT` nem marca a missão
-como reservada. A ausência de propostas produz `no_eligible_proposals`.
-
-Os testes com mocks validam ausência de propostas, recusas, timeouts, mensagens
-tardias, limite de rondas e concorrência. A demonstração XMPP real validada no
-Ubuntu cobre o cenário normal; os testes unitários não substituem essa
-validação de transporte.
+Uma recusa explícita de reserva pode iniciar a ronda seguinte com novos IDs de
+CFP e conversa, mantendo `incident_id`. Um timeout depois de `ACCEPT` produz
+`confirmation_unknown`; não marca a missão como reservada. A ausência de
+propostas produz `no_eligible_proposals`.
 
 Na raiz do repositório, sem precisar de SPADE nem de servidor XMPP:
 

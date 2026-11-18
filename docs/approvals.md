@@ -21,7 +21,7 @@
 | # | Decisão | Valor atual | Aprovado |
 |---|---|---|---|
 | 1.1 | Formato das mensagens e exemplos válidos e inválidos revistos por quem implementa agentes e simulação | [message-contract.md](message-contract.md), [protocols.md](protocols.md) | [x] 16-11-2026 (Guilherme) |
-| 1.2 | Retenção para deduplicação por `message_id` | 600 s simulados ([messages.py:33](../src/isia/communication/messages.py#L33)) | [x] 16-11-2026 (Guilherme) |
+| 1.2 | Retenção para deduplicação por `message_id` | 600 s simulados (a constante e `MessageDeduplicator` foram removidos em 18-11-2026 por nunca terem sido usados; ver o [registo](#registo-de-alterações-ao-código)) | [x] 16-11-2026 (Guilherme) |
 
 ## Etapas 4–5 — corroboração e negociação
 
@@ -50,6 +50,7 @@ Valores de [config/agents.json](../config/agents.json).
 ## Registo de alterações ao código
 
 - **18-11-2026 — três opções ligadas por omissão** (pendente C do [Bloco F](delivery-todo.md#pendentes-deixados-pelo-bloco-f)): `max_receive_timeout=2.0`, `queue_rounds=60` e `silent_invalid=True` em `run_mvp`. Afeta o MVP na linha de comandos e o modo `--xmpp`; não afeta as recolhas (Etapa 9, P3, Blocos F1 e G), que passam `PUBLISHED_CONDITIONS`. Seis testes que verificavam o comportamento antigo foram ajustados. O silêncio muda o contrato de mensagens: um `ACCEPT` incoerente deixa de ter resposta. Falta a aprovação do item 5.1 por um elemento; para desfazer, basta repor os três valores na assinatura de `run_mvp`.
+- **18-11-2026 — correções da auditoria ao código** (branch `fix/auditoria-correcoes`). (1) Aviso entre iniciadores: a espera pelos vizinhos gasta tempo real e o relógio simulado anda com as missões dos outros; o iniciador lia o feed outra vez, obtinha outra observação e o informador respondia `no_data`, por isso ameaças reais fechavam `expired`. Agora lê depois da espera, usa essa leitura e o mesmo incidente, e os pedidos de verificação levam a hora simulada atual. Sem leitura depois da espera fecha `expired/threat_expired`, em vez de pedir verificação de um evento de exemplo. (2) Segunda volta de `ALERT`: só se cede a um vizinho que fica com a ameaça. (3) Removidos `contract_net_demo.py` e o código que só os testes usavam (decisão `close`, `result_from_ground_truth`, `MessageDeduplicator`, `serialize_model`). (4) A espera por `VERIFY_RESPONSE` usa o prazo do iniciador; `requirements.txt` fixa `pyjabber` e `SQLAlchemy`. Afeta só as execuções com `alert_distance`: o cenário E e `alerta.csv` foram recolhidos de novo; A, B, C e D foram repetidos e não mudaram.
 
 ## Depois de aprovar
 
