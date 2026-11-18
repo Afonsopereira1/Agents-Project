@@ -48,7 +48,8 @@ class TestFaults(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(executions(report, "ranger")), 1)
 
     async def test_late_proposals_are_ignored_and_short_delay_is_tolerated(self):
-        late = await run_mvp(faults={"delay": {"PROPOSAL": 1.0}})
+        # Prazo fixo (o dinâmico, ligado por omissão, esperaria por estas propostas).
+        late = await run_mvp(faults={"delay": {"PROPOSAL": 1.0}}, max_receive_timeout=None)
         self.assertEqual((late["incident_status"], late["reason"]), ("unresolved", "no_eligible_proposals"))
         short = await run_mvp(faults={"delay": {"CFP": 0.05, "PROPOSAL": 0.05}})
         self.assertEqual(short["incident_status"], "closed")

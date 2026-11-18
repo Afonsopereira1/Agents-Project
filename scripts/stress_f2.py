@@ -9,6 +9,9 @@ Grupos: paralelo (1, 2, 4 e 8 ocorrências) invalidas escala (C4 mínimo + C1)
         prazo (prazo fixo contra prazo dinâmico, max_receive_timeout) teto (vários tetos)
         fila (queue_rounds) silencio (silent_invalid) espera (fila com ameaças que duram pouco)
         prioridade (queue_priority)
+        validade (expire_unseen) guardas (extra_rangers) informadores (extra_informants)
+        ocupado (queue_until_free, a recusa traz busy_until) encadear (chain_missions)
+        humano (informadores humanos em vez de câmaras) alerta (aviso entre iniciadores, alert_distance)
 """
 import asyncio, collections, copy, csv, logging, sys, time
 from pathlib import Path
@@ -16,7 +19,9 @@ from pathlib import Path
 from isia.domain.models import Position
 from isia.evaluation.collector import load_scenario
 from isia.reasoning.reputation import ReputationBook
-from isia.simulation.runner import run_mvp
+from isia.simulation.runner import PUBLISHED_CONDITIONS, run_mvp
+
+from isia.evaluation.metrics import run_metrics
 
 from stress_f1 import double_bookings, mean
 
@@ -49,9 +54,11 @@ async def run(count, rep, flood=0, faults=None, duration=None, severities=None, 
         settings["severity_by_source"] = severities
     if duration is not None:
         events = [{**event, "duration": duration} for event in events]
+    # Cada grupo liga só a opção que mede; o resto fica como nos resultados publicados.
     return await run_mvp(
         response_settings=settings, reputation=ReputationBook(**settings["reputation"]),
-        corroborate=False, extra_initiators=extra, faults=faults or ({"flood": flood} if flood else None), **options,
+        corroborate=False, extra_initiators=extra, faults=faults or ({"flood": flood} if flood else None),
+        **{**PUBLISHED_CONDITIONS, **options},
         max_seconds=120.0, scenario={"run_id": f"f2-{rep}", "seed": 1000 + rep, "sources": sources,
                                      "events": events, "resources": base["resources"]})
 
@@ -229,7 +236,8 @@ async def espera():
             results = [r["payload"] for v in views for r in v["results"]]
             # Em vão: a patrulha chegou ao alvo e a ameaça já lá não estava.
             late += sum(r["task"] == "verify_incident" and r["outcome"] == "not_confirmed" for r in results)
-            # A intervenção do guarda é sempre "confirmed" no simulador; contar as que acabam depois do fim da ameaça.
+            # Pelo relógio: intervenções que acabam depois do fim da ameaça (desde 18-11-2026 dão not_confirmed;
+            # o grupo validade conta-as pelo resultado).
             after += sum(r["task"] == "respond_incident" and r["completed_at"] > duration for r in results)
             last = collections.Counter()
             for m in report["messages"]:
@@ -290,6 +298,172 @@ async def silencio():
             print(out[-1], flush=True)
     return fields, out
 
+def tally(reports):
+    """Contagens comuns aos grupos da fila: fechos, último fecho, mensagens e rondas ao guarda."""
+    rows = [row for r in reports for row in incidents(r)]
+    results = [x["payload"] for r in reports for v in (r, *r["extra_initiators"].values()) for x in v["results"]]
+    rounds = []
+    for r in reports:
+        last = collections.Counter()
+        for m in r["messages"]:
+            if m["body"]["message_type"] == "CFP" and m["to"].startswith("ranger"):
+                last[m["sender"]] = max(last[m["sender"]], m["body"]["payload"]["round_number"])
+        rounds += last.values()
+    return {"runs": len(reports), "total": len(rows),
+            "fechadas_confirmadas": sum(r["status"] == "closed" and r["reason"] == "confirmed" for r in rows),
+            "expiradas": sum(r["status"] == "expired" for r in rows),
+            "unresolved": sum(r["status"] == "unresolved" for r in rows),
+            "patrulha_em_vao": sum(x["task"] == "verify_incident" and x["outcome"] == "not_confirmed" for x in results),
+            "guarda_em_vao": sum(x["task"] == "respond_incident" and x["outcome"] == "not_confirmed" for x in results),
+            "t_ultimo_fecho_sim_mean": mean(max((row["closed_at"] for row in incidents(r) if row["status"] == "closed"),
+                                                default=None) for r in reports),
+            "msgs_mean": mean(len(r["messages"]) for r in reports),
+            "rondas_ao_guarda_mean": mean(rounds), "rondas_ao_guarda_max": max(rounds, default=0),
+            "duplas_reservas": sum(double_bookings(r) for r in reports)}
+
+async def before_after(name, cases, **common):
+    """Uma linha por caso; cada caso são argumentos de run() por cima dos comuns (8 ocorrências com fila)."""
+    out = []
+    for label, options in cases:
+        t0 = time.monotonic()
+        reports = [await run(**{"count": 8, "queue_rounds": 60, **common, **options}, rep=rep) for rep in range(REPS)]
+        out.append({name: label, **tally(reports), "tempo_real_por_execucao_s": round((time.monotonic() - t0) / REPS, 2)})
+        print(out[-1], flush=True)
+    return list(out[0]), out
+
+async def validade():
+    """Antes e depois do prazo de validade: ameaças de 60 e 30 s, sem e com expire_unseen."""
+    return await before_after("caso", [(f"ameaça {d:g} s, {'com' if e else 'sem'} validade",
+                                        {"duration": d, "expire_unseen": e}) for d in (60.0, 30.0) for e in (False, True)])
+
+RANGERS = {"ranger-2": Position(1, 4), "ranger-3": Position(6, 1), "ranger-4": Position(3, 7)}
+
+async def guardas():
+    """Mais guardas (extra_rangers): 8 ocorrências com fila e 1, 2 e 4 guardas."""
+    return await before_after("guardas", [(n, {"extra_rangers": dict(list(RANGERS.items())[:n - 1])}) for n in (1, 2, 4)])
+
+async def ocupado():
+    """Antes e depois de o recurso ocupado dizer quando fica livre (busy_until na recusa)."""
+    return await before_after("espera", [("de 5 em 5 s", {}), ("até busy_until", {"queue_until_free": True})])
+
+async def encadear():
+    """Antes e depois de os recursos aceitarem a missão seguinte durante o regresso à base."""
+    return await before_after("recursos", [("livres só na base", {}), ("encadeiam missões", {"chain_missions": True})])
+
+async def informadores():
+    """Um informador por iniciador (C6): 4 ocorrências a 4 células umas das outras, política completa
+    com corroboração, e 1, 2 e 4 informadores visuais (alcance 1) ao lado dos iniciadores."""
+    return await informant_cases("informadores", [(n, n, {"kind": "visual", "detection_range": 1.0}) for n in (1, 2, 4)])
+
+async def humano():
+    """Informadores humanos no lugar das câmaras: as mesmas 4 ocorrências, com 4 informadores.
+    O relato humano fiável só muda o tipo de sinal; o realista falha 30 % das vezes, erra a posição
+    em 1 célula e declara confiança 0,5."""
+    return await informant_cases("informador", [
+        ("câmara", 4, {"kind": "visual", "detection_range": 1.0}),
+        ("humano fiável", 4, {"kind": "human", "detection_range": 1.0}),
+        ("humano realista", 4, {"kind": "human", "detection_range": 1.0, "false_negative_rate": 0.3,
+                               "position_error": 1, "confidence": 0.5})])
+
+async def informant_cases(name, cases):
+    """Uma linha por caso (rótulo, número de informadores, perfil da fonte dos informadores)."""
+    from isia.agents.sensor import SensorAgent
+    fields = [name, "runs", "total", "corroboradas", "mobilizadas", "fechadas", "expiradas", "decisoes",
+              "verify_request_mean", "verify_response_mean", "t_corroboracao_real_ms_mean", "msgs_mean"]
+    initiators = {"sensor-3": Position(6, 2), "sensor-4": Position(2, 6), "sensor-5": Position(6, 6)}
+    pool = {"sensor-6": Position(7, 2), "sensor-7": Position(3, 6), "sensor-8": Position(7, 6)}
+    waits, original = [], SensorAgent.VerificationBehaviour.run
+
+    async def timed(self):
+        t0 = time.monotonic()
+        await original(self)
+        waits.append(time.monotonic() - t0)
+    SensorAgent.VerificationBehaviour.run = timed
+    out = []
+    try:
+        for label, count, see in cases:
+            extra = dict(list(pool.items())[:count - 1])
+            hear, modality = {"kind": "acoustic", "detection_range": 1.0}, see["kind"]
+            sources = {"sensor-1": hear, "sensor-2": see, **{k: hear for k in initiators}, **{k: see for k in extra}}
+            settings = copy.deepcopy(base["response_settings"])
+            settings["sources"].update(
+                {**{k: {"modality": "acoustic", "correlation_group": f"local_{k}"} for k in initiators},
+                 **{k: {"modality": "visual", "correlation_group": f"camera_{k}"} for k in extra}})
+            if modality == "human":
+                # O relato humano tem outro tipo de sinal: declará-lo compatível com o som de tiro.
+                settings["compatibility_rules"] = {"gunshot_like_sound": ["suspicious_activity_report"]}
+                settings["sources"].update({k: {"modality": "human", "correlation_group": f"informant_{k}"}
+                                            for k in ("sensor-2", *extra)})
+            events = [{**THREAT, "event_id": f"threat-{k}", "position": {"x": p.x, "y": p.y}}
+                      for k, p in {"sensor-1": Position(2, 2), **initiators}.items()]
+            waits.clear()
+            reports = [await run_mvp(
+                response_settings=settings, reputation=ReputationBook(**settings["reputation"]),
+                extra_initiators=initiators, extra_informants=extra, sensor_positions={"sensor-2": Position(3, 2)},
+                **{**PUBLISHED_CONDITIONS, "queue_rounds": 60}, max_seconds=120.0,
+                scenario={"run_id": f"f2-inf-{rep}", "seed": 1000 + rep, "sources": sources, "events": events,
+                          "resources": base["resources"]}) for rep in range(REPS)]
+            views = [v for r in reports for v in (r, *r["extra_initiators"].values())]
+            decisions = collections.Counter((v["decision"] or {}).get("decision") for v in views)
+            kinds = [collections.Counter(m["body"]["message_type"] for m in r["messages"]) for r in reports]
+            out.append({name: label, "runs": REPS, "total": len(views),
+                        "corroboradas": sum(bool((v["decision"] or {}).get("compatible_source_ids")) for v in views),
+                        "mobilizadas": sum(n for d, n in decisions.items() if d and d.startswith("request")),
+                        "fechadas": sum(v["incident_status"] == "closed" for v in views),
+                        "expiradas": sum(v["incident_status"] == "expired" for v in views),
+                        "decisoes": " ".join(f"{k}={v}" for k, v in decisions.items()),
+                        "verify_request_mean": mean(k["VERIFY_REQUEST"] for k in kinds),
+                        "verify_response_mean": mean(k["VERIFY_RESPONSE"] for k in kinds),
+                        "t_corroboracao_real_ms_mean": mean(w * 1000 for w in waits),
+                        "msgs_mean": mean(len(r["messages"]) for r in reports)})
+            print(out[-1], flush=True)
+    finally:
+        SensorAgent.VerificationBehaviour.run = original
+    return fields, out
+
+async def alerta():
+    """Aviso entre iniciadores com cobertura sobreposta (alert_distance): sem ele, cada iniciador que
+    ouve a mesma ameaça abre a sua ocorrência. Fontes sem ruído, alcance 1,5, política sem corroboração."""
+    fields = ["caso", "aviso", "runs", "iniciadores", "ameacas", "ocorrencias_tratadas", "desistencias",
+              "fechadas_confirmadas", "missoes_patrulha", "missoes_guarda", "energia_mean", "msgs_mean",
+              "alertas_mean", "duplas_reservas", "tempo_real_por_execucao_s"]
+    square = {"sensor-3": Position(4, 2), "sensor-4": Position(2, 4), "sensor-5": Position(4, 4)}
+    cases = [("2 iniciadores e 1 ameaça entre eles", {"sensor-3": Position(4, 2)}, [(3, 2)]),
+             ("4 iniciadores e 1 ameaça ao centro", square, [(3, 3)]),
+             ("2 iniciadores e 2 ameaças a 4 células", {"sensor-3": Position(4, 2)}, [(1, 2), (5, 2)])]
+    hear = {"kind": "acoustic", "detection_range": 1.5}
+    out = []
+    for label, extra, threats in cases:
+        settings = copy.deepcopy(base["response_settings"])
+        settings["policy"].update(patrol_threshold=0.01, severe_patrol_threshold=0.01)  # como no_corroboration
+        settings["sources"].update({k: {"modality": "acoustic", "correlation_group": f"local_{k}"} for k in extra})
+        sources = {"sensor-1": hear, "sensor-2": {"kind": "visual", "detection_range": 0.0}, **{k: hear for k in extra}}
+        events = [{**THREAT, "event_id": f"threat-{i}", "position": {"x": x, "y": y}} for i, (x, y) in enumerate(threats)]
+        for distance in (None, 1.0):
+            t0 = time.monotonic()
+            reports = [await run_mvp(
+                response_settings=settings, reputation=ReputationBook(**settings["reputation"]), corroborate=False,
+                extra_initiators=extra, alert_distance=distance, **{**PUBLISHED_CONDITIONS, "queue_rounds": 60},
+                max_seconds=120.0, scenario={"run_id": f"f2-alerta-{rep}", "seed": 1000 + rep, "sources": sources,
+                                             "events": events, "resources": base["resources"]}) for rep in range(REPS)]
+            rows = [row for r in reports for row in incidents(r)]
+            results = [x["payload"] for r in reports for v in (r, *r["extra_initiators"].values()) for x in v["results"]]
+            out.append({"caso": label, "aviso": "sem" if distance is None else f"até {distance:g} célula",
+                        "runs": REPS, "iniciadores": len(extra) + 1, "ameacas": len(threats),
+                        "ocorrencias_tratadas": sum(r["status"] is not None and r["reason"] != "duplicate_alert" for r in rows),
+                        "desistencias": sum(r["reason"] == "duplicate_alert" for r in rows),
+                        "fechadas_confirmadas": sum(r["status"] == "closed" and r["reason"] == "confirmed" for r in rows),
+                        "missoes_patrulha": sum(x["task"] == "verify_incident" for x in results),
+                        "missoes_guarda": sum(x["task"] == "respond_incident" for x in results),
+                        "energia_mean": mean(run_metrics(r)["energy_used"] for r in reports),
+                        "msgs_mean": mean(len(r["messages"]) for r in reports),
+                        "alertas_mean": mean(sum(m["body"]["message_type"] == "ALERT" for m in r["messages"])
+                                             for r in reports),
+                        "duplas_reservas": sum(double_bookings(r) for r in reports),
+                        "tempo_real_por_execucao_s": round((time.monotonic() - t0) / REPS, 2)})
+            print(out[-1], flush=True)
+    return fields, out
+
 async def go(groups):
     OUT.mkdir(parents=True, exist_ok=True)
     for group in groups:
@@ -300,4 +474,5 @@ async def go(groups):
         print("gravado:", path.relative_to(ROOT), flush=True)
 
 if __name__ == "__main__":
-    asyncio.run(go(sys.argv[1:] or ["paralelo", "invalidas", "escala", "prazo", "teto", "fila", "silencio", "espera", "prioridade"]))
+    asyncio.run(go(sys.argv[1:] or ["paralelo", "invalidas", "escala", "prazo", "teto", "fila", "silencio", "espera", "prioridade",
+                                    "validade", "guardas", "informadores", "ocupado", "encadear", "humano", "alerta"]))

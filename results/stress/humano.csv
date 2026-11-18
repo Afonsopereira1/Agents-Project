@@ -1,0 +1,4 @@
+informador,runs,total,corroboradas,mobilizadas,fechadas,expiradas,decisoes,verify_request_mean,verify_response_mean,t_corroboracao_real_ms_mean,msgs_mean
+câmara,10,40,40,40,40,0,request_mobile_verification=40,4.0,4.0,2.93,110.8
+humano fiável,10,40,40,40,40,0,request_mobile_verification=40,4.0,4.0,2.21,110.4
+humano realista,10,40,30,30,30,10,request_mobile_verification=30 observe=10,4.0,4.0,1.88,77.6

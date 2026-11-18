@@ -404,7 +404,7 @@ dos parâmetros continua pendente. Não foi executada comunicação XMPP real.
 
 **Implementação (12-11-2026):** o transporte local do runner aceita `faults`
 (perda aleatória com semente, perda por tipo, atraso, duplicação, agentes
-indisponíveis e recurso ocupado após proposta). Não há retransmissões; as rondas
+indisponíveis e recurso ocupado após proposta). Não há retransmissões por omissão (opção `retransmit` desde 18-11-2026); as rondas
 continuam limitadas por `max_attempts`. Recuperação do iniciador: o recurso
 termina, regressa e liberta a reserva; o incidente fica `unresolved`. A
 indisponibilidade dura toda a execução de janela única. Ver [falhas](faults.md).
@@ -453,7 +453,7 @@ A injeção não se aplica ao XMPP, que não foi executado nesta validação.
 - [x] Executar diferentes sementes quando há aleatoriedade; registar o número de repetições.
 - [x] Comparar políticas simples: sem corroboração, sem reputação e seleção da patrulha mais próxima.
 - [x] Produzir tabelas e discutir compromissos entre precisão, rapidez e custo.
-- [ ] Produzir gráficos a partir de `summary.csv` — **opcional**; ver [delivery-todo.md](delivery-todo.md#bloco-d--entregáveis-oficiais).
+- [x] Produzir gráficos a partir de `summary.csv` — **opcional**. **Feito (18-11-2026):** [scripts/charts.py](../scripts/charts.py) grava [taxas.svg](../results/experiments/charts/taxas.svg) e [custo.svg](../results/experiments/charts/custo.svg), sem dependências novas.
 - [x] Registar falhas observadas, limitações e incerteza — **sem inventar resultados**.
 
 **Implementação (12-11-2026):** a unidade é a execução (zona 8×8 numa janela
@@ -462,7 +462,7 @@ devolve `None` para denominadores zero; `evaluation/collector.py` corre
 cenários × variantes × sementes e escreve `runs.csv`, `summary.csv` e
 `manifest.json` em `results/experiments/`. `run_mvp` aceita `scenario`,
 `corroborate` e `selection_weights`. Os cenários A, B e C ficam em
-`config/scenarios/`, com 20 repetições cada. Só há tabelas, sem gráficos.
+`config/scenarios/`, com 20 repetições cada. Às tabelas juntaram-se dois gráficos SVG a 18-11-2026.
 Resultados e limitações: [experiências](experiments.md).
 
 **Verificação (12-11-2026):** a suite completa passou **419 testes, OK**.
@@ -548,7 +548,7 @@ merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
 - [x] Preservar scripts, configurações e resultados de P3 em caminhos versionados ou com proveniência registada; repetir a referência antes de comparar alterações. — `scripts/`, `results/scalability/`, repetida a 16-11-2026.
 - [ ] Medir mensagens, tempo real, tempo simulado e crescimento dos históricos ao variar sensores, recursos e ocorrências; C4 é necessário para testar mais drones por configuração. — **Parcial:** mensagens e tempos medidos ao retirar recursos e juntar caçadores; variar N e o crescimento dos históricos ficaram medidos no [Bloco F](scalability.md#testes-de-stress-bloco-f) (`escala.csv` e `longa.csv`); variar sensores continua por fazer.
 - [ ] Começar pela avaliação de C1, C5 e da persistência da reputação em C8, comparando custo e decisões antes/depois; medir também a espera de C2. — **C2 medido.** C1 implementado e medido no [Bloco F](scalability.md#testes-de-stress-bloco-f) (`cfp_limit`: 57 mensagens contra 15 com 16 patrulhas). C5 sem ganho mensurável (feed lido uma vez); C8 parte testes que usam `book.history`: o crescimento ficou medido (1824 registos em 1000 execuções), a persistência fica proposta.
-- [ ] Avaliar C6, C7 e a possibilidade de qualquer sensor iniciar, evitando ocorrências duplicadas para a mesma ameaça. — **Adiado:** C7 e o ponto cego medidos; correções propostas em [scalability.md](scalability.md).
+- [ ] Avaliar C6, C7 e a possibilidade de qualquer sensor iniciar, evitando ocorrências duplicadas para a mesma ameaça. — **Adiado nos cenários A, B e C:** C7 e o ponto cego medidos; correções propostas em [scalability.md](scalability.md). **Feito como opção (18-11-2026):** vários sensores iniciam (`extra_initiators`) e o aviso `ALERT` entre vizinhos evita ocorrências duplicadas (`alert_distance`, [alerta.csv](../results/stress/alerta.csv)).
 - [x] Acrescentar métricas por ameaça/ocorrência: cobertura, confirmações, atendimento e casos não resolvidos, mantendo a comparação com a métrica por execução. — `attended()` em `scripts/dist.py`; coluna `atendidos/ameacas` ao lado das contagens por execução.
 - [ ] **Adiado (depende de C7):** depois de suportar várias ocorrências, avaliar uma fila por gravidade e a proporção recursos/ameaças, preservando a reserva exclusiva. A contenção entre várias ocorrências é uma hipótese a testar, não um resultado destes ensaios.
 - [ ] Repetir as comparações de cobertura, distância, autonomia e perdas com sementes comuns, número de repetições explícito e incerteza reportada. — **Parcial:** sementes comuns e repetições explícitas; incerteza não reportada (10–20 repetições).
@@ -572,16 +572,16 @@ merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
 
 **Tarefas concretas:**
 
-- [ ] Mostrar em grelha as fontes, ocorrências, patrulhas, estados e deslocações.
-- [ ] Representar as mensagens principais e a passagem por estados do incidente.
-- [ ] Mostrar métricas acumuladas e resultado final do cenário.
-- [ ] Garantir que o observador/visualizador não toma decisões por agentes.
-- [ ] Documentar instalação, servidor XMPP, configuração e comando único de execução.
-- [ ] Descrever arquitetura, formatos de mensagem, protocolos, algoritmos, falhas e escolhas descartadas.
-- [ ] Inserir dados verdadeiros dos três cenários, gráficos e limitações na apresentação.
-- [ ] Fazer ensaio da demonstração com um colega a seguir apenas o `README`.
-- [ ] Rever autorias, licenças e não publicar credenciais, dados privados nem materiais docentes sem autorização.
-- [ ] Preparar demo interativa **ou** gravada e pacote de entrega segundo Moodle/docentes.
+- [x] Mostrar em grelha as fontes, ocorrências, patrulhas, estados e deslocações. — [scripts/replay.py](../scripts/replay.py), repetição do relatório JSON ([Bloco D](delivery-todo.md#bloco-d--entregáveis-oficiais)).
+- [x] Representar as mensagens principais e a passagem por estados do incidente. — mensagens por instante na repetição; gravações em [results/demo/](../results/demo/).
+- [x] Mostrar métricas acumuladas e resultado final do cenário. — energia por recurso e total de mensagens no fim da repetição.
+- [x] Garantir que o observador/visualizador não toma decisões por agentes. — a repetição só lê a `timeline` do relatório; não corre agentes.
+- [x] Documentar instalação, servidor XMPP, configuração e comando único de execução. — [README, «Comandos por ordem»](../README.md#comandos-por-ordem).
+- [x] Descrever arquitetura, formatos de mensagem, protocolos, algoritmos, falhas e escolhas descartadas. — [architecture.md](architecture.md), [message-contract.md](message-contract.md), [protocols.md](protocols.md) e [faults.md](faults.md).
+- [x] Inserir dados verdadeiros dos três cenários, gráficos e limitações na apresentação. — 13 diapositivos e dois de reserva; cada número com a fonte no [roteiro](presentation/roteiro.md).
+- [ ] Fazer ensaio da demonstração com um colega a seguir apenas o `README`. — **Por fazer.** O ensaio de 18-11-2026 foi na mesma máquina e não conta ([delivery-todo.md](delivery-todo.md#pendentes-deixados-pelo-bloco-d)).
+- [x] Rever autorias, licenças e não publicar credenciais, dados privados nem materiais docentes sem autorização. — Verificado a 18-11-2026 nos ficheiros versionados: nenhuma credencial (as palavras-passe do README são marcadores e `local-demo` é a do servidor local de demonstração), `server.db` e `temp/` ignorados pelo Git, nenhum PDF nem enunciado dos docentes. O repositório não tem ficheiro de licença; os commits são dos três elementos do grupo.
+- [ ] Preparar demo interativa **ou** gravada e pacote de entrega segundo Moodle/docentes. — **Parcial:** demonstração gravada em [results/demo/](../results/demo/) (terminal e `mvp.mp4`). Falta o pacote: `git bundle create isia.bundle --all` ou ZIP do clone com `.git`, e o PDF dos diapositivos.
 
 **Dependências:** Etapas 0–9 e análise da Etapa 9A, embora documentação e protótipo de visualização possam avançar em paralelo.
 

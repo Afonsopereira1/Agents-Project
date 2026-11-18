@@ -24,6 +24,28 @@ class TestExperiments(unittest.IsolatedAsyncioTestCase):
     def test_three_versioned_scenarios_load(self):
         self.assertEqual([load_scenario(p)["scenario_id"] for p in SCENARIOS], ["A", "B", "C"])
 
+    async def test_demo_scenario_d_reads_world_and_options_from_the_file(self):
+        config = load_scenario(ROOT / "config/scenarios/demo/D.json")
+        options = collector.world_options(config)
+        self.assertEqual(options["map_size"], (12, 8))
+        self.assertEqual((len(options["extra_initiators"]), len(options["extra_informants"]),
+                          sorted(options["extra_patrols"]), sorted(options["extra_rangers"])),
+                         (5, 5, ["drone-2", "drone-3"], ["ranger-2"]))
+        for invalid in ({"world": {"depth": 3}}, {"options": {"corroborate": False}},
+                        {"world": {"rangers": {"ranger-2": 5}}}):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                collector.validate_scenario({**config, **invalid})
+        [row] = await run_scenario(config, "full", repetitions=1)
+        # As colunas habituais são as do sensor-1; estas contam todos os iniciadores.
+        self.assertEqual(row["incidents"],
+                         row["incidents_closed"] + row["incidents_expired"] + row["incidents_unresolved"])
+        self.assertGreaterEqual(row["incidents"], 4)
+        self.assertEqual(row["incidents_unresolved"], 0)
+        with TemporaryDirectory() as output:
+            path = Path(output, "runs.csv")
+            collector.write_csv(path, [{"scenario": "A"}, row])
+            self.assertIn(",incidents,", path.read_text().splitlines()[0])
+
     async def test_same_seed_repeats_same_metrics_and_stores_runs(self):
         config = load_scenario(ROOT / "config/scenarios/A.json")
         with TemporaryDirectory() as output:

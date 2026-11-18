@@ -1,0 +1,4 @@
+informadores,runs,total,corroboradas,mobilizadas,fechadas,expiradas,decisoes,verify_request_mean,verify_response_mean,t_corroboracao_real_ms_mean,msgs_mean
+1,10,40,10,10,10,30,request_mobile_verification=10 observe=30,4.0,4.0,1.51,21.0
+2,10,40,20,20,20,20,request_mobile_verification=20 observe=20,4.0,4.0,1.74,44.0
+4,10,40,40,40,40,0,request_mobile_verification=40,4.0,4.0,1.78,110.2

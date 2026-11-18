@@ -1,4 +1,4 @@
 duracao_ameaca_s,runs,total,fechadas_confirmadas,patrulha_em_vao,guarda_apos_fim_da_ameaca,rondas_ao_guarda_mean,rondas_ao_guarda_max,msgs_mean
-1000.0,10,80,80,0,0,2.94,15,358.3
-60.0,10,80,70,10,15,2.74,13,345.3
-30.0,10,80,39,41,19,2.82,8,312.8
+1000.0,10,80,80,0,0,3.29,15,363.5
+60.0,10,80,54,10,16,3.06,13,347.2
+30.0,10,80,20,40,20,3.17,8,323.8

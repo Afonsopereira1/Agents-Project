@@ -28,3 +28,7 @@ results/simulation/
 
 # Relatórios completos por execução (Etapa 9); summary/runs/manifest são versionados
 results/experiments/runs/
+
+# Relatórios completos por execução do cenário D; runs.csv, summary.csv e manifest.json são versionados
+results/scenario-d/runs/
+results/scenario-e/runs/

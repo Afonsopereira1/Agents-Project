@@ -7,18 +7,20 @@ from time import monotonic
 
 from spade.template import Template
 
-from isia.agents.sensor import SensorAgent
-from isia.communication.messages import Message, MessageType, model_from_dict
+from isia.agents.sensor import SensorAgent, _recent_observations
+from isia.communication.messages import Message, MessageType, model_from_dict, model_to_dict
 from isia.communication.transport import (
     ONTOLOGY, CONTRACT_NET_PROTOCOL, build_spade_message, parse_spade_message,
 )
 from isia.domain.incident_state import IncidentState, IncidentStatus
-from isia.domain.models import Bid, Incident, Mission, MissionStatus
+from isia.domain.models import Bid, Incident, Mission, MissionStatus, Observation, Position
+from isia.domain.validation import is_finite_number
 from isia.reasoning.allocation import (
     MissionRegistry, build_cfp_message, build_accept_message,
     build_proposal_rejection_message, select_best_proposal,
     reservation_status_matches_accept, RANGER_TASK, RANGER_CAPABILITY,
 )
+from isia.reasoning.corroboration import are_observations_compatible
 from isia.reasoning.policy import ResponsePolicy, decide_response
 from isia.reasoning.reputation import EvaluationResult
 
@@ -36,13 +38,21 @@ class IncidentSensorAgent(SensorAgent):
 
     def configure_mvp(self, patrols, rangers, *, receive_timeout=2.0, max_attempts=2,
                       selection_weights=None, base_positions=None, cfp_limit=None,
-                      max_receive_timeout=None, queue_rounds=0):
+                      max_receive_timeout=None, queue_rounds=0, expire_unseen=False,
+                      queue_until_free=False, retransmit=0, neighbours=(), alert_distance=None):
         """base_positions ({jid: Position}) e cfp_limit=K ativam C1: CFP só aos K mais próximos.
 
         max_receive_timeout ativa o prazo dinâmico: sem nenhuma proposta ao fim de
         receive_timeout, o iniciador espera até este teto; o STATUS espera sempre até ao teto.
         queue_rounds ativa a fila: com os recursos ocupados, o iniciador espera
         QUEUE_INTERVAL_SECONDS simulados e volta a pedir, até queue_rounds vezes.
+        queue_until_free: se a recusa trouxer busy_until, espera até esse instante em vez do intervalo.
+        expire_unseen ativa o prazo de validade: antes de cada pedido o iniciador volta a ler o
+        seu sensor; sem nenhuma leitura na janela do feed, fecha como expired e não manda ninguém.
+        retransmit=N ativa o reenvio: sem resposta no prazo, o mesmo VERIFY_REQUEST, CFP ou ACCEPT
+        (mesmo message_id) volta a sair, até N vezes por pedido.
+        neighbours (JIDs de outros iniciadores) e alert_distance ativam o aviso entre iniciadores:
+        cada um envia um ALERT aos vizinhos e desiste se um deles viu a mesma ameaça primeiro.
         """
         if type(max_attempts) is not int or max_attempts < 1:
             raise ValueError("max_attempts deve ser positivo.")
@@ -62,6 +72,14 @@ class IncidentSensorAgent(SensorAgent):
         if type(queue_rounds) is not int or queue_rounds < 0:
             raise ValueError("queue_rounds deve ser um inteiro não negativo.")
         self.queue_rounds = queue_rounds
+        if type(retransmit) is not int or retransmit < 0:
+            raise ValueError("retransmit deve ser um inteiro não negativo.")
+        self.retransmit = retransmit
+        if alert_distance is not None:
+            nonnegative(alert_distance, "alert_distance")
+        self.neighbours = tuple(bare(jid) for jid in neighbours) if alert_distance is not None else ()
+        self.alert_distance = alert_distance
+        self.expire_unseen, self.queue_until_free = expire_unseen, queue_until_free
         self.patrols, self.rangers = dict(patrols), dict(rangers)
         self.receive_timeout, self.max_attempts = receive_timeout, max_attempts
         self.selection_weights = dict(selection_weights or {})
@@ -147,6 +165,48 @@ class IncidentSensorAgent(SensorAgent):
                 return (incoming, None)
             return incoming, body
 
+        async def yields_to_neighbour(self, observation, incident_id):
+            """Avisar os iniciadores vizinhos e dizer se um deles fica com esta ameaça.
+
+            Prioridade: a leitura mais antiga e, em caso de empate, o menor source_id. Os dois
+            lados calculam a mesma ordem, por isso só um desiste. Um ALERT perdido deixa os dois
+            a tratar a mesma ameaça, como sem aviso.
+            """
+            agent = self.agent
+            alert = Message(
+                f"alert-{observation.event_id}", MessageType.ALERT, agent.simulated_time,
+                {"event_type": observation.event_type, "position": model_to_dict(observation.position),
+                 "observed_at": observation.observed_at, "confidence_score": observation.confidence_score},
+                event_id=observation.event_id, incident_id=incident_id, source_id=observation.source_id,
+                conversation_id=f"alert-{observation.event_id}")
+            for jid in agent.neighbours:
+                await self.send(build_spade_message(
+                    jid, alert, performative="inform", conversation_id=alert.conversation_id))
+            heard, deadline = set(), monotonic() + agent.receive_timeout
+            # shortcut: um vizinho sem leitura não responde e a espera dura o prazo todo; se pesar, ele que diga «nada».
+            while len(heard) < len(agent.neighbours):
+                remaining = deadline - monotonic()
+                incoming = await self.receive(timeout=remaining) if remaining > 0 else None
+                if incoming is None:
+                    break
+                try:
+                    body = parse_spade_message(incoming)
+                    if body.message_type is not MessageType.ALERT or bare(incoming.sender) not in agent.neighbours:
+                        continue
+                    other = Observation(
+                        body.event_id, body.source_id, body.payload["event_type"],
+                        model_from_dict(body.payload["position"], Position),
+                        body.payload["observed_at"], body.payload["confidence_score"])
+                    same = are_observations_compatible(
+                        observation, other, agent.alert_distance, agent.max_time_difference)
+                except (KeyError, TypeError, ValueError):
+                    continue
+                heard.add(bare(incoming.sender))
+                if same and (other.observed_at, other.source_id) < (observation.observed_at, observation.source_id):
+                    agent.record("duplicate_alert", observation_id=other.event_id, source_id=other.source_id)
+                    return True
+            return False
+
         async def allocate(self, mission, candidates, attempt):
             agent = self.agent
             if agent.cfp_limit is not None and all(jid in agent.base_positions for jid in candidates):
@@ -164,12 +224,22 @@ class IncidentSensorAgent(SensorAgent):
             responses = {}
             deadline = monotonic() + agent.receive_timeout
             ceiling = deadline - agent.receive_timeout + agent.max_receive_timeout
+            resends = agent.retransmit
             while len(responses) < len(candidates):
                 # Prazo dinâmico: com uma proposta na mão vale o prazo curto; sem nenhuma, o teto.
-                received = await self.receive_until(deadline if any(
-                    r.message_type is MessageType.PROPOSAL for r in responses.values()) else ceiling)
+                proposed = any(r.message_type is MessageType.PROPOSAL for r in responses.values())
+                received = await self.receive_until(deadline if proposed else ceiling)
                 if received is None:
-                    break
+                    if proposed or not resends:
+                        break
+                    # Reenvio: sem nenhuma proposta, o mesmo CFP volta a sair para quem ficou calado.
+                    resends -= 1
+                    for jid in candidates:
+                        if jid not in responses:
+                            await self.send_body(jid, cfp, "cfp")
+                    deadline = monotonic() + agent.receive_timeout
+                    ceiling = deadline - agent.receive_timeout + agent.max_receive_timeout
+                    continue
                 incoming, body = received
                 sender = bare(incoming.sender)
                 if body is None or sender not in candidates or sender in responses:
@@ -196,6 +266,8 @@ class IncidentSensorAgent(SensorAgent):
             winner = selection.winner
             if winner is None:
                 self._busy = any(r.payload.get("reason") in ("resource_unavailable", "waiting_turn") for r in responses.values())
+                self._free_at = min((r.payload["busy_until"] for r in responses.values()
+                                     if is_finite_number(r.payload.get("busy_until"))), default=None)
                 return None, "no_eligible_proposals"
             winner_jid = next(jid for jid, body in responses.items() if body.message_id == winner.message_id)
             accept = build_accept_message(cfp, winner, agent.simulated_time, source_id=bare(agent.jid))
@@ -212,11 +284,18 @@ class IncidentSensorAgent(SensorAgent):
             # Depois do ACCEPT não há alternativa: desistir cedo só dá confirmation_unknown.
             deadline = monotonic() + agent.max_receive_timeout
             confirmed = False
+            resends = agent.retransmit
             try:
                 while True:
                     received = await self.receive_until(deadline)
                     if received is None:
-                        return None, "confirmation_unknown"
+                        if not resends:
+                            return None, "confirmation_unknown"
+                        # Reenvio: o recurso repete a confirmação que já deu a este ACCEPT.
+                        resends -= 1
+                        await self.send_body(winner_jid, accept, "accept-proposal", winner.message_id)
+                        deadline = monotonic() + agent.max_receive_timeout
+                        continue
                     incoming, status = received
                     if self.result_matches_assignment(incoming, status, assignment, mission):
                         if self._pending_mission_result is None:
@@ -242,11 +321,19 @@ class IncidentSensorAgent(SensorAgent):
             self._pending_mission_result = None
             # O prazo real limita falhas de transporte; o movimento usa só tempo simulado.
             deadline = monotonic() + agent.receive_timeout * 10
+            resends = agent.retransmit
             while True:
                 received = pending if pending is not None else await self.receive_until(deadline)
                 pending = None
                 if received is None:
-                    return None
+                    if not resends:
+                        return None
+                    # Reenvio: o mesmo ACCEPT serve de pergunta; o recurso repete confirmação e resultado.
+                    resends -= 1
+                    jid, accept, _ = assignment
+                    await self.send_body(jid, accept, "accept-proposal", accept.payload["proposal_message_id"])
+                    deadline = monotonic() + agent.receive_timeout * 10
+                    continue
                 incoming, result = received
                 if self.result_matches_assignment(incoming, result, assignment, mission):
                     agent.results.append(result)
@@ -260,7 +347,11 @@ class IncidentSensorAgent(SensorAgent):
             for attempt in range(1, agent.max_attempts + 1):
                 for wait in range(agent.queue_rounds + 1):
                     rounds += 1
-                    self._busy = False
+                    self._busy, self._free_at = False, None
+                    if agent.expire_unseen and not _recent_observations(agent.observation_feed):
+                        # Prazo de validade: a janela do feed (várias leituras seguidas) ficou vazia.
+                        agent.close_reason = "threat_expired"
+                        return None
                     assignment, failure = await self.allocate(mission, remaining, rounds)
                     # Fila: recurso ocupado não é falha; esperar tempo simulado e voltar a pedir.
                     # shortcut: sem ordem de chegada nem prioridade; trocar por fila no recurso se for preciso.
@@ -269,6 +360,8 @@ class IncidentSensorAgent(SensorAgent):
                         break
                     # Relógio parado (ninguém em missão): o prazo real evita esperar para sempre.
                     until, limit = agent.simulated_time + QUEUE_INTERVAL_SECONDS, monotonic() + agent.receive_timeout
+                    if agent.queue_until_free and (self._free_at or 0) > agent.simulated_time:
+                        until = self._free_at  # o prazo real acima limita um busy_until absurdo
                     while agent.simulated_time < until and monotonic() < limit:
                         await asyncio.sleep(0.01)
                 if assignment is None:
@@ -308,6 +401,12 @@ class IncidentSensorAgent(SensorAgent):
             agent.incident_observations = observations
             agent.incident_state = IncidentState(incident_id)
             agent.record("ALERT", observation_id=initial.event_id)
+            if agent.neighbours and await self.yields_to_neighbour(initial, incident_id):
+                agent.close_reason = "duplicate_alert"
+                agent.transition(IncidentStatus.CLOSED)
+                agent.record("INCIDENT_CLOSED", status="closed", reason=agent.close_reason)
+                agent.cycle_done = True
+                return
             agent.transition(IncidentStatus.VERIFYING)
             await super().run()
             if agent.decision.get("decision") == "close":
@@ -335,7 +434,8 @@ class IncidentSensorAgent(SensorAgent):
                                        RANGER_TASK, mission.target, RANGER_CAPABILITY, mission.priority)
                     result = await self.execute_task(response, agent.rangers)
                 if result is None:
-                    agent.transition(IncidentStatus.UNRESOLVED)
+                    agent.transition(IncidentStatus.EXPIRED if agent.close_reason == "threat_expired"
+                                     else IncidentStatus.UNRESOLVED)
                 else:
                     agent.close_reason = result.payload["outcome"]
                     agent.transition(IncidentStatus.CLOSED)

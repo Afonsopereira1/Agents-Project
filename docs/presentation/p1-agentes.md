@@ -9,7 +9,7 @@
 ## Corpo (esquerda): três camadas
 
 1. **SPADE — comunicação e tempo:** `setup()` regista comportamentos; cada um filtra mensagens por performativa, ontologia e protocolo.
-2. **Raciocínio — funções puras:** corroboração, política, `evaluate_cfp`, escolha da proposta, reputação. Testadas sem servidor (489 testes).
+2. **Raciocínio — funções puras:** corroboração, política, `evaluate_cfp`, escolha da proposta, reputação. Testadas sem servidor (579 testes).
 3. **Domínio — dados imutáveis e validados:** `Observation`, `Mission`, `Bid`, `Message`.
 
 | Agente | Comportamentos |
@@ -20,13 +20,13 @@
 
 ## Corpo (direita): onde está a autonomia
 
-1. **Decide se propõe:** o recurso avalia o CFP com o seu próprio estado — [mobile.py:127](../../src/isia/agents/mobile.py#L127).
-2. **Energia de ida e volta:** recusa se não consegue regressar — [mobile.py:139](../../src/isia/agents/mobile.py#L139).
-3. **Pode recusar depois do `ACCEPT`:** `STATUS` ≠ `reserved` e o iniciador não o obriga — [incident.py:229](../../src/isia/agents/incident.py#L229).
+1. **Decide se propõe:** o recurso avalia o CFP com o seu próprio estado — [mobile.py:141](../../src/isia/agents/mobile.py#L141).
+2. **Energia de ida e volta:** recusa se não consegue regressar — [mobile.py:156](../../src/isia/agents/mobile.py#L156).
+3. **Pode recusar depois do `ACCEPT`:** `STATUS` ≠ `reserved` e o iniciador não o obriga — [incident.py:237](../../src/isia/agents/incident.py#L237).
 
 ## Rodapé
 
-Híbrido reativo + utilidade, não BDI completo. Os agentes nunca veem o `ground_truth`. Informador humano: o tipo existe, mas **nenhum cenário medido o usa**.
+Híbrido reativo + utilidade, não BDI completo. Os agentes nunca veem o `ground_truth`. Informador humano: os cenários A, B e C não o usam; está medido nos testes de stress (`humano.csv`) e no cenário E.
 
 ## Notas do orador (30 s)
 

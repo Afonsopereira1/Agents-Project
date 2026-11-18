@@ -25,7 +25,7 @@ from isia.communication.transport import (
     build_spade_message,
     parse_spade_message,
 )
-from isia.domain.models import Mission, Position, ResourceState
+from isia.domain.models import Mission, Position, ResourceState, ResourceStatus
 from isia.reasoning.allocation import (
     LocalResourceReservation,
     ReservationResult,
@@ -60,6 +60,8 @@ class MobileResourceAgent(Agent):
 
     silent_invalid = False  # True: um ACCEPT que não bate com a proposta fica sem resposta
     ordered_queue = False  # True: com vários pedidos em espera, só o primeiro da fila recebe proposta
+    chain_missions = False  # True: no regresso à base, com o resultado entregue, aceita a missão seguinte
+    resend_replies = False  # True: a um CFP ou ACCEPT repetido responde outra vez com a mesma resposta
 
     def __init__(
         self,
@@ -84,6 +86,7 @@ class MobileResourceAgent(Agent):
         self.load = load
         self.simulated_time = simulated_time
         self.reservation = LocalResourceReservation(resource)
+        self.base = resource.position
         self._proposal_context: dict[str, tuple[Message, Message, str]] = {}
         self._closed_cfp_ids: set[str] = set()
         # (iniciador, missão) -> (-prioridade, espera desde, idem em tempo real, último pedido, idem em tempo real)
@@ -98,6 +101,9 @@ class MobileResourceAgent(Agent):
         self._result_sent = False
         self._result_message = None
         self._completed_accepts = set()
+        # Reenvio: respostas já dadas, para repetir sem reavaliar. CFP recusado e ACCEPT confirmado.
+        self._refusals = {}
+        self._accept_replies = {}
 
     def configure_execution(self, world, inspect, *, speed=1.0, energy_per_cell=1.0,
                             service_seconds=1.0):
@@ -124,8 +130,23 @@ class MobileResourceAgent(Agent):
         # A ordem só usa o que não muda entre pedidos; o último pedido serve apenas para a validade.
         return min(self._waiting, key=lambda key: self._waiting[key][:3]) == requester
 
+    def returning(self):
+        """Encadear missões: a caminho da base e com o resultado entregue, o recurso já pode ser pedido."""
+        execution = self.execution
+        return (self.chain_missions and execution is not None and not execution.finished
+                and self._result_sent and execution.resource.status is ResourceStatus.RETURNING)
+
+    def _close_execution(self):
+        accept, _ = self._execution_context
+        proposal_id = accept.payload["proposal_message_id"]
+        self._accepted_proposal_ids.discard(proposal_id)
+        self._invalidate_proposal(proposal_id)
+
     def evaluate_request(self, cfp):
         eta, energy = self.eta_seconds, self.energy_cost_percent
+        state = self.reservation.resource_state
+        if self.returning():
+            state = state.change_status(ResourceStatus.AVAILABLE)  # só para avaliar; a reserva não muda
         if self.execution_options is not None:
             target = Position(**cfp.payload["target"])
             if not self.execution_options["world"].contains(target):
@@ -134,13 +155,24 @@ class MobileResourceAgent(Agent):
                     self.simulated_time, {"cfp_message_id": cfp.message_id, "reason": "target_outside_map"},
                     mission_id=cfp.mission_id, incident_id=cfp.incident_id,
                     conversation_id=cfp.conversation_id, source_id=self.resource.resource_id)
-            cells = distance(self.reservation.resource_state.position, target)
+            cells = distance(state.position, target)
             eta = cells / self.execution_options["speed"]
-            energy = 2 * cells * self.execution_options["energy_per_cell"]
-        return evaluate_cfp(
-            cfp, self.reservation.resource_state, self.capabilities,
+            # Ida a partir da posição atual e regresso à base; parado na base, é o dobro da ida.
+            home = self.base if self.chain_missions else state.position
+            energy = (cells + distance(target, home)) * self.execution_options["energy_per_cell"]
+        response = evaluate_cfp(
+            cfp, state, self.capabilities,
             current_time=self.simulated_time, minimum_autonomy_percent=self.minimum_autonomy_percent,
             eta_seconds=eta, energy_cost_percent=energy, load=self.load)
+        if (response.payload.get("reason") == "resource_unavailable"
+                and self.execution is not None and not self.execution.finished):
+            # Ocupado numa missão: dizer quando fica livre, para o iniciador não perguntar de 5 em 5 s.
+            response = Message(
+                response.message_id, MessageType.REJECT, response.created_at,
+                {**response.payload, "busy_until": self.execution.free_at(self.chain_missions)},
+                mission_id=cfp.mission_id, incident_id=cfp.incident_id,
+                conversation_id=cfp.conversation_id, source_id=self.resource.resource_id)
+        return response
 
     def start_execution(self, cfp, accept, initiator):
         if self.execution_options is None or accept.message_id in self._completed_accepts:
@@ -151,6 +183,7 @@ class MobileResourceAgent(Agent):
                           Position(**cfp.payload["target"]), cfp.payload["required_capability"],
                           cfp.payload["priority"])
         self.execution = MissionExecution(self.reservation, mission, now=self.simulated_time,
+                                          home=self.base if self.chain_missions else None,
                                           **self.execution_options)
         self.executions.append(self.execution)
         self._execution_context = (accept, initiator)
@@ -168,10 +201,7 @@ class MobileResourceAgent(Agent):
             execution.advance(agent.simulated_time)
             agent.resource = execution.resource
             if execution.finished:
-                accept, _ = agent._execution_context
-                proposal_id = accept.payload["proposal_message_id"]
-                agent._accepted_proposal_ids.discard(proposal_id)
-                agent._invalidate_proposal(proposal_id)
+                agent._close_execution()
             if execution.result is not None and not agent._result_sent:
                 accept, initiator = agent._execution_context
                 if agent._result_message is None:
@@ -183,15 +213,18 @@ class MobileResourceAgent(Agent):
                         incident_id=accept.incident_id, mission_id=accept.mission_id,
                         source_id=agent.resource.resource_id, conversation_id=accept.conversation_id)
                 result = agent._result_message
+                outgoing = build_spade_message(
+                    initiator, result, performative=PERFORMATIVE_INFORM,
+                    conversation_id=result.conversation_id, in_reply_to=accept.message_id,
+                    protocol=CONTRACT_NET_PROTOCOL)
                 try:
-                    await self.send(build_spade_message(
-                        initiator, result, performative=PERFORMATIVE_INFORM,
-                        conversation_id=result.conversation_id, in_reply_to=accept.message_id,
-                        protocol=CONTRACT_NET_PROTOCOL))
+                    await self.send(outgoing)
                 except Exception as error:
                     logger.warning("Resultado não enviado; o regresso continua: %s", error)
                     return
                 agent._result_sent = True
+                if accept.message_id in agent._accept_replies:
+                    agent._accept_replies[accept.message_id].append(outgoing)
 
     def set_simulated_time(self, simulated_time: float) -> None:
         value = _validate_simulated_time(simulated_time, "simulated_time")
@@ -236,6 +269,9 @@ class MobileResourceAgent(Agent):
                     cfp.message_id in agent._closed_cfp_ids
                     or cfp.created_at < agent._latest_cfp_times.get(negotiation, -1)
                 ):
+                    refusal = agent._refusals.get((initiator, cfp.message_id))
+                    if refusal is not None:
+                        await self.send(refusal)  # a recusa perdeu-se: repetir a mesma, sem reavaliar
                     return
                 existing = next((
                     context for context in agent._proposal_context.values()
@@ -307,6 +343,8 @@ class MobileResourceAgent(Agent):
                 else:
                     proposal_context = None
                     agent._closed_cfp_ids.add(cfp.message_id)
+                    if agent.resend_replies:
+                        agent._refusals[(initiator, cfp.message_id)] = reply
                 try:
                     await self.send(reply)
                 except Exception as error:
@@ -361,7 +399,11 @@ class MobileResourceAgent(Agent):
                             agent._waiting.pop((_bare_jid(initiator), cfp.mission_id), None)
                     return
                 if accept.message_id in agent._completed_accepts:
-                    return  # Uma missão terminada nunca volta a reservar por replay.
+                    # Uma missão terminada nunca volta a reservar por replay; com reenvio, repete
+                    # a confirmação e o resultado já enviados ao iniciador original.
+                    for stored in tuple(agent._accept_replies.get(accept.message_id, ())):
+                        await self.send(stored)
+                    return
                 if context is None:
                     result = ReservationResult(
                         ReservationStatus.INVALID_REQUEST,
@@ -397,6 +439,11 @@ class MobileResourceAgent(Agent):
                             ReservationStatus.RESOURCE_OCCUPIED, agent.reservation.resource_state,
                             accept.mission_id, "waiting_turn")
                     else:
+                        if agent.returning():
+                            # Encadear: o regresso acaba aqui e a missão seguinte parte da posição atual.
+                            agent.execution.advance(agent.simulated_time)
+                            agent.execution.release()
+                            agent._close_execution()
                         result = agent.reservation.reserve(
                             accept.mission_id,
                             resource_id=agent.reservation.resource_state.resource_id,
@@ -419,6 +466,8 @@ class MobileResourceAgent(Agent):
                     in_reply_to=accept.message_id,
                     protocol=CONTRACT_NET_PROTOCOL,
                 )
+                if agent.resend_replies and result.confirmed and context is not None:
+                    agent._accept_replies[accept.message_id] = [reply]
                 try:
                     await self.send(reply)
                 except Exception as error:

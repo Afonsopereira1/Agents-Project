@@ -15,7 +15,10 @@ class IncidentStatus(Enum):
 
 
 _ALLOWED_TRANSITIONS = {
-    IncidentStatus.DETECTED: {IncidentStatus.VERIFYING},
+    IncidentStatus.DETECTED: {
+        IncidentStatus.VERIFYING,
+        IncidentStatus.CLOSED,  # alerta duplicado: um iniciador vizinho fica com a mesma ameaça
+    },
     IncidentStatus.VERIFYING: {IncidentStatus.ASSESSING},
     IncidentStatus.ASSESSING: {
         IncidentStatus.WATCHING,
@@ -29,6 +32,7 @@ _ALLOWED_TRANSITIONS = {
     IncidentStatus.ALLOCATING: {
         IncidentStatus.RESPONDING,
         IncidentStatus.UNRESOLVED,
+        IncidentStatus.EXPIRED,  # prazo de validade: a ameaça deixou de ser vista
     },
     IncidentStatus.RESPONDING: {
         IncidentStatus.CLOSED,

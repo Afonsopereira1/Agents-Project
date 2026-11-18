@@ -1,0 +1,7 @@
+caso,aviso,runs,iniciadores,ameacas,ocorrencias_tratadas,desistencias,fechadas_confirmadas,missoes_patrulha,missoes_guarda,energia_mean,msgs_mean,alertas_mean,duplas_reservas,tempo_real_por_execucao_s
+2 iniciadores e 1 ameaça entre eles,sem,10,2,1,20,0,20,20,20,36.0,40.0,0.0,0,0.78
+2 iniciadores e 1 ameaça entre eles,até 1 célula,10,2,1,10,10,10,10,10,20.0,17.0,2.0,0,0.19
+4 iniciadores e 1 ameaça ao centro,sem,10,4,1,40,0,40,40,40,72.0,119.0,0.0,0,1.41
+4 iniciadores e 1 ameaça ao centro,até 1 célula,10,4,1,10,30,10,10,10,20.0,27.0,12.0,0,0.18
+2 iniciadores e 2 ameaças a 4 células,sem,10,2,2,20,0,20,20,20,36.0,40.0,0.0,0,0.76
+2 iniciadores e 2 ameaças a 4 células,até 1 célula,10,2,2,20,0,20,20,20,36.0,44.0,2.0,0,0.78

@@ -159,19 +159,19 @@ A tabela descreve o que o código envia hoje (verificado em 16-11-2026).
 
 | Tipo lógico | Performative enviada | Emissor → destinatário | Resposta esperada | Código |
 |---|---|---|---|---|
-| `ALERT` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:310](../src/isia/agents/incident.py#L310) |
+| `ALERT` | **não enviado** por omissão; `inform` com `alert_distance` | — (linha temporal do iniciador). Com `alert_distance`: iniciador → iniciadores vizinhos | Nenhuma; quem leu a mesma ameaça depois desiste (`duplicate_alert`) | `yields_to_neighbour` em [incident.py](../src/isia/agents/incident.py) |
 | `VERIFY_REQUEST` | `request` | Iniciador (`sensor-1`) → uma fonte par (`informant_jid`) | `VERIFY_RESPONSE` ou timeout | [sensor.py:179](../src/isia/agents/sensor.py#L179) |
 | `VERIFY_RESPONSE` | `inform` (nunca `refuse`) | Fonte → iniciador | `status`: `observations_available`, `no_data` ou `informative_absence` | [informant.py:119](../src/isia/agents/informant.py#L119) |
-| `CFP` | `cfp` | Iniciador → recursos candidatos | `PROPOSAL` ou `REJECT` | [incident.py:163](../src/isia/agents/incident.py#L163) |
-| `PROPOSAL` | `propose` | Recurso → iniciador | `ACCEPT` ou `REJECT` | [mobile.py:289](../src/isia/agents/mobile.py#L289) |
-| `REJECT` (recusa do CFP) | `refuse` | Recurso → iniciador | Nenhuma | [mobile.py:291](../src/isia/agents/mobile.py#L291) |
-| `ACCEPT` | `accept-proposal` | Iniciador → recurso vencedor | `STATUS` | [incident.py:202](../src/isia/agents/incident.py#L202) |
-| `REJECT` (perdedores) | `reject-proposal` | Iniciador → outros proponentes | Nenhuma | [incident.py:207](../src/isia/agents/incident.py#L207) |
-| `STATUS` | `inform` | Recurso vencedor → iniciador | `reserved` ou `reservation_failed` | [mobile.py:408](../src/isia/agents/mobile.py#L408) |
-| `MISSION_RESULT` | `inform` (também com `outcome=failed`; nunca `failure`) | Recurso → iniciador | Nenhuma | [mobile.py:188](../src/isia/agents/mobile.py#L188) |
-| `INCIDENT_CLOSED` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:342](../src/isia/agents/incident.py#L342) |
+| `CFP` | `cfp` | Iniciador → recursos candidatos | `PROPOSAL` ou `REJECT` | [incident.py:169](../src/isia/agents/incident.py#L169) |
+| `PROPOSAL` | `propose` | Recurso → iniciador | `ACCEPT` ou `REJECT` | [mobile.py:315](../src/isia/agents/mobile.py#L315) |
+| `REJECT` (recusa do CFP) | `refuse` | Recurso → iniciador | Nenhuma | [mobile.py:317](../src/isia/agents/mobile.py#L317) |
+| `ACCEPT` | `accept-proposal` | Iniciador → recurso vencedor | `STATUS` | [incident.py:210](../src/isia/agents/incident.py#L210) |
+| `REJECT` (perdedores) | `reject-proposal` | Iniciador → outros proponentes | Nenhuma | [incident.py:215](../src/isia/agents/incident.py#L215) |
+| `STATUS` | `inform` | Recurso vencedor → iniciador | `reserved` ou `reservation_failed` | [mobile.py:439](../src/isia/agents/mobile.py#L439) |
+| `MISSION_RESULT` | `inform` (também com `outcome=failed`; nunca `failure`) | Recurso → iniciador | Nenhuma | [mobile.py:214](../src/isia/agents/mobile.py#L214) |
+| `INCIDENT_CLOSED` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:357](../src/isia/agents/incident.py#L357) |
 
-`ALERT` e `INCIDENT_CLOSED` existem em `MessageType` para quando houver vários iniciadores a avisar vizinhos; nenhuma execução atual os envia.
+`ALERT` e `INCIDENT_CLOSED` existem em `MessageType` para quando houver vários iniciadores a avisar vizinhos. Nos cenários A, B e C nenhum é enviado. Desde 18-11-2026, a opção `alert_distance` faz os iniciadores com cobertura sobreposta trocarem `ALERT` para não tratarem a mesma ameaça duas vezes ([medição](scalability.md#aviso-entre-iniciadores-antes-e-depois)); `INCIDENT_CLOSED` continua a não ser enviado.
 
 Nem todos os esquemas correspondem formalmente a um protocolo FIPA completo. Devemos dizer **«inspirado em FIPA»**; os desvios estão na [secção 9](#9-porquê-estes-protocolos-alternativas-prós-e-contras).
 
@@ -338,7 +338,9 @@ reservar recursos. O envio de resultado preserva ID e corpo se uma chamada de
 envio falhar; não implementa confirmação de entrega nem recuperação distribuída.
 
 - `not_confirmed`: fecha o incidente com esse resultado, sem pedir um guarda.
-  Não equivale a refutação fundamentada nem atualiza reputações.
+  Não equivale a refutação fundamentada nem atualiza reputações. Desde 18-11-2026,
+  a intervenção do guarda também o devolve quando chega e a ameaça já lá não está
+  (antes era sempre `confirmed`); a Etapa 9 repetida deu resultados iguais, byte a byte.
 - `confirmed` na verificação: cria **nova missão** `respond_incident`, capacidade
   `incident_response`, para os `RangerAgent` conhecidos. Usa o mesmo protocolo
   CFP → PROPOSAL → ACCEPT → STATUS → MISSION_RESULT. Só o resultado da resposta
@@ -354,6 +356,23 @@ envio falhar; não implementa confirmação de entrega nem recuperação distrib
 não há difusão de encerramento aos pares nesta etapa. Sem corroboração suficiente,
 a demonstração de uma única janela passa por `WATCHING → EXPIRED`.
 
+**Extensões opcionais da fila (18-11-2026).** Não há mensagens novas:
+
+- **Prazo de validade** (`expire_unseen`): antes de cada `CFP`, o iniciador volta a ler
+  o seu sensor. Com a janela do feed vazia (5 s simulados, 6 leituras seguidas), a
+  ocorrência passa de `ALLOCATING` para `EXPIRED`, com motivo `threat_expired`, e
+  ninguém é enviado.
+- **`busy_until` na recusa:** um recurso ocupado numa missão acrescenta ao payload do
+  `REJECT` (`resource_unavailable`) o instante simulado em que prevê ficar livre. O
+  campo é opcional e informativo; com `queue_until_free`, o iniciador espera até lá
+  em vez de voltar a perguntar de 5 em 5 s.
+- **Missões encadeadas** (`chain_missions`): no regresso à base, com o
+  `MISSION_RESULT` já enviado, o recurso responde ao `CFP` com `PROPOSAL` calculada
+  a partir da posição atual (ida ao alvo mais regresso à base). O `ACCEPT` termina
+  o regresso nesse ponto e a missão seguinte parte daí.
+
+Medições em [escalabilidade](scalability.md#mitigações-da-espera-na-fila-antes-e-depois).
+
 O movimento usa segundos simulados e distância Manhattan, primeiro x e depois y.
 No exemplo, velocidade 1 célula/s, custo 1 ponto percentual/célula e inspeção de 1 s
 sem consumo adicional. A tolerância numérica de energia é de `1e-10` pontos
@@ -361,7 +380,8 @@ percentuais. O relógio do exemplo avança enquanto há missões em execução; 
 prazos de receção usam segundos reais e não avançam esse relógio.
 A inspeção é local e idealizada, consultada apenas na célula visitada; o agente
 recebe a classificação, sem acesso aos eventos de referência. A intervenção
-simulada do guarda não remove eventos globais. Estes limites antecedem os
+simulada do guarda só é bem-sucedida com a ameaça ainda na célula e não remove
+eventos globais. Estes limites antecedem os
 cenários e a política de resposta das Etapas 7–9.
 
 A política opcional da Etapa 7 reutiliza este contrato e o mesmo ciclo. Pode
@@ -392,6 +412,7 @@ ver [reputação e política](reputation-policy.md).
 |---|---|---|
 | Fonte indisponível | Prazo de verificação e marcação de evidência incompleta | Desligar sensor durante pedido |
 | Mensagem duplicada | Deduplicação por `message_id`/`event_id` | Reenviar mensagem idêntica |
+| Mensagem perdida | Por omissão, timeout e estado explícito. Com `retransmit=N`, o mesmo pedido volta a sair e o destinatário repete a resposta | Perder a primeira `PROPOSAL`, `STATUS` ou `VERIFY_RESPONSE` |
 | Mensagem tardia | Conferir `deadline` e estado da conversa | Atrasar uma proposta após o fecho |
 | Dupla atribuição | Reserva atómica por recurso | Duas conversas concorrentes |
 | Recurso sem energia | `refuse` / `REJECT` com motivo | Bateria inferior à reserva mínima |
@@ -448,7 +469,7 @@ No Contract Net clássico, `accept-proposal` vale como compromisso. Entre propor
 | Fonte sem dados | `refuse` ou `failure` | `inform` com `status=no_data` | «Não vi» é informação, não recusa |
 | Conteúdo | FIPA-SL | JSON validado | Compatível com SPADE e testável sem XMPP; não é conformidade FIPA-ACL integral |
 
-**Corrigido a 16-11-2026:** o recurso recusava o CFP com `reject-proposal`, que no FIPA é a performativa do iniciador para as propostas não escolhidas. Passou a enviar `refuse` ([mobile.py:291](../src/isia/agents/mobile.py#L291)), e o iniciador valida-a ([incident.py:183](../src/isia/agents/incident.py#L183)). O tipo de domínio continua `REJECT` nos dois casos.
+**Corrigido a 16-11-2026:** o recurso recusava o CFP com `reject-proposal`, que no FIPA é a performativa do iniciador para as propostas não escolhidas. Passou a enviar `refuse` ([mobile.py:317](../src/isia/agents/mobile.py#L317)), e o iniciador valida-a ([incident.py:189](../src/isia/agents/incident.py#L189)). O tipo de domínio continua `REJECT` nos dois casos.
 
 ## 10. Checklist de aprovação
 

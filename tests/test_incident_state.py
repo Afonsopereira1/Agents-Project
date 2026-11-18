@@ -65,6 +65,7 @@ class TestIncidentState(unittest.TestCase):
     def test_todas_as_combinacoes_de_transicao(self):
         allowed = {
             (IncidentStatus.DETECTED, IncidentStatus.VERIFYING),
+            (IncidentStatus.DETECTED, IncidentStatus.CLOSED),
             (IncidentStatus.VERIFYING, IncidentStatus.ASSESSING),
             (IncidentStatus.ASSESSING, IncidentStatus.WATCHING),
             (IncidentStatus.ASSESSING, IncidentStatus.ALLOCATING),
@@ -73,6 +74,7 @@ class TestIncidentState(unittest.TestCase):
             (IncidentStatus.WATCHING, IncidentStatus.EXPIRED),
             (IncidentStatus.ALLOCATING, IncidentStatus.RESPONDING),
             (IncidentStatus.ALLOCATING, IncidentStatus.UNRESOLVED),
+            (IncidentStatus.ALLOCATING, IncidentStatus.EXPIRED),
             (IncidentStatus.RESPONDING, IncidentStatus.CLOSED),
             (IncidentStatus.RESPONDING, IncidentStatus.ALLOCATING),
         }

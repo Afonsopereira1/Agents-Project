@@ -12,9 +12,11 @@ import subprocess
 from copy import deepcopy
 from pathlib import Path
 
+from isia.communication.messages import model_from_dict
+from isia.domain.models import Position
 from isia.evaluation.metrics import NUMERIC, run_metrics, summarize
 from isia.reasoning.reputation import ReputationBook
-from isia.simulation.runner import run_mvp, validate_experimental_settings
+from isia.simulation.runner import PUBLISHED_CONDITIONS, run_mvp, validate_experimental_settings
 
 
 # Variantes de pipelines; "no_corroboration" também adapta o limiar de patrulha.
@@ -30,12 +32,44 @@ VARIANTS = {
 }
 
 
+# C4 completo: o mundo e as opções do runner vêm do ficheiro de cenário (chaves opcionais).
+WORLD_KEYS = {"sensors": "sensor_positions", "initiators": "extra_initiators", "informants": "extra_informants",
+              "patrols": "extra_patrols", "rangers": "extra_rangers"}
+OPTION_KEYS = {"queue_rounds", "queue_priority", "queue_until_free", "max_receive_timeout", "silent_invalid",
+               "cfp_limit", "expire_unseen", "chain_missions", "retransmit", "alert_distance"}
+
+
+def world_options(config):
+    """Converter ``world`` e ``options`` do cenário em argumentos de run_mvp.
+
+    ``world`` aceita width, height e, como {id: {x, y}}: sensors (sensor-1 e sensor-2),
+    initiators, informants, patrols e rangers (os adicionais). Os três recursos base
+    continuam em ``resources``. Sem estas chaves, o resultado é vazio: o mundo do MVP.
+    """
+    world, options = config.get("world", {}), config.get("options", {})
+    if not isinstance(world, dict) or set(world) - set(WORLD_KEYS) - {"width", "height"}:
+        raise ValueError(f"world aceita apenas width, height e {sorted(WORLD_KEYS)}.")
+    if not isinstance(options, dict) or set(options) - OPTION_KEYS:
+        raise ValueError(f"options aceita apenas {sorted(OPTION_KEYS)}.")
+    kwargs = dict(options)
+    if "width" in world or "height" in world:
+        kwargs["map_size"] = (world.get("width", 8), world.get("height", 8))
+    try:
+        for key, name in WORLD_KEYS.items():
+            if key in world:
+                kwargs[name] = {k: model_from_dict(v, Position) for k, v in world[key].items()}
+    except (AttributeError, TypeError) as error:
+        raise ValueError("world associa identificadores a posições {x, y}.") from error
+    return kwargs
+
+
 def validate_scenario(config):
     """Validar também os campos que identificam relatórios e avaliações."""
     expected = {"scenario_id", "description", "repetitions", "base_seed", "episodes",
                 "sources", "resources", "faults", "response_settings"}
-    if not isinstance(config, dict) or set(config) != expected:
-        raise ValueError(f"O cenário exige {sorted(expected)}.")
+    if not isinstance(config, dict) or not expected <= set(config) <= expected | {"world", "options"}:
+        raise ValueError(f"O cenário exige {sorted(expected)}; world e options são opcionais.")
+    world_options(config)
     if not isinstance(config["scenario_id"], str) or not config["scenario_id"].strip():
         raise ValueError("scenario_id deve identificar o cenário.")
     if type(config["repetitions"]) is not int or config["repetitions"] < 1:
@@ -94,7 +128,10 @@ async def run_scenario(config, variant, *, repetitions=None, output=None, runner
     selection_weights = overrides.pop("selection_weights", options.get("selection_weights"))
     # Preservar o watchdog da Etapa 9; um prazo-base maior exige a margem
     # calculada pelo runner, incluindo a espera de dez prazos pelo resultado.
-    max_seconds = None if overrides.get("receive_timeout", 0.5) > 0.5 else 30.0
+    world = world_options(config)
+    # Com fila, a execução dura mais do que os 30 s da Etapa 9: usar também o limite do runner.
+    max_seconds = (None if overrides.get("receive_timeout", 0.5) > 0.5 or world.get("queue_rounds")
+                   or world.get("retransmit") else 30.0)
     settings = deepcopy(config["response_settings"])
     settings["policy"].update(options.get("policy", {}))
     book = ReputationBook(**settings["reputation"])
@@ -111,7 +148,8 @@ async def run_scenario(config, variant, *, repetitions=None, output=None, runner
                 scenario={"run_id": run_id, "seed": seed, "sources": config["sources"],
                           "events": episode["events"], "resources": config["resources"]},
                 corroborate=options.get("corroborate", True),
-                selection_weights=deepcopy(selection_weights), max_seconds=max_seconds, **deepcopy(overrides))
+                selection_weights=deepcopy(selection_weights), max_seconds=max_seconds,
+                **deepcopy(overrides), **{**PUBLISHED_CONDITIONS, **deepcopy(world)})
             row = {"scenario": config["scenario_id"], "variant": variant, "repetition": repetition,
                    "episode": episode["label"], "seed": seed, **run_metrics(report),
                    "reputation_sensor_1": book.score("sensor-1")}
@@ -138,7 +176,9 @@ def flat_summary(scenario, variant, rows):
 
 def write_csv(path, rows):
     with open(path, "w", newline="", encoding="utf-8") as stream:
-        writer = csv.DictWriter(stream, fieldnames=list(rows[0]), lineterminator="\n")
+        # União das colunas: os cenários com vários iniciadores têm contagens a mais.
+        fields = list(dict.fromkeys(key for row in rows for key in row))
+        writer = csv.DictWriter(stream, fieldnames=fields, restval="N/A", lineterminator="\n")
         writer.writeheader()
         writer.writerows([{k: "N/A" if v is None else v for k, v in row.items()} for row in rows])
 

@@ -17,15 +17,18 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class TestSensitivityParameterValidation(unittest.TestCase):
-    def test_effective_defaults_and_stress_defaults_are_unchanged(self):
+    def test_effective_defaults_and_published_conditions(self):
         self.assertEqual(runner.validate_experimental_settings(),
                          ({"max_distance": 3.0, "max_time_difference": 2.0}, 0.5, 10.0))
         self.assertEqual(runner.validate_experimental_settings(xmpp=True)[1], 2.0)
         defaults = inspect.signature(runner.run_mvp).parameters
+        # Prazo dinâmico, fila e silêncio ligados por omissão (18-11-2026); o resto continua desligado.
         for key, value in {"extra_initiators": None, "extra_patrols": None, "cfp_limit": None,
-                           "max_receive_timeout": None, "queue_rounds": 0,
-                           "silent_invalid": False, "queue_priority": False}.items():
+                           "max_receive_timeout": 2.0, "queue_rounds": 60,
+                           "silent_invalid": True, "queue_priority": False}.items():
             self.assertEqual(defaults[key].default, value)
+        self.assertEqual(runner.PUBLISHED_CONDITIONS,
+                         {"max_receive_timeout": None, "queue_rounds": 0, "silent_invalid": False})
 
     def test_allowlist_preserves_the_scenario_contract_and_blocks_stress_overrides(self):
         config = collector.load_scenario(ROOT / "config/scenarios/A.json")
@@ -141,7 +144,9 @@ class TestSensitivityCollector(unittest.IsolatedAsyncioTestCase):
                 final=True, sufficient_coverage=True)
             book.update(observation, "incident", reference, run_id=scenario["run_id"])
             self.assertEqual(kwargs["receive_timeout"], 0.1)
-            self.assertNotIn("queue_rounds", kwargs)
+            # O Bloco G corre nas condições publicadas, não com as opções ligadas por omissão.
+            self.assertEqual({key: kwargs[key] for key in runner.PUBLISHED_CONDITIONS},
+                             runner.PUBLISHED_CONDITIONS)
             return {}
 
         with patch.object(collector, "run_mvp", side_effect=simulate), \

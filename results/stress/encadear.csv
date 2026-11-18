@@ -1,0 +1,3 @@
+recursos,runs,total,fechadas_confirmadas,expiradas,unresolved,patrulha_em_vao,guarda_em_vao,t_ultimo_fecho_sim_mean,msgs_mean,rondas_ao_guarda_mean,rondas_ao_guarda_max,duplas_reservas,tempo_real_por_execucao_s
+livres só na base,10,80,80,0,0,0,0,80.7,357.8,3.1,12,0,1.5
+encadeiam missões,10,80,80,0,0,0,0,54.4,306.2,2.2,6,0,0.82

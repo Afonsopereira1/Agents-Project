@@ -53,6 +53,8 @@ pipelines e não constitui uma ablação estrita de uma única variável.
 
 ### Classificação
 
+![Precision, recall e FPR por cenário e variante](../results/experiments/charts/taxas.svg)
+
 | Cen. | Variante | Exec. | TP | FP | TN | FN | Precision | Recall | FPR | Confirmadas | Não resolvidos |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | A | full | 40 | 17 | 0 | 20 | 3 | 1.00 | 0.85 | 0.00 | 17 | 0 |
@@ -69,6 +71,8 @@ pipelines e não constitui uma ablação estrita de uma única variável.
 | C | nearest | 40 | 16 | 0 | 20 | 4 | 1.00 | 0.80 | 0.00 | 10 | 10 |
 
 ### Rapidez e custo (média ± desvio-padrão; n = execuções com esse valor)
+
+![Energia, mensagens e execuções não resolvidas por cenário e variante](../results/experiments/charts/custo.svg)
 
 | Cen. | Variante | t verificação (s) | t resposta guarda (s) | Autonomia gasta/exec. (p.p.) | Mensagens/exec. | Perdidas/exec. | Duplicadas/exec. |
 |---|---|---|---|---|---|---|---|
@@ -107,4 +111,4 @@ pipelines e não constitui uma ablação estrita de uma única variável.
 - **Baseline `no_corroboration`:** também baixa o limiar de patrulha. Sem isso, nenhum alerta isolado mobilizaria nestas configurações e o recall seria 0. A comparação permite avaliar os dois pipelines; uma conclusão causal sobre o efeito exclusivo da corroboração exigiria um controlo que separasse a alteração do limiar.
 - **Reputação:** depende da ordem das execuções, porque `full` aprende sequencialmente.
 - **Reprodutibilidade:** os cenários e a perda aleatória usam sementes fixas. A perda depende ainda da ordem de envios no `asyncio`, e os prazos de negociação são reais (0.5 s). `test_experiments` verifica que a mesma semente repete as métricas no cenário A. A injeção de falhas é só local; não valida XMPP.
-- **Gráficos:** não foram produzidos, porque o projeto não depende de uma biblioteca de gráficos. As tabelas acima e `summary.csv` servem de base à Etapa 10.
+- **Gráficos:** dois SVG gerados a partir de `summary.csv` por [scripts/charts.py](../scripts/charts.py), sem biblioteca de gráficos: [taxas de classificação](../results/experiments/charts/taxas.svg) e [custo por execução](../results/experiments/charts/custo.svg). Mostram os mesmos números das tabelas acima.
