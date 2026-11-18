@@ -26,7 +26,7 @@
 
 ## Rodapé
 
-Híbrido reativo + utilidade, não BDI completo. Os agentes nunca veem o `ground_truth`. Informador humano: o tipo existe, mas **nenhum cenário medido o usa**.
+Híbrido reativo + utilidade, não BDI completo. Os agentes nunca veem o `ground_truth`. Informador humano: os cenários A, B e C não o usam; está medido nos testes de stress (`humano.csv`) e no cenário E.
 
 ## Notas do orador (30 s)
 

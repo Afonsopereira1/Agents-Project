@@ -159,7 +159,7 @@ A tabela descreve o que o código envia hoje (verificado em 16-11-2026).
 
 | Tipo lógico | Performative enviada | Emissor → destinatário | Resposta esperada | Código |
 |---|---|---|---|---|
-| `ALERT` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:324](../src/isia/agents/incident.py#L324) |
+| `ALERT` | **não enviado** por omissão; `inform` com `alert_distance` | — (linha temporal do iniciador). Com `alert_distance`: iniciador → iniciadores vizinhos | Nenhuma; quem leu a mesma ameaça depois desiste (`duplicate_alert`) | `yields_to_neighbour` em [incident.py](../src/isia/agents/incident.py) |
 | `VERIFY_REQUEST` | `request` | Iniciador (`sensor-1`) → uma fonte par (`informant_jid`) | `VERIFY_RESPONSE` ou timeout | [sensor.py:179](../src/isia/agents/sensor.py#L179) |
 | `VERIFY_RESPONSE` | `inform` (nunca `refuse`) | Fonte → iniciador | `status`: `observations_available`, `no_data` ou `informative_absence` | [informant.py:119](../src/isia/agents/informant.py#L119) |
 | `CFP` | `cfp` | Iniciador → recursos candidatos | `PROPOSAL` ou `REJECT` | [incident.py:169](../src/isia/agents/incident.py#L169) |
@@ -171,7 +171,7 @@ A tabela descreve o que o código envia hoje (verificado em 16-11-2026).
 | `MISSION_RESULT` | `inform` (também com `outcome=failed`; nunca `failure`) | Recurso → iniciador | Nenhuma | [mobile.py:214](../src/isia/agents/mobile.py#L214) |
 | `INCIDENT_CLOSED` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:357](../src/isia/agents/incident.py#L357) |
 
-`ALERT` e `INCIDENT_CLOSED` existem em `MessageType` para quando houver vários iniciadores a avisar vizinhos; nenhuma execução atual os envia.
+`ALERT` e `INCIDENT_CLOSED` existem em `MessageType` para quando houver vários iniciadores a avisar vizinhos. Nos cenários A, B e C nenhum é enviado. Desde 18-11-2026, a opção `alert_distance` faz os iniciadores com cobertura sobreposta trocarem `ALERT` para não tratarem a mesma ameaça duas vezes ([medição](scalability.md#aviso-entre-iniciadores-antes-e-depois)); `INCIDENT_CLOSED` continua a não ser enviado.
 
 Nem todos os esquemas correspondem formalmente a um protocolo FIPA completo. Devemos dizer **«inspirado em FIPA»**; os desvios estão na [secção 9](#9-porquê-estes-protocolos-alternativas-prós-e-contras).
 
@@ -412,6 +412,7 @@ ver [reputação e política](reputation-policy.md).
 |---|---|---|
 | Fonte indisponível | Prazo de verificação e marcação de evidência incompleta | Desligar sensor durante pedido |
 | Mensagem duplicada | Deduplicação por `message_id`/`event_id` | Reenviar mensagem idêntica |
+| Mensagem perdida | Por omissão, timeout e estado explícito. Com `retransmit=N`, o mesmo pedido volta a sair e o destinatário repete a resposta | Perder a primeira `PROPOSAL`, `STATUS` ou `VERIFY_RESPONSE` |
 | Mensagem tardia | Conferir `deadline` e estado da conversa | Atrasar uma proposta após o fecho |
 | Dupla atribuição | Reserva atómica por recurso | Duas conversas concorrentes |
 | Recurso sem energia | `refuse` / `REJECT` com motivo | Bateria inferior à reserva mínima |

@@ -3,7 +3,7 @@
 **Unidade curricular:** Introdução aos Sistemas Inteligentes e Autónomos (2026/2027) — Assignment 1  
 **Tema:** *Decentralised Wildlife Monitoring and Anti-Poaching Patrols*
 
-> **Estado (18-11-2026):** Etapas 1–9 e 9A implementadas e medidas (transporte local), com testes de stress, sensibilidade, gráficos, cenário D e diapositivos. As caixas das Etapas 0–1, 4–5 e 7 aguardam só a aprovação formal dos parâmetros (Bloco E). Ver [o que falta para a entrega](docs/delivery-todo.md).
+> **Estado (18-11-2026):** Etapas 1–9 e 9A implementadas e medidas (transporte local), com testes de stress, sensibilidade, gráficos, cenários D e E, reenvio de mensagens, aviso entre iniciadores, informadores humanos medidos e diapositivos. As caixas das Etapas 0–1, 4–5 e 7 aguardam só a aprovação formal dos parâmetros (Bloco E). Ver [o que falta para a entrega](docs/delivery-todo.md).
 
 ## Comandos por ordem
 
@@ -14,7 +14,7 @@ A partir da raiz, com Python 3.12. Nenhum passo precisa de servidor XMPP.
 python3 -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
 
-# 2. Testes: 579, OK, cerca de 1 min (18-11-2026)
+# 2. Testes: 581, OK, cerca de 75 s (18-11-2026)
 PYTHONPATH=src python -m unittest discover -s tests
 
 # 3. MVP: uma ocorrência completa, relatório JSON
@@ -40,17 +40,23 @@ PYTHONPATH=src python scripts/stress_f1.py     # perda, latência, cascata, auto
 PYTHONPATH=src python scripts/stress_f2.py     # ocorrências em paralelo, mensagens inválidas, N patrulhas, prazo dinâmico, fila,
                                                # prioridade, silêncio, validade, guardas, informadores, busy_until, missões encadeadas
 PYTHONPATH=src python scripts/stress_long.py   # 1000 execuções com a mesma reputação
+PYTHONPATH=src python scripts/stress_f1.py reenvio        # perda com 0, 1 e 2 reenvios (cerca de 9 min; não corre por omissão)
+PYTHONPATH=src python scripts/stress_f2.py humano alerta  # informadores humanos e aviso entre iniciadores (já incluídos acima)
 
 # 8. Cenário D, «dia movimentado», opcional: seis ameaças ao mesmo tempo, mundo lido do ficheiro de cenário
 PYTHONPATH=src python -m isia.evaluation.collector config/scenarios/demo/D.json --variants full --output results/scenario-d
 python scripts/replay.py results/demo/d.json --delay 0.3
 #    ou a gravação versionada:
 scriptreplay --log-timing results/demo/replay-d.tim --log-out results/demo/replay-d.log
+
+# 9. Cenário E, «reserva alargada», opcional: 16 ameaças, 20 fontes (2 câmaras e 2 informadores humanos)
+PYTHONPATH=src python -m isia.evaluation.collector config/scenarios/demo/E.json --variants full --output results/scenario-e
+PYTHONPATH=src python scripts/scenario_e.py    # câmaras contra informadores humanos
 ```
 
-O passo 5 usa só `config/scenarios/*.json` (A, B e C); o cenário D está em `config/scenarios/demo/` para não entrar nessa recolha. Desde 18-11-2026, o MVP do passo 3 corre com o prazo dinâmico, a fila e o silêncio ligados por omissão; as recolhas dos passos 5 a 7 continuam nas condições publicadas (ver a [ata](docs/approvals.md#registo-de-alterações-ao-código)).
+O passo 5 usa só `config/scenarios/*.json` (A, B e C); os cenários D e E estão em `config/scenarios/demo/` para não entrarem nessa recolha. Desde 18-11-2026, o MVP do passo 3 corre com o prazo dinâmico, a fila e o silêncio ligados por omissão; as recolhas dos passos 5 a 7 continuam nas condições publicadas (ver a [ata](docs/approvals.md#registo-de-alterações-ao-código)).
 
-**Entregar com `.git`.** O coletor dos passos 5 e 8 grava o commit em `manifest.json` e recusa correr sem repositório Git. Numa cópia sem `.git` (por exemplo, um ZIP do GitHub), os passos 1–4, 6 e 7 funcionam, os passos 5 e 8 falham e a suite passa com 4 testes `skipped`, por dependerem do Git. Os resultados publicados em `results/` continuam válidos. Para entregar com o histórico: `git bundle create isia.bundle --all` ou um ZIP do clone com a pasta `.git`.
+**Entregar com `.git`.** O coletor dos passos 5, 8 e 9 grava o commit em `manifest.json` e recusa correr sem repositório Git. Numa cópia sem `.git` (por exemplo, um ZIP do GitHub), os passos 1–4, 6 e 7 funcionam, os passos 5, 8 e 9 falham e a suite passa com 4 testes `skipped`, por dependerem do Git. Os resultados publicados em `results/` continuam válidos. Para entregar com o histórico: `git bundle create isia.bundle --all` ou um ZIP do clone com a pasta `.git`.
 
 Apresentação: [roteiro](docs/presentation/roteiro.md). Resultados: [experiências](docs/experiments.md) e [escalabilidade](docs/scalability.md).
 

@@ -125,6 +125,8 @@ Onde o sistema deixa de atender, em várias dimensões. Os números vêm de [`re
 PYTHONPATH=src python scripts/stress_f1.py     # ~8 min: perda, latencia, cascata, autonomia, combinadas
 PYTHONPATH=src python scripts/stress_f2.py     # ~14 min: paralelo, invalidas, escala, prazo (~8,5 min), teto (~2,5 min), fila, silencio, espera, prioridade
 PYTHONPATH=src python scripts/stress_long.py   # ~3 min: longa
+PYTHONPATH=src python scripts/stress_f1.py reenvio        # ~9 min: perda sem reenvio e com 1 e 2 reenvios
+PYTHONPATH=src python scripts/stress_f2.py humano alerta  # ~1 min: informadores humanos e aviso entre iniciadores
 ```
 
 - **F1** usa o cenário A (1 caçador em (3,2), fontes com ruído) e a variante `full`, com reputação nova em cada execução. Em 10 execuções, 2 param na corroboração; por isso o máximo é 8/10 (17/20 com 20 execuções).
@@ -185,6 +187,10 @@ Antes dizíamos «o sistema foi desenhado para aguentar falhas». Agora dizemos 
 | Fila ordenada por gravidade | [prioridade.csv](../results/stress/prioridade.csv) | Com 2 graves, 3 médias e 3 leves ao mesmo tempo, as graves fecham em média aos 23 s em vez de 74 s; as leves passam de 27 s para 76 s. Ver [antes e depois](#fila-ordenada-por-gravidade-antes-e-depois) |
 | Silêncio perante `ACCEPT` incoerente | [silencio.csv](../results/stress/silencio.csv) | As respostas a lixo descem 80 % (de 5 para 1 por unidade de `flood`). Ver [antes e depois](#silêncio-perante-accept-incoerente-antes-e-depois) |
 | Mensagens em função de N (C4 + C1) | [escala.csv](../results/stress/escala.csv) | Sem limite: 15, 21, 33 e 57 mensagens com 2, 4, 8 e 16 patrulhas. Com K = 2: 15 em todos os casos |
+| Reenvio de mensagens | [reenvio.csv](../results/stress/reenvio.csv) | Com 10 % de perda e 1 reenvio fecha 17/20, como sem perda (7/20 sem reenvio). Com 20 %: 1, 10 e 16 de 20 com 0, 1 e 2 reenvios. Com 30 %: 0, 3 e 9. Ver [reenvio](#reenvio-de-mensagens-antes-e-depois) |
+| Aviso entre iniciadores | [alerta.csv](../results/stress/alerta.csv) | Com 4 iniciadores a ouvir a mesma ameaça, 40 ocorrências e 40 idas de patrulha passam a 10 e 10; duas ameaças a 4 células não se fundem. Ver [aviso](#aviso-entre-iniciadores-antes-e-depois) |
+| Informadores humanos | [humano.csv](../results/stress/humano.csv) | Um informador humano fiável corrobora como uma câmara (40 de 40). Com 30 % de falhas, erro de 1 célula e confiança 0,5, são mobilizadas 30 de 40. Ver [informadores humanos](#informadores-humanos-no-lugar-das-câmaras) |
+| Cenário E, «reserva alargada» | [runs.csv](../results/scenario-e/runs.csv) | 16 ameaças ao mesmo tempo e 20 fontes: 129 de 160 fechadas, 23 expiradas sem corroboração, 0 por resolver, 0 duplas reservas; último fecho aos 119 s, em média. Ver [cenário E](#cenário-e--reserva-alargada) |
 
 ### F1 — só parâmetros
 
@@ -198,7 +204,7 @@ Antes dizíamos «o sistema foi desenhado para aguentar falhas». Agora dizemos 
 | 30 % | 10 | 4 | 0 | 10 | 5,0 |
 | 50 % | 4 | 0 | 0 | 4 | 2,0 |
 
-- Os agentes não retransmitem. Uma ocorrência completa precisa de 15 mensagens seguidas, por isso a perda de uma só já a deixa por fechar.
+- Nestas condições os agentes não retransmitem. Uma ocorrência completa precisa de 15 mensagens seguidas, por isso a perda de uma só já a deixa por fechar. O [reenvio](#reenvio-de-mensagens-antes-e-depois), opcional, responde a isto.
 - A perda atinge primeiro a corroboração: com 50 %, 15 das 20 execuções param em `insufficient_corroboration` e nem chegam a negociar.
 
 **Latência (10 execuções por ponto).** O limite é o prazo fixo de 0,5 s reais. Atraso na `PROPOSAL` ≥ 0,5 s dá `no_eligible_proposals`; atraso no `STATUS` ≥ 0,5 s dá `confirmation_unknown`, com o recurso já reservado. O prazo fixo é frágil: 0,4 s funciona sempre e 0,5 s nunca.
@@ -581,7 +587,7 @@ flowchart TD
 **Mundo lido da configuração (C4 completo).** O ficheiro de cenário ganhou duas chaves opcionais, que o coletor converte em argumentos de `run_mvp` ([collector.py](../src/isia/evaluation/collector.py), `world_options`):
 
 - `world`: `width`, `height` e, como `{id: {x, y}}`, `sensors` (posições do sensor-1 e do sensor-2), `initiators`, `informants`, `patrols` e `rangers` (os adicionais).
-- `options`: `max_receive_timeout`, `queue_rounds`, `queue_priority`, `queue_until_free`, `silent_invalid`, `cfp_limit`, `expire_unseen` e `chain_missions`.
+- `options`: `max_receive_timeout`, `queue_rounds`, `queue_priority`, `queue_until_free`, `silent_invalid`, `cfp_limit`, `expire_unseen`, `chain_missions`, `retransmit` e `alert_distance`.
 
 Sem estas chaves, o cenário corre no mundo do MVP e nas condições publicadas: os cenários A, B e C não mudaram. O cenário D está fora de `config/scenarios/*.json` para não entrar na recolha da Etapa 9.
 
@@ -624,6 +630,139 @@ Por execução: último fecho aos 30 s, em média, 186 mensagens e 72 pontos per
 - Drone, veículo e guarda base existem sempre; os recursos adicionais são drones ou guardas com 100 % de autonomia.
 - Os iniciadores adicionais não atualizam a reputação. Um cenário, 10 execuções, transporte local.
 
+### Reenvio de mensagens (antes e depois)
+
+**O problema.** Sem reenvio, uma só mensagem perdida deixa a ocorrência por fechar: com 10 % de perda fecham 7 de 20 em vez de 17 ([curva de perda](#f1--só-parâmetros)).
+
+**O que mudou.** `retransmit=N` em `run_mvp`, desligado por omissão (0). Quando a resposta não chega no prazo, o iniciador volta a enviar **a mesma mensagem, com o mesmo `message_id`**, até N vezes por pedido:
+
+| Pedido | Resposta em falta | O que o destinatário faz ao pedido repetido |
+|---|---|---|
+| `VERIFY_REQUEST` | `VERIFY_RESPONSE` | O informador responde outra vez; a resposta tem o mesmo ID |
+| `CFP` (só sem nenhuma proposta na mão) | `PROPOSAL` ou recusa | O recurso repete a proposta ou a recusa que já deu, sem reavaliar |
+| `ACCEPT` | `STATUS` | O recurso repete a confirmação da reserva; não reserva duas vezes |
+| `ACCEPT`, como pergunta | `MISSION_RESULT` | O recurso repete a confirmação e, se já existir, o resultado |
+
+Código: [incident.py](../src/isia/agents/incident.py) (`allocate` e `mission_result`), [sensor.py](../src/isia/agents/sensor.py) e [mobile.py](../src/isia/agents/mobile.py) (`resend_replies`). O [contrato de mensagens](message-contract.md) já previa que um `message_id` repetido não repete efeitos.
+
+**Resultados** ([reenvio.csv](../results/stress/reenvio.csv), cenário A, 20 execuções por linha; sem perda fecham 17 de 20):
+
+| Perda | Reenvios | Fechadas | Não resolvidas | Mensagens por execução | Reenviadas por execução | Tempo real (20 exec.) |
+|---|---|---|---|---|---|---|
+| 10 % | 0 | 7 | 8 | 9,6 | 0 | 44,7 s |
+| 10 % | 1 | 17 | 0 | 13,2 | 1,0 | 17,8 s |
+| 10 % | 2 | 17 | 0 | 13,2 | 1,0 | 17,8 s |
+| 20 % | 0 | 1 | 11 | 6,8 | 0 | 79,2 s |
+| 20 % | 1 | 10 | 4 | 11,8 | 1,9 | 61,1 s |
+| 20 % | 2 | 16 | 1 | 16,0 | 3,8 | 54,1 s |
+| 30 % | 0 | 0 | 10 | 5,0 | 0 | 100,8 s |
+| 30 % | 1 | 3 | 8 | 10,4 | 2,8 | 102,2 s |
+| 30 % | 2 | 9 | 7 | 17,3 | 6,3 | 120,4 s |
+
+- **Com 10 % de perda, um reenvio repõe o resultado sem perda:** 17 de 20 fechadas e nenhuma por resolver.
+- **Também é mais rápido em tempo real,** com 10 % e 20 % de perda: reenviar ao fim do prazo curto evita esperar os 10 s da verificação e os 5 s do resultado.
+- **Zero duplas reservas e zero fechos duplicados** nas 180 execuções: repetir um pedido não repete o efeito.
+
+**Desvantagens e limitações**
+
+- Mais mensagens: cerca de uma reenviada por execução com 10 % de perda, seis com 30 % e 2 reenvios.
+- Com 30 % de perda o segundo reenvio já custa tempo real (120 s contra 101 s) e ainda ficam 7 por resolver.
+- O `CFP` só é reenviado quando não há nenhuma proposta: com uma na mão, o iniciador decide com o que tem e pode escolher o segundo melhor recurso.
+- A recusa do `CFP` e a rejeição enviada aos perdedores não são confirmadas; perdê-las não muda o resultado.
+- Medido no cenário A e no transporte local, com o prazo fixo de 0,5 s. Os cenários A, B e C publicados continuam sem reenvio.
+
+### Aviso entre iniciadores (antes e depois)
+
+**O problema.** Com vários sensores a iniciar, cada um que ouve a mesma ameaça abre a sua ocorrência: duas patrulhas e dois guardas para um caçador. Era a razão para só o `sensor-1` iniciar nos cenários A, B e C (limite C7 e ponto cego em (7,0)).
+
+**O que mudou.** `alert_distance=D` em `run_mvp`, desligado por omissão. Cada iniciador com uma leitura envia um `ALERT` (`inform`, protocolo `verification`) aos iniciadores vizinhos e espera pelos deles durante um prazo. Se um vizinho leu a mesma ameaça (até D células e dentro da janela temporal da corroboração) **antes**, ou no mesmo instante mas com um identificador menor, o iniciador desiste e fecha com o motivo `duplicate_alert`. Os dois lados calculam a mesma ordem, por isso só um desiste. Não há despachante: o runner só diz quem é vizinho (os sensores cujo alcance se pode sobrepor), como já dizia as posições base no C1. Código: `yields_to_neighbour` em [incident.py](../src/isia/agents/incident.py).
+
+**Resultados** ([alerta.csv](../results/stress/alerta.csv), 10 execuções por linha, fontes sem ruído com alcance 1,5):
+
+| Caso | Aviso | Ocorrências tratadas | Desistências | Idas de patrulha | Idas do guarda | Energia por execução | Mensagens por execução |
+|---|---|---|---|---|---|---|---|
+| 2 iniciadores, 1 ameaça entre eles | sem | 20 | 0 | 20 | 20 | 36 p.p. | 40 |
+| 2 iniciadores, 1 ameaça entre eles | até 1 célula | 10 | 10 | 10 | 10 | 20 p.p. | 17 |
+| 4 iniciadores, 1 ameaça ao centro | sem | 40 | 0 | 40 | 40 | 72 p.p. | 119 |
+| 4 iniciadores, 1 ameaça ao centro | até 1 célula | 10 | 30 | 10 | 10 | 20 p.p. | 27 |
+| 2 iniciadores, 2 ameaças a 4 células | sem | 20 | 0 | 20 | 20 | 36 p.p. | 40 |
+| 2 iniciadores, 2 ameaças a 4 células | até 1 célula | 20 | 0 | 20 | 20 | 36 p.p. | 44 |
+
+- **Uma ameaça passa a ter uma só ocorrência,** sejam dois ou quatro os iniciadores que a ouvem; todas são fechadas como confirmadas.
+- **Duas ameaças diferentes não se fundem:** a 4 células uma da outra, cada iniciador trata a sua, e o aviso só custa 2 mensagens por execução.
+
+**Desvantagens e limitações**
+
+- Um `ALERT` perdido deixa os dois iniciadores a tratar a mesma ameaça, como sem aviso.
+- Quem desiste não entrega a sua leitura ao vizinho: seria evidência independente para a corroboração e fica por aproveitar.
+- Um vizinho sem leitura não responde, e o iniciador espera o prazo todo (0,5 s reais) antes de avançar.
+- D pequeno deixa passar duplicados quando há erro de posição; D grande funde ameaças próximas. Só foi medido D = 1.
+- Só no transporte local, onde existem os iniciadores adicionais.
+
+### Informadores humanos no lugar das câmaras
+
+O enunciado pede informadores. Até aqui, quem respondia aos pedidos de verificação era sempre uma câmara (fonte `visual`). O simulador já tinha a fonte `human`, que emite `suspicious_activity_report`; faltava um cenário que a usasse. Não foi preciso código novo nos agentes: basta declarar a fonte como `human` no cenário e dizer nas `compatibility_rules` que um relato é compatível com o som de tiro.
+
+**Resultados** ([humano.csv](../results/stress/humano.csv), 4 ocorrências com um informador ao lado de cada iniciador, política completa com corroboração, 10 execuções):
+
+| Informador | Corroboradas | Mobilizadas | Fechadas | Expiradas sem corroboração |
+|---|---|---|---|---|
+| Câmara, sem ruído | 40 de 40 | 40 | 40 | 0 |
+| Humano fiável (só muda o tipo de sinal) | 40 de 40 | 40 | 40 | 0 |
+| Humano realista (falha 30 %, erro de 1 célula, confiança 0,5) | 30 de 40 | 30 | 30 | 10 |
+
+- **O sistema trata um relato humano como trata uma câmara:** com a mesma fiabilidade, o resultado é igual.
+- **O que conta é a fiabilidade da fonte, não o seu tipo:** com 30 % de relatos em falta, 10 das 40 ocorrências expiram por falta de corroboração. O erro de posição de 1 célula e a confiança 0,5 não impediram nenhuma mobilização.
+
+**Limitações:** o informador humano responde no mesmo instante, como uma câmara; não há relatos atrasados, porque os eventos começam todos em `t = 0` e o iniciador lê o sensor uma vez. Não mediu falsos relatos (turistas tomados por caçadores).
+
+### Cenário E — reserva alargada
+
+**O que é.** O maior cenário versionado: [config/scenarios/demo/E.json](../config/scenarios/demo/E.json). **16 ameaças ao mesmo tempo** num mapa 16×12, com **20 fontes**: 16 sensores acústicos iniciadores (um na célula de cada ameaça), 2 câmaras e 2 informadores humanos. O mapa tem quatro quadrantes de 8×6, com quatro ameaças cada; em dois quadrantes quem corrobora é uma câmara e nos outros dois um informador humano, que falha 25 % das vezes, erra a posição em 1 célula e declara confiança 0,6. Há 4 patrulhas e 2 guardas. Gravidades: 4 graves, 8 médias e 4 leves. Corre com tudo o que o cenário D liga, mais o reenvio (1) e o aviso entre iniciadores (1 célula).
+
+**Como correr.**
+
+```bash
+PYTHONPATH=src python -m isia.evaluation.collector config/scenarios/demo/E.json --variants full --output results/scenario-e
+PYTHONPATH=src python scripts/scenario_e.py     # câmaras contra informadores humanos: results/scenario-e/informants.csv
+```
+
+**Resultados** ([results/scenario-e/](../results/scenario-e/), 10 execuções, 160 ameaças, 18-11-2026, `dirty: false`):
+
+| Desfecho | Ocorrências |
+|---|---|
+| Ameaças sem alerta (falso negativo do sensor iniciador) | 8 de 160 |
+| Fechadas como confirmadas, com patrulha e guarda | 129 |
+| Expiradas sem corroboração | 23 |
+| Não resolvidas | 0 |
+| Duplas reservas | 0 |
+
+| Quem corrobora ([informants.csv](../results/scenario-e/informants.csv)) | Com alerta | Corroboradas | Fechadas | Expiradas |
+|---|---|---|---|---|
+| Câmara | 76 de 80 | 68 | 70 | 6 |
+| Informador humano | 76 de 80 | 53 | 59 | 17 |
+
+| Gravidade | Confirmadas | Fecho médio | Último fecho |
+|---|---|---|---|
+| Grave | 39 | 29,7 s | 74 s |
+| Média | 61 | 71,1 s | 105 s |
+| Leve | 29 | 112,1 s | 136 s |
+
+Por execução: último fecho aos 119 s, em média, 1086 mensagens e 333 pontos percentuais de energia.
+
+- **Dezasseis ocorrências em paralelo, sem despachante e sem nenhuma por resolver:** 16 iniciadores disputam 6 recursos e a fila fecha todas as que foram mobilizadas.
+- **O informador humano corrobora menos:** 53 de 76 contra 68 de 76 com câmara, e 17 ocorrências expiram em vez de 6. As ocorrências graves são mobilizadas mesmo sem corroboração (limiar de 0,08), por isso há mais fechadas do que corroboradas.
+- **A gravidade ordena o atendimento:** as graves fecham em média aos 30 s, as médias aos 71 s e as leves aos 112 s.
+- **O gargalo são os recursos:** com 6 recursos para 16 ocorrências, a última fecha aos 2 minutos simulados.
+
+**Limitações**
+
+- As ameaças estão a 3 ou mais células umas das outras e cada iniciador só ouve a sua (alcance 1): o aviso entre iniciadores corre (cerca de 30 `ALERT` por execução), mas não há nenhum duplicado para eliminar. O que ele poupa está medido em [alerta.csv](../results/stress/alerta.csv).
+- Não houve perda de mensagens, por isso o reenvio ficou ligado sem ser exercitado (0 reenvios).
+- As 16 ameaças começam em `t = 0`: é um pico simultâneo, não um dia de operação com ameaças espaçadas no tempo.
+- Não se repete byte a byte, como o cenário D: a ordem na fila depende do relógio real.
+- Os tempos por gravidade vêm dos relatórios completos de cada execução (`results/scenario-e/runs/`), que não são versionados.
+
 ### O que fica por investigar
 
 1. **Prazo que se ajusta sozinho:** estimar o teto a partir dos tempos de resposta observados, em vez de o fixar.
@@ -631,12 +770,14 @@ Por execução: último fecho aos 30 s, em média, 186 mensagens e 72 pontos per
 3. **Patrulhas como gargalo:** com 2 guardas, o último fecho passa a depender das 2 patrulhas; falta medir patrulhas e guardas a variar em conjunto, e dar autonomia e carga próprias aos recursos adicionais.
 4. **Atrasos reais na rede XMPP:** continuam por medir. A 18-11-2026 confirmou-se que o visualizador lê um relatório `--xmpp` e que o SPADE entrega diretamente as mensagens entre agentes do mesmo processo (`spade/container.py`), sem passar pelo servidor. Como o runner corre todos os agentes num processo, um atraso na rede (por exemplo, `tc netem`) não chegaria às mensagens. Obrigá-las a passar pelo servidor local (`spade run`) não deu entrega fiável nos ensaios, e a causa ficou por determinar. Medir a rede pede primeiro agentes em processos separados (C8).
 5. **Mais cenários e intervalos de confiança:** os testes de stress usam um cenário e 5 a 20 execuções por ponto.
+6. **Ameaças espaçadas no tempo e relatos atrasados:** os eventos começam todos em `t = 0` e cada iniciador lê o sensor uma vez. Um dia de operação, com informadores que relatam minutos depois, pede um iniciador que volte a ler o sensor.
+7. **Aproveitar a leitura de quem desiste:** com o aviso entre iniciadores, o vizinho que desiste tem evidência independente que podia contar para a corroboração.
 
 ### Limites destes testes
 
 - 10 a 20 execuções por ponto, sem intervalos de confiança; um cenário.
 - Tudo no transporte local; nada disto valida a rede XMPP.
-- Os iniciadores adicionais só corroboram com `extra_informants` (grupo `informadores` e cenário D) e nunca atualizam a reputação.
+- Os iniciadores adicionais só corroboram com `extra_informants` (grupos `informadores` e `humano`, cenários D e E) e nunca atualizam a reputação.
 - `cfp_limit` usa a posição base dos recursos, não a atual.
 - Os valores de tempo real e o limite das mensagens inválidas dependem da máquina e da carga: com o prazo fixo, entre 300 e 2000; com o prazo dinâmico, entre 5000 e 8000.
 - Repetição (17-11-2026, mesma máquina): o F1 foi corrido duas vezes com as mesmas sementes e depois os três scripts num clone limpo do commit. Os nove CSV de então saíram iguais em todas as colunas, exceto `tempo_real_s` e `rss_pico_kb`, com uma exceção: o ponto de 1000 inválidas, que falhou na primeira execução e passou no clone (ver acima). O `espera.csv` foi corrido três vezes na mesma máquina: as confirmadas e as patrulhas em vão variam em 1 ocorrência, as intervenções tardias entre 12 e 15, e as mensagens até 3 %. O `prioridade.csv` só foi corrido uma vez. Os grupos novos do F2 (`prazo`, `teto`, `fila`, `silencio`) foram repetidos num segundo clone limpo: `teto` e `silencio` saíram iguais; no `prazo`, as ocorrências fechadas são as mesmas e só muda o motivo de uma falha em 300 execuções; na `fila`, as ocorrências fechadas são as mesmas (40 de 40 e 80 de 80), mas as mensagens e o instante do último fecho variam até 2 %, porque a espera da fila depende do relógio real.

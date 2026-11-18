@@ -37,8 +37,11 @@ chamador, e não altera os defaults das execuções seguintes.
 | Recurso ocupado após proposta | renegociação, `closed` com outro recurso | — |
 | `MISSION_RESULT`/`ACCEPT` duplicado | `closed`, um efeito por missão | — |
 
-**Retransmissões:** os agentes não retransmitem mensagens; uma perda leva ao
-timeout e a um estado explícito. As rondas de negociação estão limitadas por
+**Retransmissões:** por omissão, os agentes não retransmitem mensagens; uma perda leva ao
+timeout e a um estado explícito. Com `retransmit=N` em `run_mvp` (18-11-2026), o iniciador
+volta a enviar o mesmo `VERIFY_REQUEST`, `CFP` ou `ACCEPT`, com o mesmo `message_id`, até N
+vezes, e o destinatário repete a resposta já dada. Com 10 % de perda e um reenvio fecham
+17 de 20 ocorrências em vez de 7 ([escalabilidade](scalability.md#reenvio-de-mensagens-antes-e-depois)). As rondas de negociação estão limitadas por
 `max_attempts` (2 no MVP).
 
 O limite global por omissão inclui os prazos reais da verificação e das

@@ -339,6 +339,22 @@ O que ficou por fazer ou por verificar depois das quatro tarefas obrigatórias d
 
 ---
 
+## Comparação com o trabalho de outro grupo (18-11-2026)
+
+Outro grupo fez o mesmo tema. Vimos só os diapositivos deles, não o código. Tinham cinco coisas que nos faltavam; as cinco ficaram feitas e medidas a 18-11-2026, como opções desligadas por omissão, para não mudar os resultados publicados dos cenários A, B e C.
+
+- [x] **Reenvio de mensagem perdida** — `retransmit` em `run_mvp` e [reenvio.csv](../results/stress/reenvio.csv). Com 10 % de perda e um reenvio fecham 17 de 20 ocorrências em vez de 7, sem duplas reservas. Ver [reenvio](scalability.md#reenvio-de-mensagens-antes-e-depois).
+- [x] **Informadores humanos medidos** — sem código novo nos agentes; grupo `humano` e [humano.csv](../results/stress/humano.csv). Um relato humano fiável corrobora como uma câmara (40 de 40); com 30 % de falhas, 30 de 40. Ver [informadores humanos](scalability.md#informadores-humanos-no-lugar-das-câmaras).
+- [x] **Vários sensores a iniciar, sem ocorrências duplicadas** — `alert_distance` em `run_mvp` (mensagem `ALERT` entre iniciadores vizinhos) e [alerta.csv](../results/stress/alerta.csv). Com 4 iniciadores a ouvir a mesma ameaça, 40 idas de patrulha passam a 10. Ver [aviso](scalability.md#aviso-entre-iniciadores-antes-e-depois).
+- [x] **Mundo maior** — [cenário E](scalability.md#cenário-e--reserva-alargada): 16 ameaças ao mesmo tempo, 20 fontes (2 câmaras e 2 informadores humanos), mapa 16×12. 129 de 160 fechadas, 0 por resolver, 0 duplas reservas.
+- [x] **Tempo até à intervenção** — já estava nos CSV (`response_time`); passou para o diapositivo 7 (guarda aos 12 s em A e aos 17 s em C) e para o cenário E, por gravidade (30 s, 71 s e 112 s).
+
+**O que continua a ser diferente do trabalho deles, e porquê:** os cenários A, B e C mantêm o mundo pequeno (2 sensores, uma ocorrência por janela), porque é isso que permite 560 execuções com episódios sem ameaça, as ablações e a sensibilidade. As ameaças começam todas em `t = 0`: não há um dia de operação com ameaças espaçadas nem relatos humanos atrasados.
+
+**Verificação:** suite completa com 581 testes, OK (dois novos: reenvio e aviso). A recolha do cenário E tem `dirty: false`.
+
+---
+
 ## Bloco G — Sensibilidade dos parâmetros (no final)
 
 **Objetivo:** explicar o impacto de cada configuração na solução do problema, medindo dois valores alternativos por parâmetro contra o valor atual. Serve também para decidir os itens ainda abertos da [ata](approvals.md).

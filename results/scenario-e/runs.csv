@@ -1,0 +1,11 @@
+scenario,variant,repetition,episode,seed,threat,alert,dispatched,decision,confirmed,status,reason,unresolved,verification_time,response_time,energy_used,messages_sent,messages_lost,messages_duplicated,missions_done,missions_failed,first_patrol,incidents,incidents_closed,incidents_expired,incidents_unresolved,incidents_duplicate,last_close_time,reputation_sensor_1
+E,full,0,wide,1000,True,True,True,request_mobile_verification,True,closed,confirmed,False,14.0,31.0,318.0,843,0,0,2,0,drone-3,15,12,3,0,0,97.0,0.6
+E,full,1,wide,1001,True,True,True,request_mobile_verification,True,closed,confirmed,False,21.0,36.0,286.0,1006,0,0,2,0,drone-3,15,12,3,0,0,121.0,0.6666666666666666
+E,full,2,wide,1002,True,True,True,request_mobile_verification,True,closed,confirmed,False,21.0,36.0,330.0,1103,0,0,2,0,drone-3,16,13,3,0,0,121.0,0.7142857142857143
+E,full,3,wide,1003,True,True,True,request_mobile_verification,True,closed,confirmed,False,21.0,36.0,392.0,1078,0,0,2,0,drone-3,16,13,3,0,0,128.0,0.75
+E,full,4,wide,1004,True,True,True,request_mobile_verification,True,closed,confirmed,False,22.0,37.0,258.0,719,0,0,2,0,drone-3,15,10,5,0,0,92.0,0.7777777777777778
+E,full,5,wide,1005,True,True,True,request_mobile_verification,True,closed,confirmed,False,21.0,36.0,366.0,1070,0,0,2,0,drone-3,15,13,2,0,0,125.0,0.8
+E,full,6,wide,1006,True,True,True,request_mobile_verification,True,closed,confirmed,False,53.0,68.0,358.0,1291,0,0,2,0,drone-3,15,15,0,0,0,126.0,0.8
+E,full,7,wide,1007,True,True,True,request_mobile_verification,True,closed,confirmed,False,15.0,25.0,324.0,1065,0,0,2,0,drone-3,14,13,1,0,0,114.0,0.8181818181818182
+E,full,8,wide,1008,True,True,True,request_mobile_verification,True,closed,confirmed,False,21.0,36.0,346.0,1212,0,0,2,0,drone-3,15,13,2,0,0,136.0,0.8333333333333334
+E,full,9,wide,1009,True,True,True,request_mobile_verification,True,closed,confirmed,False,21.0,36.0,348.0,1469,0,0,2,0,drone-3,16,15,1,0,0,125.0,0.8461538461538461

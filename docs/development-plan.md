@@ -404,7 +404,7 @@ dos parâmetros continua pendente. Não foi executada comunicação XMPP real.
 
 **Implementação (12-11-2026):** o transporte local do runner aceita `faults`
 (perda aleatória com semente, perda por tipo, atraso, duplicação, agentes
-indisponíveis e recurso ocupado após proposta). Não há retransmissões; as rondas
+indisponíveis e recurso ocupado após proposta). Não há retransmissões por omissão (opção `retransmit` desde 18-11-2026); as rondas
 continuam limitadas por `max_attempts`. Recuperação do iniciador: o recurso
 termina, regressa e liberta a reserva; o incidente fica `unresolved`. A
 indisponibilidade dura toda a execução de janela única. Ver [falhas](faults.md).
@@ -548,7 +548,7 @@ merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
 - [x] Preservar scripts, configurações e resultados de P3 em caminhos versionados ou com proveniência registada; repetir a referência antes de comparar alterações. — `scripts/`, `results/scalability/`, repetida a 16-11-2026.
 - [ ] Medir mensagens, tempo real, tempo simulado e crescimento dos históricos ao variar sensores, recursos e ocorrências; C4 é necessário para testar mais drones por configuração. — **Parcial:** mensagens e tempos medidos ao retirar recursos e juntar caçadores; variar N e o crescimento dos históricos ficaram medidos no [Bloco F](scalability.md#testes-de-stress-bloco-f) (`escala.csv` e `longa.csv`); variar sensores continua por fazer.
 - [ ] Começar pela avaliação de C1, C5 e da persistência da reputação em C8, comparando custo e decisões antes/depois; medir também a espera de C2. — **C2 medido.** C1 implementado e medido no [Bloco F](scalability.md#testes-de-stress-bloco-f) (`cfp_limit`: 57 mensagens contra 15 com 16 patrulhas). C5 sem ganho mensurável (feed lido uma vez); C8 parte testes que usam `book.history`: o crescimento ficou medido (1824 registos em 1000 execuções), a persistência fica proposta.
-- [ ] Avaliar C6, C7 e a possibilidade de qualquer sensor iniciar, evitando ocorrências duplicadas para a mesma ameaça. — **Adiado:** C7 e o ponto cego medidos; correções propostas em [scalability.md](scalability.md).
+- [ ] Avaliar C6, C7 e a possibilidade de qualquer sensor iniciar, evitando ocorrências duplicadas para a mesma ameaça. — **Adiado nos cenários A, B e C:** C7 e o ponto cego medidos; correções propostas em [scalability.md](scalability.md). **Feito como opção (18-11-2026):** vários sensores iniciam (`extra_initiators`) e o aviso `ALERT` entre vizinhos evita ocorrências duplicadas (`alert_distance`, [alerta.csv](../results/stress/alerta.csv)).
 - [x] Acrescentar métricas por ameaça/ocorrência: cobertura, confirmações, atendimento e casos não resolvidos, mantendo a comparação com a métrica por execução. — `attended()` em `scripts/dist.py`; coluna `atendidos/ameacas` ao lado das contagens por execução.
 - [ ] **Adiado (depende de C7):** depois de suportar várias ocorrências, avaliar uma fila por gravidade e a proporção recursos/ameaças, preservando a reserva exclusiva. A contenção entre várias ocorrências é uma hipótese a testar, não um resultado destes ensaios.
 - [ ] Repetir as comparações de cobertura, distância, autonomia e perdas com sementes comuns, número de repetições explícito e incerteza reportada. — **Parcial:** sementes comuns e repetições explícitas; incerteza não reportada (10–20 repetições).
@@ -578,7 +578,7 @@ merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
 - [x] Garantir que o observador/visualizador não toma decisões por agentes. — a repetição só lê a `timeline` do relatório; não corre agentes.
 - [x] Documentar instalação, servidor XMPP, configuração e comando único de execução. — [README, «Comandos por ordem»](../README.md#comandos-por-ordem).
 - [x] Descrever arquitetura, formatos de mensagem, protocolos, algoritmos, falhas e escolhas descartadas. — [architecture.md](architecture.md), [message-contract.md](message-contract.md), [protocols.md](protocols.md) e [faults.md](faults.md).
-- [x] Inserir dados verdadeiros dos três cenários, gráficos e limitações na apresentação. — 13 diapositivos e um de reserva; cada número com a fonte no [roteiro](presentation/roteiro.md).
+- [x] Inserir dados verdadeiros dos três cenários, gráficos e limitações na apresentação. — 13 diapositivos e dois de reserva; cada número com a fonte no [roteiro](presentation/roteiro.md).
 - [ ] Fazer ensaio da demonstração com um colega a seguir apenas o `README`. — **Por fazer.** O ensaio de 18-11-2026 foi na mesma máquina e não conta ([delivery-todo.md](delivery-todo.md#pendentes-deixados-pelo-bloco-d)).
 - [x] Rever autorias, licenças e não publicar credenciais, dados privados nem materiais docentes sem autorização. — Verificado a 18-11-2026 nos ficheiros versionados: nenhuma credencial (as palavras-passe do README são marcadores e `local-demo` é a do servidor local de demonstração), `server.db` e `temp/` ignorados pelo Git, nenhum PDF nem enunciado dos docentes. O repositório não tem ficheiro de licença; os commits são dos três elementos do grupo.
 - [ ] Preparar demo interativa **ou** gravada e pacote de entrega segundo Moodle/docentes. — **Parcial:** demonstração gravada em [results/demo/](../results/demo/) (terminal e `mvp.mp4`). Falta o pacote: `git bundle create isia.bundle --all` ou ZIP do clone com `.git`, e o PDF dos diapositivos.

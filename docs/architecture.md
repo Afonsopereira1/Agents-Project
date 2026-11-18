@@ -138,7 +138,7 @@ O `ExecutionBehaviour` só é registado quando o recurso recebe `configure_execu
 
 Criação em [runner.py:162-210](../src/isia/simulation/runner.py#L162-L235); fontes por cenário em [config/scenarios/](../config/scenarios/).
 
-> **Informador = `sensor-2` visual.** O enunciado pede informadores (fontes humanas). No código, o `InformantAgent` é o papel de **quem responde a pedidos de verificação**, e nas execuções medidas esse papel é desempenhado pelo `sensor-2`, uma câmara (fonte `visual`), ligado em [runner.py:198](../src/isia/simulation/runner.py#L198). O tipo de fonte `human` existe no simulador ([scenario.py:16-19](../src/isia/simulation/scenario.py#L16-L19)), mas **nenhum dos cenários A, B ou C tem uma fonte `human`**. Não há, por isso, resultados medidos sobre informadores humanos.
+> **Informador = `sensor-2` visual.** O enunciado pede informadores (fontes humanas). No código, o `InformantAgent` é o papel de **quem responde a pedidos de verificação**, e nas execuções medidas esse papel é desempenhado pelo `sensor-2`, uma câmara (fonte `visual`), ligado em [runner.py:198](../src/isia/simulation/runner.py#L198). O tipo de fonte `human` existe no simulador ([scenario.py:16-19](../src/isia/simulation/scenario.py#L16-L19)), mas **nenhum dos cenários A, B ou C tem uma fonte `human`**. Os informadores humanos foram medidos à parte, a 18-11-2026: no grupo `humano` dos testes de stress e no cenário E, onde dois dos quatro informadores são humanos ([resultados](scalability.md#informadores-humanos-no-lugar-das-câmaras)). Respondem no mesmo instante, como uma câmara; relatos atrasados continuam por fazer.
 
 ### 3.3 Porquê assim: sete decisões, com alternativas
 

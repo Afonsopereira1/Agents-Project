@@ -2,26 +2,27 @@
 
 > Ordem fixa e conteúdo de cada diapositivo. Os números vêm de `results/`: Etapa 9 (560 execuções), P3 (`results/scalability/`) e Bloco G (3500 execuções alternativas válidas). Cada diapositivo aponta para a fonte; as recolhas têm âmbitos distintos.
 
-**Duração alvo:** cerca de 12 minutos, 13 diapositivos, cerca de 55 segundos cada. A demonstração gravada ocupa o diapositivo 10. O diapositivo 14 é de reserva, para perguntas.
+**Duração alvo:** cerca de 12 minutos, 13 diapositivos, cerca de 55 segundos cada. A demonstração gravada ocupa o diapositivo 10. Os diapositivos 14 e 15 são de reserva, para perguntas.
 
 **Diapositivos (18-11-2026):** <https://claude.ai/artifact/C5kRVniNyws5ZcU1z3SaXs>, feitos a partir deste roteiro, com notas do orador. A ligação é privada até ser partilhada no menu Share; para a entrega, exportar para PDF ou PowerPoint (Share › Export) e guardar em `docs/presentation/`. Grupo, por ordem alfabética: Afonso Pereira, Guilherme Gomes e Guilherme Kotchergenko. Revistos a 18-11-2026: capa com os nomes, restrição → resposta no diapositivo 2, código do `setup()` no 4, diagrama de sequência no 5 e definição das métricas no 6; não foram pré-visualizados no ecrã.
 
 | # | Diapositivo | Conteúdo | Fonte |
 |---|---|---|---|
-| 1 | Título | Tema C — monitorização descentralizada e patrulhas anti-caça furtiva; SPADE; nomes do grupo; 579 testes, 560 execuções (Etapa 9) e 3500 (Bloco G) | — |
+| 1 | Título | Tema C — monitorização descentralizada e patrulhas anti-caça furtiva; SPADE; nomes do grupo; 581 testes, 560 execuções (Etapa 9) e 3500 (Bloco G) | — |
 | 2 | Problema e abordagem | Três restrições e a resposta a cada uma: ruído → corroboração; recursos limitados → Contract Net; sem despachante → B1. Ciclo: observação → corroboração → Contract Net → missão → resultado | [README](../../README.md#o-projeto) |
 | 3 | Mapa e agentes | Grelha 8×8: `sensor-1` (2,2), `sensor-2` (4,2), drone (0,2), veículo (0,0), guarda (5,5). O ambiente guarda a verdade só para o avaliador | [runner.py](../../src/isia/simulation/runner.py) |
 | 4 | **P1** — construção dos agentes | Três camadas, o `setup()` do recurso móvel (abreviado) e as três ligações de autonomia | [p1-agentes.md](p1-agentes.md), [mobile.py](../../src/isia/agents/mobile.py) |
 | 5 | **P2** — protocolos e arquitetura | Diagrama de sequência de uma ocorrência (15 mensagens): FIPA Request, Contract Net e segunda ronda para o guarda; dois contras medidos | [p2-protocolos.md](p2-protocolos.md), [protocols.md](../protocols.md#3-tipos-de-mensagens-e-intenção) |
 | 6 | Cenários, variantes e métricas | A normal, B ruído, C falhas/escassez; variantes `full`, `no_reputation`, `no_corroboration`, `nearest`; o que contam precision, recall, FPR e «não resolvidas»; 20 repetições por episódio | [experiments.md](../experiments.md#unidade-de-avaliação-e-métricas) |
-| 7 | Resultados A e C | A/full: precision 1,00, recall 0,85. C/full: recall 0,80, mas 10/20 ameaças `unresolved` (uma mensagem perdida no único recurso elegível) | [experiments.md](../experiments.md#resultados) |
+| 7 | Resultados A e C | A/full: precision 1,00, recall 0,85. C/full: recall 0,80, mas 10/20 ameaças `unresolved` (uma mensagem perdida no único recurso elegível). Tempo até à intervenção do guarda: 12 s em A e 17 s em C (`response_time`) | [experiments.md](../experiments.md#resultados) |
 | 8 | Resultado B — o compromisso da corroboração | FPR 0,75 → 0,25 e precision 0,35 → 0,57, ao custo de recall 0,80 → 0,65. Os 10 FP restantes vêm de `thunder+tourist` | [experiments.md](../experiments.md#discussão) |
 | 9 | **P3** — escalabilidade | Ponto cego (7,0), série 8/10 → 8/20 → 8/30, tabela C1–C8 | [p3-escalabilidade.md](p3-escalabilidade.md) |
 | 10 | Demonstração | Repetição gravada de uma execução do MVP (ver abaixo) | [results/demo/](../../results/demo/) |
 | 11 | **Bloco G — sensibilidade** | Em B, patrulha 0,35 reduz recall 0,65→0,10 e FPR 0,25→0,025; gravidade 0,9 eleva recall a 0,80 e FPR a 0,75. São os dois maiores efeitos absolutos observados nas taxas de classificação | [sensitivity.md](../sensitivity.md#síntese-dos-efeitos-e-ausência-de-diferenças), tabela abaixo |
-| 12 | Limites | Uma ocorrência por janela; 20 sementes com aprendizagem dependente; intervalos G descritivos; scores não calibrados; 1/1 bloqueado; falhas só no transporte local. A reputação mudou 1 decisão em 560 na Etapa 9 | [experiments.md](../experiments.md#limitações-e-incerteza), [sensitivity.md](../sensitivity.md#limitações-e-interpretação-científica), [scalability.md](../scalability.md) |
-| 13 | Conclusão e trabalho futuro | Ciclo completo, recusa autónoma e compromissos medidos entre deteção, alarmes e custo. Próximos passos: trajetórias independentes, observações temporalmente separadas, agrupamento de ocorrências, retransmissões e decisão sobre 1/1 | [sensitivity.md](../sensitivity.md#conclusões-e-trabalho-que-permanece-condicionado), [delivery-todo.md](../delivery-todo.md#bloco-g--sensibilidade-dos-parâmetros-no-final) |
-| 14 | Reserva — testes de stress | Seis limites encontrados e a resposta medida a cada um: prazo dinâmico, fila, gravidade, validade, missões encadeadas e segundo guarda | [scalability.md](../scalability.md#mapa-de-limites) |
+| 12 | Limites | Uma ocorrência por janela nos cenários A, B e C; 20 sementes com aprendizagem dependente; intervalos G descritivos; scores não calibrados; 1/1 bloqueado; falhas só no transporte local. A reputação mudou 1 decisão em 560 na Etapa 9 | [experiments.md](../experiments.md#limitações-e-incerteza), [sensitivity.md](../sensitivity.md#limitações-e-interpretação-científica), [scalability.md](../scalability.md) |
+| 13 | Conclusão e trabalho futuro | Ciclo completo, recusa autónoma e compromissos medidos entre deteção, alarmes e custo. Próximos passos: ameaças espaçadas no tempo, relatos humanos com atraso, trajetórias independentes, agentes em processos separados e decisão sobre 1/1 | [sensitivity.md](../sensitivity.md#conclusões-e-trabalho-que-permanece-condicionado), [delivery-todo.md](../delivery-todo.md#bloco-g--sensibilidade-dos-parâmetros-no-final) |
+| 14 | Reserva — testes de stress | Oito limites encontrados e a resposta medida a cada um: prazo dinâmico, fila, gravidade, validade, missões encadeadas, segundo guarda, reenvio e aviso entre iniciadores | [scalability.md](../scalability.md#mapa-de-limites) |
+| 15 | Reserva — cenário E | 16 ameaças ao mesmo tempo e 20 fontes: 129 de 160 fechadas, 0 por resolver, 0 reservas duplas; câmara contra informador humano (70 e 59 fechadas em 80); fecho por gravidade (30, 71 e 112 s) | [scalability.md](../scalability.md#cenário-e--reserva-alargada) |
 
 ## Notas para os diapositivos 7, 8, 11 e 12
 
