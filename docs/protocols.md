@@ -56,12 +56,10 @@ SPADE ou XMPP. A versão atual usa:
 
 As mensagens podem ser convertidas com `Message.to_json()` e
 `Message.from_json()`. Os modelos de domínio suportados podem ser convertidos
-com `serialize_model()`/`deserialize_model()`, usando enums pelos seus valores
-JSON e tuplos como listas JSON. `MessageDeduplicator` considera repetida uma
-mensagem cujo `message_id` já foi aceite; não deduplica por conteúdo nem por
-`event_id`. A política proposta para a futura retenção do registo local é de
-`600.0` segundos simulados, mas a expiração operacional pertence a uma etapa
-posterior.
+com `model_to_dict()`/`model_from_dict()`, usando enums pelos seus valores
+JSON e tuplos como listas JSON. Cada agente ignora repetições pelo `message_id`
+no seu próprio comportamento; não existe um registo de deduplicação partilhado
+(`MessageDeduplicator` foi removido em 18-11-2026, sem nunca ter sido usado).
 
 As unidades partilhadas dos modelos são: posições inteiras não negativas numa
 grelha 2D; distância euclidiana em unidades da grelha; tempo simulado e ETA em
@@ -159,19 +157,19 @@ A tabela descreve o que o código envia hoje (verificado em 16-11-2026).
 
 | Tipo lógico | Performative enviada | Emissor → destinatário | Resposta esperada | Código |
 |---|---|---|---|---|
-| `ALERT` | **não enviado** por omissão; `inform` com `alert_distance` | — (linha temporal do iniciador). Com `alert_distance`: iniciador → iniciadores vizinhos | Nenhuma; quem leu a mesma ameaça depois desiste (`duplicate_alert`) | `yields_to_neighbour` em [incident.py](../src/isia/agents/incident.py) |
-| `VERIFY_REQUEST` | `request` | Iniciador (`sensor-1`) → uma fonte par (`informant_jid`) | `VERIFY_RESPONSE` ou timeout | [sensor.py:179](../src/isia/agents/sensor.py#L179) |
-| `VERIFY_RESPONSE` | `inform` (nunca `refuse`) | Fonte → iniciador | `status`: `observations_available`, `no_data` ou `informative_absence` | [informant.py:119](../src/isia/agents/informant.py#L119) |
-| `CFP` | `cfp` | Iniciador → recursos candidatos | `PROPOSAL` ou `REJECT` | [incident.py:169](../src/isia/agents/incident.py#L169) |
-| `PROPOSAL` | `propose` | Recurso → iniciador | `ACCEPT` ou `REJECT` | [mobile.py:315](../src/isia/agents/mobile.py#L315) |
-| `REJECT` (recusa do CFP) | `refuse` | Recurso → iniciador | Nenhuma | [mobile.py:317](../src/isia/agents/mobile.py#L317) |
-| `ACCEPT` | `accept-proposal` | Iniciador → recurso vencedor | `STATUS` | [incident.py:210](../src/isia/agents/incident.py#L210) |
-| `REJECT` (perdedores) | `reject-proposal` | Iniciador → outros proponentes | Nenhuma | [incident.py:215](../src/isia/agents/incident.py#L215) |
-| `STATUS` | `inform` | Recurso vencedor → iniciador | `reserved` ou `reservation_failed` | [mobile.py:439](../src/isia/agents/mobile.py#L439) |
-| `MISSION_RESULT` | `inform` (também com `outcome=failed`; nunca `failure`) | Recurso → iniciador | Nenhuma | [mobile.py:214](../src/isia/agents/mobile.py#L214) |
-| `INCIDENT_CLOSED` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:357](../src/isia/agents/incident.py#L357) |
+| `ALERT` | **não enviado** por omissão; `inform` com `alert_distance` | — (linha temporal do iniciador). Com `alert_distance`: iniciador → iniciadores vizinhos | Um segundo `ALERT` com `keeps` (fica ou não com a ameaça) a quem lhe cederia; quem leu a mesma ameaça depois de um vizinho que fica desiste (`duplicate_alert`) | `yields_to_neighbour` em [incident.py](../src/isia/agents/incident.py) |
+| `VERIFY_REQUEST` | `request` | Iniciador (`sensor-1`) → uma fonte par (`informant_jid`) | `VERIFY_RESPONSE` ou timeout | [sensor.py:186](../src/isia/agents/sensor.py#L186) |
+| `VERIFY_RESPONSE` | `inform` (nunca `refuse`) | Fonte → iniciador | `status`: `observations_available`, `no_data` ou `informative_absence` | [informant.py:120](../src/isia/agents/informant.py#L120) |
+| `CFP` | `cfp` | Iniciador → recursos candidatos | `PROPOSAL` ou `REJECT` | [incident.py:144](../src/isia/agents/incident.py#L144) |
+| `PROPOSAL` | `propose` | Recurso → iniciador | `ACCEPT` ou `REJECT` | [mobile.py:312](../src/isia/agents/mobile.py#L312) |
+| `REJECT` (recusa do CFP) | `refuse` | Recurso → iniciador | Nenhuma | [mobile.py:314](../src/isia/agents/mobile.py#L314) |
+| `ACCEPT` | `accept-proposal` | Iniciador → recurso vencedor | `STATUS` | [incident.py:216](../src/isia/agents/incident.py#L216) |
+| `REJECT` (perdedores) | `reject-proposal` | Iniciador → outros proponentes | Nenhuma | [incident.py:221](../src/isia/agents/incident.py#L221) |
+| `STATUS` | `inform` | Recurso vencedor → iniciador | `reserved` ou `reservation_failed` | [mobile.py:436](../src/isia/agents/mobile.py#L436) |
+| `MISSION_RESULT` | `inform` (também com `outcome=failed`; nunca `failure`) | Recurso → iniciador | Nenhuma | [mobile.py:211](../src/isia/agents/mobile.py#L211) |
+| `INCIDENT_CLOSED` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:363](../src/isia/agents/incident.py#L363) |
 
-`ALERT` e `INCIDENT_CLOSED` existem em `MessageType` para quando houver vários iniciadores a avisar vizinhos. Nos cenários A, B e C nenhum é enviado. Desde 18-11-2026, a opção `alert_distance` faz os iniciadores com cobertura sobreposta trocarem `ALERT` para não tratarem a mesma ameaça duas vezes ([medição](scalability.md#aviso-entre-iniciadores-antes-e-depois)); `INCIDENT_CLOSED` continua a não ser enviado.
+`ALERT` e `INCIDENT_CLOSED` existem em `MessageType` para quando houver vários iniciadores a avisar vizinhos. Nos cenários A, B e C nenhum é enviado. Desde 18-11-2026, a opção `alert_distance` faz os iniciadores com cobertura sobreposta trocarem `ALERT` para não tratarem a mesma ameaça duas vezes ([medição](scalability.md#aviso-entre-iniciadores-antes-e-depois)), em duas voltas: a leitura de cada um e, depois, se fica com a ameaça; `INCIDENT_CLOSED` continua a não ser enviado.
 
 Nem todos os esquemas correspondem formalmente a um protocolo FIPA completo. Devemos dizer **«inspirado em FIPA»**; os desvios estão na [secção 9](#9-porquê-estes-protocolos-alternativas-prós-e-contras).
 
@@ -423,7 +421,7 @@ ver [reputação e política](reputation-policy.md).
 
 ## 8. Implementação e compatibilidade SPADE
 
-Na Etapa 3 foram verificados com SPADE 4.1.4: `spade.agent.Agent`, `OneShotBehaviour`, `CyclicBehaviour`, `spade.message.Message`, `Template`, `send`/`receive` e metadados, com demonstração real XMPP. Na Etapa 5, `MobileResourceAgent` reutiliza `CyclicBehaviour` e `Template` para `CFP` e `accept-proposal`; `contract_net_demo.py` usa `OneShotBehaviour` no iniciador. `PeriodicBehaviour` não foi necessário. O suporte de mensagens com metadados não implica validação integral de conformidade FIPA-ACL, que exigiria teste específico.
+Na Etapa 3 foram verificados com SPADE 4.1.4: `spade.agent.Agent`, `OneShotBehaviour`, `CyclicBehaviour`, `spade.message.Message`, `Template`, `send`/`receive` e metadados, com demonstração real XMPP. Na Etapa 5, `MobileResourceAgent` reutiliza `CyclicBehaviour` e `Template` para `CFP` e `accept-proposal`; o iniciador (`IncidentSensorAgent`) usa `OneShotBehaviour`. `PeriodicBehaviour` não foi necessário. O suporte de mensagens com metadados não implica validação integral de conformidade FIPA-ACL, que exigiria teste específico.
 
 Os contratos atuais estão implementados em `src/isia/communication/messages.py`, o adaptador SPADE/XMPP em `src/isia/communication/transport.py`, a lógica de alocação em `src/isia/reasoning/allocation.py`, e a correlação nos comportamentos dos agentes e no demo. Não existe `communication/protocols.py` separado. `DroneAgent`, `VehicleAgent` e `RangerAgent` reutilizam o ciclo comum de `src/isia/agents/mobile.py`; `IncidentSensorAgent` integra o ciclo do incidente. A injeção parametrizada de perda/latência permanece proposta para etapas posteriores. Os testes de serialização e mocks não substituem testes de entrega real XMPP; na Etapa 5 o cenário normal foi executado com XMPP e os cenários de falha foram testados localmente com mocks/determinismo.
 
@@ -469,7 +467,7 @@ No Contract Net clássico, `accept-proposal` vale como compromisso. Entre propor
 | Fonte sem dados | `refuse` ou `failure` | `inform` com `status=no_data` | «Não vi» é informação, não recusa |
 | Conteúdo | FIPA-SL | JSON validado | Compatível com SPADE e testável sem XMPP; não é conformidade FIPA-ACL integral |
 
-**Corrigido a 16-11-2026:** o recurso recusava o CFP com `reject-proposal`, que no FIPA é a performativa do iniciador para as propostas não escolhidas. Passou a enviar `refuse` ([mobile.py:317](../src/isia/agents/mobile.py#L317)), e o iniciador valida-a ([incident.py:189](../src/isia/agents/incident.py#L189)). O tipo de domínio continua `REJECT` nos dois casos.
+**Corrigido a 16-11-2026:** o recurso recusava o CFP com `reject-proposal`, que no FIPA é a performativa do iniciador para as propostas não escolhidas. Passou a enviar `refuse` ([mobile.py:314](../src/isia/agents/mobile.py#L314)), e o iniciador valida-a ([incident.py:176](../src/isia/agents/incident.py#L176)). O tipo de domínio continua `REJECT` nos dois casos.
 
 ## 10. Checklist de aprovação
 

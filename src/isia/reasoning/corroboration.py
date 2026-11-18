@@ -171,14 +171,12 @@ def classify_verification_response(
         ):
             unique_observations.append(observation)
 
-    incompatible_types = _configured_incompatible_types(
-        initial_observation.event_type, incompatibility_rules
+    incompatible_types = _configured_types(
+        initial_observation.event_type, incompatibility_rules, "incompatibility"
     )
     compatible_types = {initial_observation.event_type}
     compatible_types.update(
-        _configured_compatible_types(
-            initial_observation.event_type, compatibility_rules
-        )
+        _configured_types(initial_observation.event_type, compatibility_rules, "compatibility")
     )
     # A declaração de contradição refere-se à resposta; cada observação
     # continua a ser classificada pelo seu próprio tipo e pelas regras locais.
@@ -721,43 +719,21 @@ def build_observation_hypothesis(observation: Observation) -> dict[str, object]:
     }
 
 
-def _configured_incompatible_types(
-    event_type: str,
-    incompatibility_rules: Mapping[str, object] | None,
-) -> set[str]:
-    if incompatibility_rules is None:
+def _configured_types(event_type: str, rules: Mapping[str, object] | None, name: str) -> set[str]:
+    """Tipos que as regras do chamador associam a ``event_type``; ``name`` só entra nas mensagens de erro."""
+    if rules is None:
         return set()
-    if not isinstance(incompatibility_rules, Mapping):
-        raise TypeError("incompatibility_rules must be a mapping.")
-    values = incompatibility_rules.get(event_type, ())
+    if not isinstance(rules, Mapping):
+        raise TypeError(f"{name}_rules must be a mapping.")
+    values = rules.get(event_type, ())
     if isinstance(values, str):
         values = (values,)
     try:
         values = tuple(values)
     except TypeError as error:
-        raise TypeError("Each incompatibility rule must be iterable.") from error
+        raise TypeError(f"Each {name} rule must be iterable.") from error
     if any(not isinstance(value, str) or not value.strip() for value in values):
-        raise ValueError("Incompatibility rules must contain non-empty strings.")
-    return set(values)
-
-
-def _configured_compatible_types(
-    event_type: str,
-    compatibility_rules: Mapping[str, object] | None,
-) -> set[str]:
-    if compatibility_rules is None:
-        return set()
-    if not isinstance(compatibility_rules, Mapping):
-        raise TypeError("compatibility_rules must be a mapping.")
-    values = compatibility_rules.get(event_type, ())
-    if isinstance(values, str):
-        values = (values,)
-    try:
-        values = tuple(values)
-    except TypeError as error:
-        raise TypeError("Each compatibility rule must be iterable.") from error
-    if any(not isinstance(value, str) or not value.strip() for value in values):
-        raise ValueError("Compatibility rules must contain non-empty strings.")
+        raise ValueError(f"{name.capitalize()} rules must contain non-empty strings.")
     return set(values)
 
 

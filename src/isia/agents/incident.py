@@ -10,7 +10,7 @@ from spade.template import Template
 from isia.agents.sensor import SensorAgent, _recent_observations
 from isia.communication.messages import Message, MessageType, model_from_dict, model_to_dict
 from isia.communication.transport import (
-    ONTOLOGY, CONTRACT_NET_PROTOCOL, build_spade_message, parse_spade_message,
+    ONTOLOGY, CONTRACT_NET_PROTOCOL, bare_jid as bare, build_spade_message, parse_spade_message,
 )
 from isia.domain.incident_state import IncidentState, IncidentStatus
 from isia.domain.models import Bid, Incident, Mission, MissionStatus, Observation, Position
@@ -21,16 +21,10 @@ from isia.reasoning.allocation import (
     reservation_status_matches_accept, RANGER_TASK, RANGER_CAPABILITY,
 )
 from isia.reasoning.corroboration import are_observations_compatible
-from isia.reasoning.policy import ResponsePolicy, decide_response
-from isia.reasoning.reputation import EvaluationResult
 
 
 logger = logging.getLogger(__name__)
 QUEUE_INTERVAL_SECONDS = 5.0  # tempo simulado entre dois pedidos a um recurso ocupado
-
-
-def bare(value):
-    return str(value).split("/", 1)[0].lower()
 
 
 class IncidentSensorAgent(SensorAgent):
@@ -106,25 +100,6 @@ class IncidentSensorAgent(SensorAgent):
         self.record(status.value)
 
     class IncidentBehaviour(SensorAgent.VerificationBehaviour):
-        def validated_close_decision(self, initial_observation, incident_id):
-            """Revalidar o fundamento antes de executar a ação de encerramento."""
-            agent = self.agent
-            decision = agent.decision
-            try:
-                if not isinstance(agent.response_policy, ResponsePolicy):
-                    raise ValueError("O encerramento exige uma política configurada.")
-                reference = EvaluationResult(**decision["mission_result"])
-                checked = decide_response(
-                    decision, agent.response_policy, severity=agent.severity,
-                    initial_observation=initial_observation, incident_id=incident_id,
-                    mission_result=reference,
-                )
-                if checked["decision"] == "close":
-                    return checked
-            except (KeyError, TypeError, ValueError):
-                pass
-            return {**decision, "decision": "observe", "reason": "unsubstantiated_close"}
-
         def result_matches_assignment(self, incoming, result, assignment, mission):
             """A mesma validação aplica-se a resultados normais e antecipados."""
             jid, accept, resource_id = assignment
@@ -171,28 +146,44 @@ class IncidentSensorAgent(SensorAgent):
             Prioridade: a leitura mais antiga e, em caso de empate, o menor source_id. Os dois
             lados calculam a mesma ordem, por isso só um desiste. Um ALERT perdido deixa os dois
             a tratar a mesma ameaça, como sem aviso.
+            Segunda volta: cada um diz aos vizinhos que lhe cederiam se fica com a ameaça. Só se
+            cede a quem fica; assim, numa fila de ameaças vizinhas, quem cederia a um vizinho que
+            também desistiu trata a sua. Um veredicto perdido conta como «não fica»: os dois tratam.
             """
             agent = self.agent
-            alert = Message(
-                f"alert-{observation.event_id}", MessageType.ALERT, agent.simulated_time,
-                {"event_type": observation.event_type, "position": model_to_dict(observation.position),
-                 "observed_at": observation.observed_at, "confidence_score": observation.confidence_score},
-                event_id=observation.event_id, incident_id=incident_id, source_id=observation.source_id,
-                conversation_id=f"alert-{observation.event_id}")
-            for jid in agent.neighbours:
-                await self.send(build_spade_message(
-                    jid, alert, performative="inform", conversation_id=alert.conversation_id))
-            heard, deadline = set(), monotonic() + agent.receive_timeout
-            # shortcut: um vizinho sem leitura não responde e a espera dura o prazo todo; se pesar, ele que diga «nada».
-            while len(heard) < len(agent.neighbours):
+            key = (observation.observed_at, observation.source_id)
+
+            def notice(message_id, payload):
+                return Message(message_id, MessageType.ALERT, agent.simulated_time, payload,
+                               event_id=observation.event_id, incident_id=incident_id,
+                               source_id=observation.source_id, conversation_id=f"alert-{observation.event_id}")
+
+            async def tell(jids, message):
+                for jid in jids:
+                    await self.send(build_spade_message(
+                        jid, message, performative="inform", conversation_id=message.conversation_id))
+
+            await tell(agent.neighbours, notice(f"alert-{observation.event_id}", {
+                "event_type": observation.event_type, "position": model_to_dict(observation.position),
+                "observed_at": observation.observed_at, "confidence_score": observation.confidence_score}))
+            # Vizinhos com a mesma ameaça: os que têm prioridade sobre mim, os que me cederiam e os veredictos.
+            earlier, later, verdicts, heard = {}, [], {}, set()
+            start = monotonic()
+
+            async def listen(deadline):
+                """Ler um ALERT ou um veredicto de um vizinho; False quando o prazo acaba."""
                 remaining = deadline - monotonic()
                 incoming = await self.receive(timeout=remaining) if remaining > 0 else None
                 if incoming is None:
-                    break
+                    return False
+                sender = bare(incoming.sender)
                 try:
                     body = parse_spade_message(incoming)
-                    if body.message_type is not MessageType.ALERT or bare(incoming.sender) not in agent.neighbours:
-                        continue
+                    if body.message_type is not MessageType.ALERT or sender not in agent.neighbours:
+                        return True
+                    if "keeps" in body.payload:
+                        verdicts[sender] = body.payload["keeps"] is True
+                        return True
                     other = Observation(
                         body.event_id, body.source_id, body.payload["event_type"],
                         model_from_dict(body.payload["position"], Position),
@@ -200,9 +191,24 @@ class IncidentSensorAgent(SensorAgent):
                     same = are_observations_compatible(
                         observation, other, agent.alert_distance, agent.max_time_difference)
                 except (KeyError, TypeError, ValueError):
-                    continue
-                heard.add(bare(incoming.sender))
-                if same and (other.observed_at, other.source_id) < (observation.observed_at, observation.source_id):
+                    return True
+                if sender not in heard:
+                    heard.add(sender)
+                    if same and (other.observed_at, other.source_id) < key:
+                        earlier[sender] = other
+                    elif same:
+                        later.append(sender)
+                return True
+
+            # shortcut: um vizinho sem leitura não responde e a espera dura o prazo todo; se pesar, ele que diga «nada».
+            while len(heard) < len(agent.neighbours) and await listen(start + agent.receive_timeout):
+                pass
+            await tell(later, notice(f"alert-{observation.event_id}-verdict", {"keeps": not earlier}))
+            # Um vizinho pode demorar o prazo todo na primeira volta: o veredicto dele chega até ao dobro.
+            while any(jid not in verdicts for jid in earlier) and await listen(start + 2 * agent.receive_timeout):
+                pass
+            for jid, other in earlier.items():
+                if verdicts.get(jid):
                     agent.record("duplicate_alert", observation_id=other.event_id, source_id=other.source_id)
                     return True
             return False
@@ -401,24 +407,26 @@ class IncidentSensorAgent(SensorAgent):
             agent.incident_observations = observations
             agent.incident_state = IncidentState(incident_id)
             agent.record("ALERT", observation_id=initial.event_id)
-            if agent.neighbours and await self.yields_to_neighbour(initial, incident_id):
-                agent.close_reason = "duplicate_alert"
-                agent.transition(IncidentStatus.CLOSED)
-                agent.record("INCIDENT_CLOSED", status="closed", reason=agent.close_reason)
-                agent.cycle_done = True
-                return
+            if agent.neighbours:
+                yields = await self.yields_to_neighbour(initial, incident_id)
+                # A espera pelos vizinhos gasta tempo real e o relógio simulado pode ter andado:
+                # a decisão usa a leitura atual, a mesma janela que o informador vai consultar.
+                observations = () if yields else _recent_observations(agent.observation_feed)
+                if not observations:
+                    agent.close_reason = "duplicate_alert" if yields else "threat_expired"
+                    agent.transition(IncidentStatus.CLOSED if yields else IncidentStatus.EXPIRED)
+                    agent.record("INCIDENT_CLOSED", status=agent.incident_state.status.value,
+                                 reason=agent.close_reason)
+                    agent.cycle_done = True
+                    return
+                initial, agent.incident_observations = observations[0], observations
             agent.transition(IncidentStatus.VERIFYING)
             await super().run()
-            if agent.decision.get("decision") == "close":
-                agent.decision = self.validated_close_decision(initial, incident_id)
             agent.record("corroboration", decision=agent.decision)
             agent.transition(IncidentStatus.ASSESSING)
             mission = MissionRegistry().create_from_decision(
                 Incident(incident_id, observations), agent.decision, priority=agent.severity_level)
-            if agent.decision.get("decision") == "close":
-                agent.close_reason = agent.decision["reason"]
-                agent.transition(IncidentStatus.CLOSED)
-            elif mission is None:
+            if mission is None:
                 agent.transition(IncidentStatus.WATCHING)
                 # MVP de uma janela: sem nova evidência, termina como expirado.
                 agent.transition(IncidentStatus.EXPIRED)

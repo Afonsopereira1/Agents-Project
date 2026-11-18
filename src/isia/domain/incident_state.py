@@ -18,6 +18,7 @@ _ALLOWED_TRANSITIONS = {
     IncidentStatus.DETECTED: {
         IncidentStatus.VERIFYING,
         IncidentStatus.CLOSED,  # alerta duplicado: um iniciador vizinho fica com a mesma ameaça
+        IncidentStatus.EXPIRED,  # a ameaça deixou de ser vista durante o aviso aos vizinhos
     },
     IncidentStatus.VERIFYING: {IncidentStatus.ASSESSING},
     IncidentStatus.ASSESSING: {
@@ -61,9 +62,3 @@ class IncidentState:
         if new_status not in _ALLOWED_TRANSITIONS[self.status]:
             raise ValueError("Transição de estado do incidente não permitida.")
         return replace(self, status=new_status)
-
-
-def allowed_transitions(status: IncidentStatus) -> frozenset[IncidentStatus]:
-    if not isinstance(status, IncidentStatus):
-        raise TypeError("O estado do incidente deve ser IncidentStatus.")
-    return frozenset(_ALLOWED_TRANSITIONS[status])

@@ -17,8 +17,10 @@ cobertura suficiente. Cada observação e par fonte/incidente contam uma vez.
 Concordância, timeout, falha e falta de deteção não são referência suficiente.
 O avaliador verifica a proveniência; os campos do resultado apenas a registam.
 
-`result_from_ground_truth()` serve apenas o avaliador: exige ligação explícita a
-um evento terminado. O sensor recebe pesos históricos através de
+Na execução, a única referência é `result_from_mission()`, que só produz
+`confirmed` ou `inconclusive`: nada produz `refuted`, por isso a reputação não
+desce (o adaptador `result_from_ground_truth()` foi removido em 18-11-2026, sem
+nunca ter sido chamado). O sensor recebe pesos históricos através de
 `book.snapshot(source_ids)`, nunca `ground_truth`. Contagens e `book.history`
 vivem no processo. `book.update(..., run_id=...)` separa os IDs locais de
 amostras distintas; repetir o mesmo âmbito mantém a deduplicação por observação
@@ -49,7 +51,8 @@ estão testados, mas **não aprovados formalmente nem calibrados cientificamente
 
 A política pede rangers com apoio suficiente, diversidade e ausência de conflito;
 pede patrulha ao atingir o limiar adequado à gravidade; caso contrário, observa.
-Missão independente fundamentada: `confirmed` pede rangers; `refuted` encerra.
+Uma patrulha que confirma leva o iniciador a pedir rangers. A política não encerra
+ocorrências: a decisão `close` foi removida em 18-11-2026, porque nada produzia `refuted`.
 Score baixo ou falta de confirmação nunca encerram. A política rejeita verdade
 de referência como entrada operacional.
 

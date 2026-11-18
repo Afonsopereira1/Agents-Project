@@ -92,7 +92,9 @@ Alguma documentação e infraestrutura de testes da Etapa 10 podem começar ante
 
 **Implementação integrada na `main`:** `IncidentState`, contratos JSON
 independentes de SPADE, serialização/desserialização dos modelos e
-deduplicação por `message_id` estão implementados e testados. O contrato
+deduplicação por `message_id` estão implementados e testados (em 18-11-2026,
+`serialize_model`/`deserialize_model` e `MessageDeduplicator` foram removidos por
+nunca terem sido usados fora dos testes). O contrato
 estrutural de `CFP` exige missão, incidente, conversa, tarefa, destino,
 capacidade, prioridade e prazo. A retenção proposta de mensagens duplicadas é
 de 600 segundos simulados, sem expiração operacional nesta etapa. Mantêm-se
@@ -230,18 +232,18 @@ de missões continuam nas Etapas 4 e 6.
 
 **Pré-requisitos:** ocorrência avaliada, recurso com posição/capacidade e mensagens correlacionadas.
 
-**Ficheiros envolvidos (implementação atual):** `src/isia/reasoning/allocation.py`, `src/isia/communication/messages.py`, `src/isia/communication/transport.py`, `src/isia/agents/mobile.py`, `contract_net_demo.py`, `tests/unit/test_allocation.py`, `tests/unit/test_contract_net_demo.py` e `tests/unit/test_mobile_agent.py`. Os nomes `communication/protocols.py` e `tests/integration/test_allocation.py` eram referências de planeamento e ainda não existem como módulos específicos. `agents/drone.py`, `vehicle.py` e `ranger.py` foram acrescentados na Etapa 6.
+**Ficheiros envolvidos (implementação atual):** `src/isia/reasoning/allocation.py`, `src/isia/communication/messages.py`, `src/isia/communication/transport.py`, `src/isia/agents/mobile.py`, `src/isia/agents/incident.py`, `tests/unit/test_allocation.py`, `tests/unit/test_incident_allocation_regressions.py` e `tests/unit/test_mobile_agent.py`. Os nomes `communication/protocols.py` e `tests/integration/test_allocation.py` eram referências de planeamento e ainda não existem como módulos específicos. `agents/drone.py`, `vehicle.py` e `ranger.py` foram acrescentados na Etapa 6.
 
 **Tarefas concretas:**
 
-- [x] Implementar o iniciador local por ocorrência, sem centralizador permanente. Evidência: `ContractNetInitiatorAgent` e `ContractNetBehaviour` em `contract_net_demo.py`; `MissionRegistry` mantém a criação local/idempotente da missão. Testes: `test_repeated_decision_returns_same_mission` e testes do iniciador no `test_contract_net_demo.py`.
+- [x] Implementar o iniciador local por ocorrência, sem centralizador permanente. Evidência: `IncidentSensorAgent.IncidentBehaviour.allocate` em `incident.py` (até 18-11-2026 também na demonstração isolada `contract_net_demo.py`, entretanto removida); `MissionRegistry` mantém a criação local/idempotente da missão. Testes: `test_repeated_decision_returns_same_mission` e `test_incident_allocation_regressions.py`.
 - [x] Criar `CFP` com missão, capacidade exigida, posição, prioridade e prazo. Evidência: `build_cfp_message()` em `allocation.py`. Testes: `test_build_cfp_contains_mission_contract_and_correlation_ids`, `test_cfp_round_trip_json_preserves_contract` e validação de tempos/IDs.
 - [x] Implementar nos recursos a decisão autónoma de `propose`/`refuse`. Evidência: `evaluate_cfp()` e `MobileResourceAgent.ContractNetBehaviour`. Testes: `test_evaluate_cfp_rejects_ineligible_resources` e `test_mobile_agent.py`; os testes SPADE dependem de `spade==4.1.4`.
 - [x] Aplicar filtros de elegibilidade: disponibilidade, competência e reserva mínima de autonomia. Evidência: `evaluate_cfp()`. Testes: recurso indisponível, capacidade incompatível e autonomia insuficiente em `test_allocation.py` e `test_mobile_agent.py`.
 - [x] Calcular custo comparável por ETA/energia/carga; definir unidades e normalização. Evidência: `_proposal_cost()`/`select_best_proposal()`; ETA em segundos simulados, energia em pontos percentuais e carga em fração `0..1`. Testes: `test_selects_lowest_normalized_cost_not_first_response` e `test_equal_cost_uses_resource_id_as_tiebreaker`.
 - [x] Ordenar propostas válidas e escolher uma; rejeitar as restantes. Evidência: `select_best_proposal()` e envio de `REJECT` em `ContractNetBehaviour`. Testes: seleção determinística, duplicação, mensagens inválidas e propostas tardias.
-- [x] Confirmar a reserva no agente escolhido antes de marcar a missão `RESERVED`. Evidência: `LocalResourceReservation.reserve()`, `MobileResourceAgent.AcceptBehaviour` e validação de `STATUS` em `contract_net_demo.py`. Testes: idempotência, concorrência, correlação de confirmação e demonstração XMPP normal validada no Ubuntu.
-- [x] Tratar propostas tardias, falta de propostas, recusa da reserva e uma nova ronda limitada. Evidência: `AllocationOutcome`, `ContractNetResult` e limite `max_rounds`/`CONTRACT_MAX_ROUNDS` em `contract_net_demo.py`. Testes unitários determinísticos cobrem ausência, recusa explícita, segunda ronda, timeout, mensagens tardias e concorrência; os cenários de falha XMPP não foram todos executados contra servidor real.
+- [x] Confirmar a reserva no agente escolhido antes de marcar a missão `RESERVED`. Evidência: `LocalResourceReservation.reserve()`, `MobileResourceAgent.AcceptBehaviour` e validação de `STATUS` em `incident.py` (`reservation_status_matches_accept`). Testes: idempotência, concorrência, correlação de confirmação e demonstração XMPP normal validada no Ubuntu.
+- [x] Tratar propostas tardias, falta de propostas, recusa da reserva e uma nova ronda limitada. Evidência: motivos `no_eligible_proposals`, `reservation_rejected` e `confirmation_unknown` e limite `max_attempts` em `incident.py`. Testes unitários determinísticos cobrem ausência, recusa explícita, segunda ronda, timeout, mensagens tardias e concorrência; os cenários de falha XMPP não foram todos executados contra servidor real.
 
 **Dependências:** Etapa 4 e contratos das Etapas 1–3. A execução das missões (Etapa 6) depende desta etapa.
 
@@ -249,9 +251,9 @@ de missões continuam nas Etapas 4 e 6.
 
 **Critérios de conclusão:** cumpridos para a alocação implementada: a negociação termina em reserva válida ou em resultado explícito (`no_eligible_proposals`, `reservation_rejected` ou `confirmation_unknown`); `LocalResourceReservation` impede dupla reserva incompatível. A execução e recuperação de missões continuam reservadas à Etapa 6.
 
-**Resultado esperado:** uma missão atribuída por mensagens SPADE a um agente móvel autónomo. Validado no cenário normal através de `contract_net_demo.py`; os cenários de falha foram validados por testes determinísticos/mocks.
+**Resultado esperado:** uma missão atribuída por mensagens SPADE a um agente móvel autónomo. Validado no cenário normal através da demonstração isolada `contract_net_demo.py` (removida em 18-11-2026; o mesmo fluxo corre com `python -m isia.simulation.runner --xmpp`); os cenários de falha foram validados por testes determinísticos/mocks.
 
-**Auditoria da etapa:** a demonstração isolada continua em `contract_net_demo.py`.
+**Auditoria da etapa:** a demonstração isolada `contract_net_demo.py` foi removida em 18-11-2026, por duplicar o iniciador real.
 A Etapa 6 integra `MissionRegistry` no `IncidentSensorAgent`, que herda a
 corroboração do `SensorAgent` e inicia a negociação da própria ocorrência.
 A aprovação formal dos contratos pelo grupo permanece pendente.
@@ -364,7 +366,7 @@ aplica-a depois da decisão; `not_confirmed` e o guarda continuam sem atualizar.
 
 **Correções das auditorias (12-11-2026, base `400161b`):** na branch independente
 `fix/etapa7-etapa8-audit-corrections`, `close` é revalidado pela política e termina
-`closed` sem missão; decisões sem fundamento conservam `observe`. A adjudicação
+`closed` sem missão; decisões sem fundamento conservam `observe` (a decisão `close` foi removida em 18-11-2026: nada a produzia). A adjudicação
 valida `Position`, e `run_id` distingue amostras sem alterar os IDs internos.
 Repetir o mesmo âmbito mantém a idempotência e não implica independência estatística.
 

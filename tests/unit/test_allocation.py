@@ -12,7 +12,6 @@ from isia.domain.models import (
     ResourceStatus,
 )
 from isia.reasoning.allocation import (
-    AllocationOutcome,
     LocalResourceReservation,
     MissionRegistry,
     ReservationStatus,
@@ -529,28 +528,7 @@ class TestMissionRegistry(unittest.TestCase):
         )
         self.assertTrue(reservation_status_matches_accept(failed, accept, "drone-1"))
 
-    def test_accept_rejects_proposal_from_another_conversation(self):
-        cfp = self._cfp()
-        proposal = self._proposal(cfp, "drone-1", conversation_id="other")
-
-        with self.assertRaises(ValueError):
-            build_accept_message(cfp, proposal, 22.0)
-
-    def test_allocation_outcomes_are_distinct_and_failure_is_not_confirmation(self):
-        self.assertEqual(
-            {
-                AllocationOutcome.RESERVATION_CONFIRMED,
-                AllocationOutcome.NO_ELIGIBLE_PROPOSALS,
-                AllocationOutcome.RESERVATION_REJECTED,
-                AllocationOutcome.CONFIRMATION_UNKNOWN,
-            },
-            {
-                "reservation_confirmed",
-                "no_eligible_proposals",
-                "reservation_rejected",
-                "confirmation_unknown",
-            },
-        )
+    def test_failed_reservation_status_is_not_confirmation(self):
         cfp = self._cfp()
         proposal = self._proposal(cfp, "drone-1")
         accept = build_accept_message(cfp, proposal, 22.0)
@@ -564,6 +542,13 @@ class TestMissionRegistry(unittest.TestCase):
         self.assertEqual(status.payload["status"], "reservation_failed")
         self.assertEqual(status.payload["reservation_status"], ReservationStatus.RESOURCE_OCCUPIED)
         self.assertNotEqual(status.payload["status"], "reserved")
+
+    def test_accept_rejects_proposal_from_another_conversation(self):
+        cfp = self._cfp()
+        proposal = self._proposal(cfp, "drone-1", conversation_id="other")
+
+        with self.assertRaises(ValueError):
+            build_accept_message(cfp, proposal, 22.0)
 
     def test_two_unavailable_resources_leave_mission_unreserved(self):
         mission = self.registry.create_from_decision(

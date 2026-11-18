@@ -41,8 +41,6 @@ def initial_score(report):
     if not policies:
         return None
     policy = policies[0]
-    if policy.get("mission_result") is not None:
-        raise ValueError("O score de calibração deve preceder o resultado da missão.")
     score = policy.get("suspicion_score")
     if not is_finite_number(score) or not 0 <= score <= 1:
         raise ValueError("suspicion_score deve ser um número finito entre 0 e 1.")

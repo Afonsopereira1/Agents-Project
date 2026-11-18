@@ -2,11 +2,11 @@
 
 > Ordem fixa, tempo e fala de cada diapositivo. Os números vêm de `results/`: Etapa 9 (560 execuções), P3 (`results/scalability/`), testes de stress (`results/stress/`), cenários D e E e Bloco G (3500 execuções). As recolhas têm âmbitos distintos; cada diapositivo aponta para a fonte.
 
-**Diapositivos (18-11-2026):** <https://claude.ai/artifact/8unfFKR29LmPhbGwdKwggj>. São 15, com notas do orador, na paleta areia, verde-floresta e âmbar. A ligação é privada até ser partilhada no menu Share; para a entrega, exportar para PDF ou PowerPoint (Share › Export) e guardar em `docs/presentation/`. As versões anteriores, a cinzento e azul, continuam em <https://claude.ai/artifact/HiSFxr2GXmDaTUH3NHpohF> e <https://claude.ai/artifact/T1wJXEX4xufTvvUWFwV2UL> (intermédia); a mais antiga, com outro desenho, em <https://claude.ai/artifact/C5kRVniNyws5ZcU1z3SaXs>.
+**Diapositivos (18-11-2026):** <https://claude.ai/artifact/8unfFKR29LmPhbGwdKwggj>. São 16, com notas do orador, na paleta areia, verde-floresta e âmbar. A ligação é privada até ser partilhada no menu Share; para a entrega, exportar para PDF ou PowerPoint (Share › Export) e guardar em `docs/presentation/`. As versões anteriores, a cinzento e azul, continuam em <https://claude.ai/artifact/HiSFxr2GXmDaTUH3NHpohF> e <https://claude.ai/artifact/T1wJXEX4xufTvvUWFwV2UL> (intermédia); a mais antiga, com outro desenho, em <https://claude.ai/artifact/C5kRVniNyws5ZcU1z3SaXs>.
 
 **Grupo, por ordem alfabética:** Afonso Pereira, Guilherme Gomes e Guilherme Kotchergenko.
 
-**Duração alvo:** 12 minutos; os tempos abaixo somam 12:30. Sugestão de divisão em três blocos, um por elemento: diapositivos 1 a 5 (o sistema), 6 a 10 (demonstração, SPADE, método, variantes e resultados) e 11 a 15 (comparação, sensibilidade, escala e conclusões).
+**Duração alvo:** 12 minutos; os tempos abaixo somam 13:10. Sugestão de divisão em três blocos, um por elemento: diapositivos 1 a 5 (o sistema), 6 a 11 (demonstração, SPADE, método, variantes, cenários e resultados) e 12 a 16 (comparação, sensibilidade, escala, stress e conclusões).
 
 ## Ordem e tempos
 
@@ -21,12 +21,13 @@
 | 7 | SPADE e Falhas | 1:00 | P1 | [mobile.py](../../src/isia/agents/mobile.py), [faults.md](../faults.md) |
 | 8 | Método de Avaliação | 0:45 | — | [experiments.md](../experiments.md#unidade-de-avaliação-e-métricas) |
 | 9 | As Quatro Variantes | 0:40 | — | [experiments.md](../experiments.md#variantes-comparadas-collectorvariants) |
-| 10 | Resultados por Cenário | 1:00 | — | [experiments.md](../experiments.md#resultados), [scalability.md](../scalability.md#cenário-d--dia-movimentado) |
-| 11 | Comparação entre Variantes | 0:50 | P2 | [experiments.md](../experiments.md#discussão) |
-| 12 | Sensibilidade dos Parâmetros | 0:40 | — | [sensitivity.md](../sensitivity.md#síntese-dos-efeitos-e-ausência-de-diferenças) |
-| 13 | Escalabilidade | 0:50 | P3 | [p3-escalabilidade.md](p3-escalabilidade.md), [scalability.md](../scalability.md) |
-| 14 | Testes de Stress | 0:40 | P3 | [scalability.md](../scalability.md#mapa-de-limites) |
-| 15 | Conclusões e Limitações | 0:40 | — | [scalability.md](../scalability.md#cenário-e--reserva-alargada) |
+| 10 | Os Cinco Cenários | 0:40 | — | [experiments.md](../experiments.md#cenários-configscenariosjson), [scalability.md](../scalability.md#cenário-d--dia-movimentado) |
+| 11 | Resultados por Cenário | 1:00 | — | [experiments.md](../experiments.md#resultados), [scalability.md](../scalability.md#cenário-d--dia-movimentado) |
+| 12 | Comparação entre Variantes | 0:50 | P2 | [experiments.md](../experiments.md#discussão) |
+| 13 | Sensibilidade dos Parâmetros | 0:40 | — | [sensitivity.md](../sensitivity.md#resultados-por-parâmetro) |
+| 14 | Escalabilidade | 0:50 | P3 | [p3-escalabilidade.md](p3-escalabilidade.md), [scalability.md](../scalability.md) |
+| 15 | Testes de Stress | 0:40 | P3 | [scalability.md](../scalability.md#mapa-de-limites) |
+| 16 | Conclusões e Limitações | 0:40 | — | [scalability.md](../scalability.md#cenário-e--reserva-alargada) |
 
 P1 é «como são construídos os agentes», P2 é «que protocolos e porquê esta arquitetura» e P3 é «escalabilidade computacional e situacional».
 
@@ -74,7 +75,7 @@ Clicar no vídeo. Dura 25 segundos; narrar por cima:
 
 ### 7 · SPADE e Falhas (1:00)
 
-«Cada agente é uma subclasse de Agent do SPADE. O sensor iniciador tem um comportamento OneShot, que conduz uma ocorrência do alerta ao fecho. Os recursos têm comportamentos cíclicos, sempre à escuta. No setup, cada comportamento é registado com um Template, as linhas a âmbar, que filtra as mensagens pela performativa, pela ontologia e pelo protocolo. Os comportamentos só comunicam; as decisões estão em funções puras, por isso os 581 testes correm sem servidor. À direita, o que acontece depois de uma atribuição: o iniciador envia o accept-proposal e fica à espera. Se o recurso confirma, executa. Se há silêncio, reenvia o mesmo pedido e volta a esperar. Se o recurso recusa, abre-se uma nova ronda, até duas tentativas. Já sem tentativas, a ocorrência fica por resolver, mas visível no relatório.»
+«Cada agente é uma subclasse de Agent do SPADE. O sensor iniciador tem um comportamento OneShot, que conduz uma ocorrência do alerta ao fecho. Os recursos têm comportamentos cíclicos, sempre à escuta. No setup, cada comportamento é registado com um Template, as linhas a âmbar, que filtra as mensagens pela performativa, pela ontologia e pelo protocolo. Os comportamentos só comunicam; as decisões estão em funções puras, por isso os 560 testes correm sem servidor. À direita, o que acontece depois de uma atribuição: o iniciador envia o accept-proposal e fica à espera. Se o recurso confirma, executa. Se há silêncio, reenvia o mesmo pedido e volta a esperar. Se o recurso recusa, abre-se uma nova ronda, até duas tentativas. Já sem tentativas, a ocorrência fica por resolver, mas visível no relatório.»
 
 Se perguntarem: nos cenários A, B e C não há reenvio (`retransmit` é 0), por isso o silêncio leva logo a «por resolver». Os testes de stress usaram 1 e 2 reenvios.
 
@@ -84,45 +85,53 @@ Se perguntarem: nos cenários A, B e C não há reenvio (`retransmit` é 0), por
 
 ### 9 · As Quatro Variantes (0:40)
 
-«Cada cenário correu em quatro variantes, com as mesmas sementes. A completa é a referência; cada uma das outras muda uma peça. Sem reputação: a reputação volta a 0,5 em cada execução, e só uma decisão mudou em 560. Sem corroboração: ignora o segundo sensor e baixa o limiar, por isso qualquer alerta mobiliza; em B os falsos alarmes triplicam, de 10 para 30. Só o mais próximo: escolhe pelo tempo de chegada e verifica aos 4 segundos em vez de 6, com a mesma deteção.»
+«O sistema tem três peças que se podem mudar: a corroboração, a reputação e a escolha do recurso. Cada variante muda uma e corre em A, B e C, com as mesmas sementes: 560 execuções. D e E correram só com o sistema completo. A tabela lê-se por linha. Sem reputação, só C muda, e numa única ameaça. Sem corroboração, o recall sobe nos três cenários, mas em B a FPR triplica, de 0,25 para 0,75. Só o mais próximo verifica aos 4 segundos em vez de 6, em A e B, com as mesmas taxas.»
 
 Dizer em voz alta: a variante sem corroboração muda duas coisas, a corroboração e o limiar, por isso não isola a causa.
 
-### 10 · Resultados por Cenário (1:00)
+### 10 · Os Cinco Cenários (0:40)
 
-«Cada barra mostra até onde chegou cada ameaça real: verde, chegou ao guarda; âmbar, foi confirmada mas o guarda não respondeu; verde claro, saiu patrulha mas não confirmou; tracejado, nem saiu patrulha. Em A, a operação normal, saem 17 patrulhas e as 17 chegam ao guarda, sem nenhum falso alarme. Em B, com ruído e erro de posição, saem 13 patrulhas mas só 2 confirmam: em 11, a patrulha vai à célula ao lado. Os falsos alarmes contam-se nos episódios sem ameaça: em B há 40, e 10 mobilizaram por engano. Em C, com 10 % de mensagens perdidas, saem 16 patrulhas, 10 confirmam e só 6 chegam ao guarda: basta perder uma mensagem. D e E são os cenários de escala, com seis e dezasseis ameaças ao mesmo tempo: fecham 40 de 60 e 129 de 160.»
+«A, B e C usam o mundo base, oito por oito, e correm nas quatro variantes. A é o caso base, com fontes que quase não erram. B mede os falsos alarmes: as fontes erram muito, a posição falha uma célula, e há episódios com trovão e turista. C mede as falhas: 10 % das mensagens perdem-se e o drone quase não tem energia. D e E são a escala e correm só com o sistema completo: D tem seis ameaças ao mesmo tempo, E tem dezasseis, com vinte fontes e informadores humanos.»
+
+### 11 · Resultados por Cenário (1:00)
+
+«Cada barra mostra até onde chegou cada ameaça real: verde, chegou ao guarda; âmbar, foi confirmada mas o guarda não respondeu; verde claro, saiu patrulha mas não confirmou; tracejado, nem saiu patrulha. Em A, a operação normal, saem 17 patrulhas e as 17 chegam ao guarda, sem nenhum falso alarme. Em B, com ruído e erro de posição, saem 13 patrulhas mas só 2 confirmam: em 11, a patrulha vai à célula ao lado. Os falsos alarmes contam-se nos episódios sem ameaça: em B há 40, e 10 mobilizaram por engano. Em C, com 10 % de mensagens perdidas, saem 16 patrulhas, 10 confirmam e só 6 chegam ao guarda: basta perder uma mensagem. D e E são os cenários de escala, com seis e dezasseis ameaças ao mesmo tempo: fecham 40 de 60 e 132 de 160; em E, 7 ficam confirmadas mas sem guarda, porque os guardas esgotam a autonomia.»
 
 Se perguntarem por D: das 20 que faltam, 15 nem tiveram patrulha (8 sem alerta, 4 sem corroboração, 3 expiradas) e em 5 a ameaça curta já tinha acabado quando a patrulha chegou.
 
-### 11 · Comparação entre Variantes (0:50)
+### 12 · Comparação entre Variantes (0:50)
 
 «Este é o compromisso central, nos três cenários. Cada linha vai de sem corroboração, à esquerda, a com corroboração, à direita: verde melhora, âmbar piora, cinzento não muda. Em todos, corroborar custa recall: 0,95 para 0,85 em A, 0,80 para 0,65 em B, 0,95 para 0,80 em C. Só em B, onde há trovões e turistas, isso compra alguma coisa: os falsos alarmes descem de 0,75 para 0,25 e a precision sobe de 0,35 para 0,57. Em A e C os episódios sem ameaça são vazios e nunca dão alerta, por isso a FPR é 0 com ou sem corroboração.»
 
 Dizer em voz alta: a variante sem corroboração também desce o limiar, por isso é a diferença conjunta dos dois; não isola a causa.
 
-`no_reputation` e `nearest` estão no diapositivo 9, e o reenvio com 10 % de perda (7 → 17) no 14; já não estão neste.
+`no_reputation` e `nearest` estão no diapositivo 9, e o reenvio com 10 % de perda (7 → 17) no 15; já não estão neste.
 
-### 12 · Sensibilidade dos Parâmetros (0:40)
+### 13 · Sensibilidade dos Parâmetros (0:40)
 
-«Variámos 13 parâmetros, um de cada vez. Estes são os dois maiores efeitos. Um limiar mais exigente evita nove falsos alarmes, mas deixa onze ameaças por mobilizar. Uma gravidade alta mobiliza mais três ameaças, mas gera mais vinte falsos alarmes. Não há um valor melhor em todos os objetivos.»
+«A pergunta é: os resultados dependem dos valores que escolhemos? Os limiares e as probabilidades foram escolhidos por nós, não calibrados. Variámos 13 parâmetros, um de cada vez, em A, B e C, e cada um tinha uma hipótese, na segunda coluna. A verde o que melhora, a âmbar o que piora, a cinzento o que fica igual. A resposta é quase não: 55 de 75 combinações não mudaram nenhuma mobilização. Pesam três: a qualidade das fontes, que com 30 % de erro deixa o recall de C em 0,35; e o limiar e a gravidade, que em B trocam deteção por falsos alarmes. Não há um valor melhor em todos os objetivos.»
+
+Se perguntarem pela linha «30 % de erro» em B: as fontes originais de B erram 50 a 60 %, por isso 30 % é menos ruído e a FPR desce.
 
 Não afirmar significância estatística: os intervalos são descritivos.
 
-### 13 · Escalabilidade (0:50)
+### 14 · Escalabilidade (0:50)
 
-«Dois limites e a resposta a cada um. Computacional: cada missão custa até 3N mais 2 mensagens. Com 16 patrulhas eram 57 mensagens por ocorrência; chamando só as duas mais próximas são 15. Situacional: com um só sensor a iniciar, atendemos sempre oito ameaças, haja uma, duas ou três ao mesmo tempo. A resposta foi deixar vários sensores iniciar, com um aviso entre eles e uma fila por gravidade.»
+«Dois limites e a resposta a cada um. À esquerda, o computacional: chamando todas as patrulhas, as mensagens sobem em linha reta, 3N mais 2 por missão, até 57 com 16 patrulhas; chamando só as duas mais próximas, ficam sempre em 15. À direita, o situacional: com um só sensor a iniciar, atendemos sempre oito ameaças, por isso a percentagem cai de 80 para 27 % quando surgem três ao mesmo tempo. A resposta foi deixar vários sensores iniciar, com um aviso entre eles e uma fila por gravidade: 67 % em D e 83 % em E.»
 
-### 14 · Testes de Stress (0:40)
+### 15 · Testes de Stress (0:40)
 
-Não ler a tabela. Escolher três linhas:
+Não ler os oito cartões. Contar os três com contorno âmbar:
 
-«Com um guarda para oito ocorrências, fechava-se uma; com fila fecham as oito. Com a fila por gravidade, as graves fecham aos 23 segundos em vez de 74. Com reenvio e 10 % de perda, fecham 17 de 20 em vez de 7. Em todos os testes houve zero reservas duplas.»
+«Com um guarda para oito ocorrências, fechavam-se 10 em 80; com fila fecham as 80. Com a fila por gravidade, as graves fecham aos 23 segundos em vez de 74. Com reenvio e 10 % de perda, fecham 17 de 20 em vez de 7. Em todos os testes houve zero reservas duplas.»
 
-### 15 · Conclusões e Limitações (0:40)
+### 16 · Conclusões e Limitações (0:40)
 
-«A cascata é o cenário maior, de 160 ameaças: 8 não geram alerta, 23 não são corroboradas, e as 129 confirmadas têm todas intervenção. O que se perde é na deteção e na corroboração, não na coordenação. Três conclusões, cada uma com o seu limite: corroborar corta falsos alarmes e custa deteções; a coordenação dispensa o despachante, sem garantir a melhor atribuição global; e uma mensagem perdida trava a ocorrência, o que o reenvio resolve.»
+«Três conclusões, cada uma com o número que a prova e o seu limite. Corroborar troca deteção por fiabilidade: em B os falsos alarmes descem de 30 para 10, mas o recall desce nos três cenários. Sem despachante, a coordenação aguenta a escala: em D e E, zero reservas duplas; em E fecham 132 das 139 mobilizadas, e as 7 por resolver são falta de autonomia dos guardas, não de coordenação. Uma mensagem perdida trava a ocorrência: em C ficam 10 de 20 por resolver, e o reenvio fecha 17 de 20 em vez de 7.»
 
-## Sensibilidade — Bloco G (diapositivo 12)
+Os limites estão no cartão de cada conclusão; ler só o do meio se faltar tempo: sem ótimo global e todos os agentes num só processo.
+
+## Sensibilidade — Bloco G (diapositivo 13)
 
 | Comparação em B | TP | FP | Recall | FPR | Energia média (p.p./execução) |
 |---|---:|---:|---:|---:|---:|
@@ -202,7 +211,7 @@ Simulámos uma reserva onde sensores com ruído detetam possíveis caçadores e,
 - **«2 de 20» em B:** parece muito mau, mas mobilizámos 13. Em 11, o erro de posição de uma célula mandou a patrulha para a célula ao lado, e ela não viu nada. O sistema decidiu bem e foi ao sítio errado.
 - **«6 de 20» em C:** o drone tem 15 % de energia e recusa sempre, por isso só o veículo pode ir. Com um só candidato, qualquer mensagem perdida deixa a ocorrência por resolver.
 - **FPR 0,75 → 0,25:** em 40 episódios sem ameaça, passámos de 30 para 10 mobilizações erradas. As 10 que sobram são todas do episódio com trovão e turista juntos: dois enganos de fontes diferentes parecem confirmar-se.
-- **«129 de 160» em E:** as 31 que faltam são 8 sem alerta e 23 sem corroboração. Tudo o que foi mobilizado fechou.
+- **«132 de 160» em E:** as 28 que faltam são 8 sem alerta, 13 sem corroboração e 7 que a patrulha confirmou mas a que nenhum guarda pôde ir, por falta de autonomia (são todas leves, as últimas da fila). Numa segunda recolha foram 137 e 2: a ordem na fila depende do relógio real. Antes da correção de 18-11-2026 ao aviso entre iniciadores eram 129, com 23 sem corroboração.
 
 ### Os pontos fracos, para não sermos apanhados de surpresa
 

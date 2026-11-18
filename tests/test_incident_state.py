@@ -1,7 +1,7 @@
 import unittest
 from dataclasses import FrozenInstanceError
 
-from isia.domain.incident_state import IncidentState, IncidentStatus, allowed_transitions
+from isia.domain.incident_state import IncidentState, IncidentStatus
 
 
 class TestIncidentState(unittest.TestCase):
@@ -45,10 +45,12 @@ class TestIncidentState(unittest.TestCase):
                 self.assertIs(state.status, origin)
 
     def test_ramos_alternativos_validos(self):
-        self.assertIn(IncidentStatus.WATCHING, allowed_transitions(IncidentStatus.ASSESSING))
-        self.assertIn(IncidentStatus.EXPIRED, allowed_transitions(IncidentStatus.WATCHING))
-        self.assertIn(IncidentStatus.UNRESOLVED, allowed_transitions(IncidentStatus.ALLOCATING))
-        self.assertIn(IncidentStatus.ALLOCATING, allowed_transitions(IncidentStatus.RESPONDING))
+        for origin, destination in ((IncidentStatus.ASSESSING, IncidentStatus.WATCHING),
+                                    (IncidentStatus.WATCHING, IncidentStatus.EXPIRED),
+                                    (IncidentStatus.ALLOCATING, IncidentStatus.UNRESOLVED),
+                                    (IncidentStatus.RESPONDING, IncidentStatus.ALLOCATING),
+                                    (IncidentStatus.DETECTED, IncidentStatus.EXPIRED)):
+            self.assertIs(IncidentState("incident-001", origin).change_status(destination).status, destination)
 
     def test_transicao_invalida_e_estado_terminal(self):
         for terminal in (
@@ -66,6 +68,7 @@ class TestIncidentState(unittest.TestCase):
         allowed = {
             (IncidentStatus.DETECTED, IncidentStatus.VERIFYING),
             (IncidentStatus.DETECTED, IncidentStatus.CLOSED),
+            (IncidentStatus.DETECTED, IncidentStatus.EXPIRED),
             (IncidentStatus.VERIFYING, IncidentStatus.ASSESSING),
             (IncidentStatus.ASSESSING, IncidentStatus.WATCHING),
             (IncidentStatus.ASSESSING, IncidentStatus.ALLOCATING),

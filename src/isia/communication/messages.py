@@ -30,9 +30,6 @@ class MessageType(Enum):
     INCIDENT_CLOSED = "INCIDENT_CLOSED"
 
 
-DEFAULT_DEDUPLICATION_RETENTION_SECONDS = 600.0
-
-
 def _require_identifier(value: Any, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} deve ser uma string não vazia.")
@@ -152,25 +149,6 @@ def model_from_dict(data: dict[str, Any], model_type: type[T]) -> T:
         raise ValueError(f"Dados inválidos para {model_type.__name__}.") from error
 
     raise TypeError(f"Modelo não suportado: {model_type.__name__}.")
-
-
-def serialize_model(model: Any) -> str:
-    data = model_to_dict(model)
-    _validate_json_value(data, "model")
-    return json.dumps(
-        data,
-        ensure_ascii=False,
-        sort_keys=True,
-        allow_nan=False,
-    )
-
-
-def deserialize_model(payload: str, model_type: type[T]) -> T:
-    try:
-        data = json.loads(payload, parse_constant=_reject_json_constant)
-    except (TypeError, json.JSONDecodeError) as error:
-        raise ValueError("JSON inválido.") from error
-    return model_from_dict(data, model_type)
 
 
 class Message:
@@ -297,25 +275,3 @@ class Message:
         except (TypeError, json.JSONDecodeError) as error:
             raise ValueError("JSON inválido.") from error
         return cls.from_dict(data)
-
-
-class MessageDeduplicator:
-    """Registo mínimo de mensagens já processadas por identificador."""
-
-    def __init__(self):
-        self._seen_ids: set[str] = set()
-
-    def accept(self, message: Message) -> bool:
-        if not isinstance(message, Message):
-            raise TypeError("message deve ser Message.")
-        if message.message_id in self._seen_ids:
-            return False
-        self._seen_ids.add(message.message_id)
-        return True
-
-    def is_duplicate(self, message_id: str) -> bool:
-        _require_identifier(message_id, "message_id")
-        return message_id in self._seen_ids
-
-    def __len__(self) -> int:
-        return len(self._seen_ids)

@@ -11,9 +11,6 @@ from isia.domain.models import Mission, Position, ResourceState
 from isia.reasoning.allocation import (
     LocalResourceReservation, build_reservation_status_message, evaluate_cfp,
 )
-from isia.reasoning.corroboration import evaluate_reputation_corroboration
-from isia.reasoning.policy import decide_response
-from isia.reasoning.reputation import EvaluationResult
 
 try:
     from isia.agents.incident import IncidentSensorAgent
@@ -25,39 +22,10 @@ except ImportError:
 
 
 @unittest.skipUnless(run_mvp, "SPADE não está instalado")
-class TestIncidentCloseCorrections(unittest.IsolatedAsyncioTestCase):
+class TestIncidentWithoutMission(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         root = Path(__file__).resolve().parents[2]
         self.settings = json.loads((root / "config/agents.json").read_text())
-
-    async def close_report(self, *, reference_changes=None, decision_changes=None):
-        async def assess(behaviour):
-            agent = behaviour.agent
-            initial = agent.incident_observations[0]
-            incident_id = agent.incident_state.incident_id
-            evaluation = evaluate_reputation_corroboration(
-                initial, {"classification": "no_data"}, (),
-                agent.reputation_scores, agent.source_profiles, 3, 2,
-            )
-            reference = EvaluationResult(
-                "independent-refutation", incident_id, (initial.event_id,),
-                "refuted", "independent_mission", initial.observed_at,
-                evidence_ids=("independent-inspection",),
-                evidence_source_ids=("independent-patrol",),
-                final=True, sufficient_coverage=True,
-            )
-            agent.decision = decide_response(
-                evaluation, agent.response_policy, severity=agent.severity,
-                initial_observation=initial, incident_id=incident_id,
-                mission_result=reference,
-            )
-            if reference_changes:
-                agent.decision["mission_result"].update(reference_changes)
-            if decision_changes:
-                agent.decision.update(decision_changes)
-
-        with patch.object(SensorAgent.VerificationBehaviour, "run", assess):
-            return await run_mvp(response_settings=self.settings)
 
     def assert_no_assignment(self, report):
         self.assertEqual(report["missions"], [])
@@ -65,51 +33,15 @@ class TestIncidentCloseCorrections(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report["reservations"], [None, None, None])
         self.assertFalse(any(m["body"]["message_type"] == "CFP" for m in report["messages"]))
 
-    async def test_grounded_close_preserves_reason_without_mission(self):
-        report = await self.close_report()
-        self.assertEqual(report["incident_status"], "closed")
-        self.assertEqual(report["reason"], "independent_mission_refuted")
-        self.assertEqual(report["decision"]["reason"], report["reason"])
-        self.assert_no_assignment(report)
+    async def test_close_claimed_by_a_decision_dict_never_closes_the_incident(self):
+        # Nada produz «close»: um dicionário que o afirme não fecha a ocorrência nem pede recursos.
+        async def assess(behaviour):
+            behaviour.agent.decision = {"decision": "close", "reason": "independent_mission_refuted"}
 
-    async def test_unsubstantiated_close_is_observe_even_when_dict_claims_close(self):
-        variants = (
-            {"sufficient_coverage": False}, {"final": False}, {"outcome": "inconclusive"},
-            {"outcome": "failed"}, {"outcome": "confirmed"}, {"basis": "consensus"},
-            {"basis": "ground_truth"}, {"incident_id": "other-incident"},
-            {"observation_ids": ("other-observation",)}, {"evidence_ids": ()},
-            {"evidence_source_ids": ("sensor-1",)},
-        )
-        for changes in variants:
-            with self.subTest(changes=changes):
-                report = await self.close_report(reference_changes=changes)
-                self.assertEqual(report["incident_status"], "expired")
-                self.assertEqual(report["decision"]["decision"], "observe")
-                self.assertEqual(report["decision"]["reason"], "unsubstantiated_close")
-                self.assert_no_assignment(report)
-
-    async def test_close_without_reference_does_not_use_forged_policy(self):
-        report = await self.close_report(decision_changes={
-            "mission_result": None, "policy": {}, "severity": 1,
-            "reason": "independent_mission_refuted",
-        })
-        self.assertEqual(report["incident_status"], "expired")
-        self.assertEqual(report["decision"]["decision"], "observe")
-        self.assert_no_assignment(report)
-
-    async def test_close_revalidation_uses_actual_policy_and_severity(self):
-        report = await self.close_report(decision_changes={"policy": {}, "severity": float("nan")})
-        self.assertEqual(report["incident_status"], "closed")
-        self.assertEqual(report["decision"]["severity"], self.settings["severity"])
-        self.assertEqual(report["decision"]["policy"], self.settings["policy"])
-        self.assert_no_assignment(report)
-
-    async def test_close_reference_must_be_independent_of_all_considered_evidence(self):
-        report = await self.close_report(decision_changes={
-            "factors": ({"source_id": "independent-patrol"},),
-        })
-        self.assertEqual(report["incident_status"], "expired")
-        self.assertEqual(report["decision"]["decision"], "observe")
+        with patch.object(SensorAgent.VerificationBehaviour, "run", assess):
+            report = await run_mvp(response_settings=self.settings)
+        self.assertEqual((report["incident_status"], report["reason"]),
+                         ("expired", "insufficient_corroboration"))
         self.assert_no_assignment(report)
 
     async def test_observe_keeps_single_window_expiration(self):

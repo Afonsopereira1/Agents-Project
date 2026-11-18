@@ -1,14 +1,11 @@
+import json
 import unittest
 
 from isia.communication.messages import (
     Message,
-    MessageDeduplicator,
     MessageType,
-    DEFAULT_DEDUPLICATION_RETENTION_SECONDS,
-    deserialize_model,
     model_from_dict,
     model_to_dict,
-    serialize_model,
 )
 from isia.domain.models import (
     Bid,
@@ -79,8 +76,6 @@ class TestMessages(unittest.TestCase):
                 '{"schema_version":1,"message_id":"msg-001",'
                 '"message_type":"ALERT","created_at":1,"payload":{"x":Infinity}}'
             )
-        with self.assertRaises(ValueError):
-            deserialize_model('{"x": NaN}', Position)
 
     def test_json_nao_serializavel_rejeitado(self):
         message = self.make_message()
@@ -137,23 +132,6 @@ class TestMessages(unittest.TestCase):
         with self.assertRaises(ValueError):
             Message("msg-cfp", MessageType.CFP, 128.0, payload, incident_id="i", mission_id="m")
 
-    def test_politica_de_retencao_e_documentada_sem_expiracao_operacional(self):
-        self.assertEqual(DEFAULT_DEDUPLICATION_RETENTION_SECONDS, 600.0)
-
-    def test_deduplicacao_por_message_id(self):
-        message = self.make_message()
-        duplicate = Message.from_dict(message.to_dict())
-        registry = MessageDeduplicator()
-
-        self.assertTrue(registry.accept(message))
-        self.assertFalse(registry.accept(duplicate))
-        self.assertTrue(registry.is_duplicate("msg-001"))
-        self.assertEqual(len(registry), 1)
-
-    def test_deduplicador_rejeita_tipo_invalido(self):
-        with self.assertRaises(TypeError):
-            MessageDeduplicator().accept("not-a-message")
-
     def test_modelos_de_dominio_round_trip(self):
         observation = Observation("obs-001", "sensor-001", "sound", Position(2, 3), 15.0, 0.8)
         models = (
@@ -168,7 +146,7 @@ class TestMessages(unittest.TestCase):
 
         for model, model_type in zip(models, model_types):
             with self.subTest(model_type=model_type):
-                restored = deserialize_model(serialize_model(model), model_type)
+                restored = model_from_dict(json.loads(json.dumps(model_to_dict(model))), model_type)
                 self.assertEqual(restored, model)
 
     def test_mission_status_ausente_usa_valor_por_omissao(self):
@@ -207,8 +185,6 @@ class TestMessages(unittest.TestCase):
             model_to_dict("not-a-model")
         with self.assertRaises(ValueError):
             model_from_dict({"x": 1}, Position)
-        with self.assertRaises(ValueError):
-            deserialize_model("not-json", Position)
 
 
 if __name__ == "__main__":

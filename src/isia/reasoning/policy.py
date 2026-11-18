@@ -5,7 +5,6 @@ from dataclasses import asdict, dataclass
 from isia.domain.models import Observation
 from isia.domain.validation import is_finite_number
 from isia.reasoning.allocation import RANGER_DECISION
-from isia.reasoning.reputation import EvaluationResult
 
 
 @dataclass(frozen=True)
@@ -37,11 +36,9 @@ def decide_response(
     severity: float,
     initial_observation: Observation,
     incident_id: str,
-    mission_result: EvaluationResult | None = None,
 ) -> dict:
-    """Escolher observar, verificar, pedir rangers ou encerrar.
+    """Escolher observar, verificar ou pedir rangers.
 
-    Só uma missão independente e fundamentada pode encerrar por refutação.
     A verdade de referência nunca entra na decisão operacional. ``severity``
     é gravidade configurada para a hipótese, não intensidade medida do sinal.
     """
@@ -61,26 +58,12 @@ def decide_response(
         raise ValueError("modalities deve conter nomes de modalidades.")
     if type(evaluation["conflicting_evidence"]) is not bool:
         raise ValueError("conflicting_evidence deve ser booleano.")
-    mission_rejection = None
-    if mission_result is not None:
-        if not isinstance(mission_result, EvaluationResult):
-            raise TypeError("mission_result deve ser EvaluationResult.")
-        if mission_result.basis != "independent_mission":
-            raise ValueError("A política só aceita resultados operacionais de missão.")
-        mission_rejection = mission_result.rejection_reason(initial_observation, incident_id)
-        evidence_sources = {factor["source_id"] for factor in evaluation.get("factors", ())}
-        if evidence_sources & set(mission_result.evidence_source_ids):
-            mission_rejection = "non_independent_reference"
-
     patrol_threshold = (policy.severe_patrol_threshold if severity >= policy.severe_threshold
                         else policy.patrol_threshold)
-    if mission_result is not None and mission_rejection is None:
-        action = "close" if mission_result.outcome == "refuted" else RANGER_DECISION
-        reason = f"independent_mission_{mission_result.outcome}"
-    elif (score >= policy.ranger_threshold
-          and group_count >= policy.ranger_min_groups
-          and len(set(modalities) - {"unknown"}) >= policy.ranger_min_modalities
-          and not evaluation["conflicting_evidence"]):
+    if (score >= policy.ranger_threshold
+            and group_count >= policy.ranger_min_groups
+            and len(set(modalities) - {"unknown"}) >= policy.ranger_min_modalities
+            and not evaluation["conflicting_evidence"]):
         action, reason = RANGER_DECISION, "diverse_reliable_evidence"
     elif score >= patrol_threshold:
         action = "request_mobile_verification"
@@ -90,6 +73,4 @@ def decide_response(
     return {
         **evaluation, "incident_id": incident_id, "decision": action, "reason": reason,
         "severity": severity, "policy": asdict(policy), "effective_patrol_threshold": patrol_threshold,
-        "mission_result": asdict(mission_result) if mission_result else None,
-        "mission_rejection": mission_rejection,
     }

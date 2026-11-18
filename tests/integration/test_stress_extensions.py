@@ -191,7 +191,8 @@ class TestStressExtensions(unittest.IsolatedAsyncioTestCase):
         base = await run_mvp()
         self.assertEqual(resent(base), 0)
         # As primeiras mensagens de cada tipo perdem-se sempre (as duas propostas das patrulhas);
-        # só o reenvio as recupera. Sem reenvio, perder o VERIFY_RESPONSE custa 10 s reais: não se repete aqui.
+        # só o reenvio as recupera. Sem reenvio, perder o VERIFY_RESPONSE não tem um motivo próprio (decide-se só
+        # com a evidência local): não se compara aqui.
         for kind, count, reason in (("PROPOSAL", 2, "no_eligible_proposals"), ("STATUS", 1, "confirmation_unknown"),
                                     ("VERIFY_RESPONSE", 1, None)):
             with self.subTest(kind=kind):
@@ -249,13 +250,77 @@ class TestStressExtensions(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(reasons(twice), ["confirmed", "confirmed"])
         once = await run(shared, alert_distance=1.0)
         self.assertEqual(reasons(once), ["confirmed", "duplicate_alert"])
-        self.assertEqual(sum(m["body"]["message_type"] == "ALERT" for m in once["messages"]), 2)
+        # Dois avisos e o veredicto de quem fica para quem lhe cede.
+        self.assertEqual(sum(m["body"]["message_type"] == "ALERT" for m in once["messages"]), 3)
         self.assertLess(sum(m["body"]["message_type"] == "CFP" for m in once["messages"]),
                         sum(m["body"]["message_type"] == "CFP" for m in twice["messages"]))
         # Duas ameaças a três células uma da outra não se fundem: cada iniciador trata a sua.
         apart = await run([{"event_id": "a", "position": {"x": 1, "y": 2}},
                            {"event_id": "b", "position": {"x": 5, "y": 2}}], alert_distance=1.0)
         self.assertNotIn("duplicate_alert", reasons(apart))
+
+    async def test_alert_chain_only_yields_to_an_initiator_that_keeps_the_threat(self):
+        root = Path(__file__).resolve().parents[2]
+        settings = json.loads((root / "config/scenarios/A.json").read_text())["response_settings"]
+        settings["policy"].update(patrol_threshold=0.01, severe_patrol_threshold=0.01)
+        settings["sources"].update({key: {"modality": "acoustic", "correlation_group": f"local_{key}"}
+                                    for key in ("sensor-3", "sensor-4")})
+        hear = {"kind": "acoustic", "detection_range": 1.0}
+        threat = {"kind": "threat", "starts_at": 0.0, "duration": 1000.0}
+        # Três ameaças em linha, a uma célula umas das outras; cada sensor só ouve a sua.
+        report = await run_mvp(
+            response_settings=settings, corroborate=False, alert_distance=1.0,
+            extra_initiators={"sensor-3": Position(4, 3), "sensor-4": Position(6, 2)},
+            scenario={"run_id": "chain", "seed": 1, "resources": {},
+                      "sources": {"sensor-1": hear, "sensor-2": {"kind": "visual", "detection_range": 0.0},
+                                  "sensor-3": hear, "sensor-4": hear},
+                      "events": [{**threat, "event_id": f"t{x}", "position": {"x": x, "y": 2}} for x in (3, 4, 5)]})
+        extras = report["extra_initiators"]
+        # O sensor-3 cede ao sensor-1. O sensor-4 cederia ao sensor-3, que desistiu: trata a sua ameaça.
+        self.assertEqual((report["reason"], extras["sensor-3"]["reason"], extras["sensor-4"]["reason"]),
+                         ("confirmed", "duplicate_alert", "confirmed"))
+        self.assertEqual(extras["sensor-4"]["results"][0]["payload"]["position"], {"x": 5, "y": 2})
+
+    async def test_alert_wait_keeps_corroboration_and_never_invents_an_event(self):
+        root = Path(__file__).resolve().parents[2]
+        settings = json.loads((root / "config/scenarios/A.json").read_text())["response_settings"]
+        settings["sources"].update({"sensor-3": {"modality": "acoustic", "correlation_group": "local_3"},
+                                    "sensor-4": {"modality": "acoustic", "correlation_group": "local_4"},
+                                    "sensor-5": {"modality": "visual", "correlation_group": "camera_5"}})
+        hear = {"kind": "acoustic", "detection_range": 1.0}
+        threat = {"kind": "threat", "starts_at": 0.0, "duration": 1000.0}
+
+        async def run(duration):
+            # O sensor-3 espera o prazo todo pelo sensor-4, que não ouve nada; entretanto a missão
+            # do sensor-1 faz andar o relógio simulado.
+            return await run_mvp(
+                response_settings=settings, alert_distance=1.0,
+                extra_initiators={"sensor-3": Position(6, 5), "sensor-4": Position(6, 7)},
+                extra_informants={"sensor-5": Position(7, 5)},
+                scenario={"run_id": "wait", "seed": 1, "resources": {},
+                          "sources": {"sensor-1": hear, "sensor-2": {"kind": "visual", "detection_range": 2.0},
+                                      "sensor-3": hear, "sensor-4": hear,
+                                      "sensor-5": {"kind": "visual", "detection_range": 1.0}},
+                          "events": [{**threat, "event_id": "a", "position": {"x": 2, "y": 2}},
+                                     {**threat, "event_id": "b", "position": {"x": 6, "y": 5},
+                                      "duration": duration}]})
+        report = await run(1000.0)
+        late = report["extra_initiators"]["sensor-3"]
+        entries = {e["event"]: e for e in report["timeline"] if e.get("initiator") == "sensor-3"}
+        requests = [m["body"] for m in report["messages"]
+                    if m["sender"].startswith("sensor-3") and m["body"]["message_type"] == "VERIFY_REQUEST"]
+        self.assertGreater(entries["corroboration"]["time"], 0)
+        self.assertEqual(list(late["decision"]["compatible_source_ids"]), ["sensor-5"])
+        self.assertEqual((late["incident_status"], late["reason"]), ("closed", "confirmed"))
+        # Um só incidente do alerta ao pedido, com uma leitura feita depois da espera.
+        incident_id = f"incident-{entries['ALERT']['observation_id']}"
+        self.assertEqual([(r["incident_id"], r["created_at"] > 0) for r in requests], [(incident_id, True)])
+        self.assertEqual(late["decision"]["incident_id"], incident_id)
+        # A ameaça acabou durante a espera: fecha como expirada, sem pedido sobre um evento de exemplo.
+        gone = await run(8.0)
+        late = gone["extra_initiators"]["sensor-3"]
+        self.assertEqual((late["incident_status"], late["reason"]), ("expired", "threat_expired"))
+        self.assertNotIn("example", json.dumps(gone["messages"]))
 
     async def test_map_and_sensor_positions_come_from_arguments(self):
         report = await run_mvp(map_size=(10, 6), sensor_positions={"sensor-2": Position(3, 2)})

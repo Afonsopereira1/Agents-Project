@@ -92,13 +92,13 @@ Mensagens por missão com N candidatos: N CFP + N respostas + 1 `ACCEPT` + até 
 
 | Ref. | Limite | Onde | Estado | Justificação |
 |---|---|---|---|---|
-| C1 | CFP enviado a todos os candidatos: O(N) por missão | [incident.py:168](../src/isia/agents/incident.py#L168) | **Implementado e medido (Bloco F)** | `cfp_limit=K` envia o CFP só às K patrulhas com base mais próxima do alvo. Com 16 patrulhas: 57 → 15 mensagens por ocorrência, mesma decisão. Opcional: sem `cfp_limit`, o comportamento é o anterior. Usa a posição base, não a atual |
-| C2 | Candidato calado obriga a esperar o prazo inteiro | [incident.py:171](../src/isia/agents/incident.py#L171) | **Medido** | 1,5 s → 5,5 s reais nesta máquina. Proposta: não voltar a chamar quem ficou calado na ronda seguinte |
-| C3 | Prazos reais com tempo simulado | [runner.py:257](../src/isia/simulation/runner.py#L257), [incident.py:171](../src/isia/agents/incident.py#L171) | Adiado | Obriga a avançar o relógio simulado durante a negociação; trabalho futuro |
+| C1 | CFP enviado a todos os candidatos: O(N) por missão | [incident.py:143](../src/isia/agents/incident.py#L143) | **Implementado e medido (Bloco F)** | `cfp_limit=K` envia o CFP só às K patrulhas com base mais próxima do alvo. Com 16 patrulhas: 57 → 15 mensagens por ocorrência, mesma decisão. Opcional: sem `cfp_limit`, o comportamento é o anterior. Usa a posição base, não a atual |
+| C2 | Candidato calado obriga a esperar o prazo inteiro | [incident.py:146](../src/isia/agents/incident.py#L146) | **Medido** | 1,5 s → 5,5 s reais nesta máquina. Proposta: não voltar a chamar quem ficou calado na ronda seguinte |
+| C3 | Prazos reais com tempo simulado | [runner.py:257](../src/isia/simulation/runner.py#L257), [incident.py:146](../src/isia/agents/incident.py#L146) | Adiado | Obriga a avançar o relógio simulado durante a negociação; trabalho futuro |
 | C4 | Recursos e sensores fixos no runner | [runner.py:67](../src/isia/simulation/runner.py#L67), [:86](../src/isia/simulation/runner.py#L86), [:200](../src/isia/simulation/runner.py#L200) | **Mínimo implementado (Bloco F)** | `run_mvp(extra_patrols=..., extra_initiators=...)` acrescenta drones e sensores iniciadores sem mudar o código. Os ficheiros de cenário continuam com os três recursos fixos |
 | C5 | `ObservationFeed.recent()` percorre todo o histórico, O(H) | [scenario.py:98](../src/isia/simulation/scenario.py#L98) | Proposto | O feed é lido uma vez por execução; o ganho não é mensurável neste sistema. Proposta: `bisect` ou `deque` da janela |
 | C6 | Corroboração com um único par fixo | [runner.py:167](../src/isia/simulation/runner.py#L167) | Proposto | Perguntar aos k vizinhos com alcance e decidir com as respostas até ao prazo |
-| C7 | Uma ocorrência por janela, ancorada na primeira observação | [incident.py:320](../src/isia/agents/incident.py#L320), [allocation.py:804](../src/isia/reasoning/allocation.py#L804) | **Medido** | 8/10, 8/20, 8/30 atendidos. Proposta: agrupar observações por proximidade e criar uma ocorrência por grupo |
+| C7 | Uma ocorrência por janela, ancorada na primeira observação | [incident.py:326](../src/isia/agents/incident.py#L326), [allocation.py:783](../src/isia/reasoning/allocation.py#L783) | **Medido** | 8/10, 8/20, 8/30 atendidos. Proposta: agrupar observações por proximidade e criar uma ocorrência por grupo |
 | C8 (reputação) | Histórico da reputação cresce em memória | [reputation.py:128](../src/isia/reasoning/reputation.py#L128) | **Medido (Bloco F)** | 1000 execuções: 1824 registos, 1,3 MB serializados, crescimento linear (~1,3 kB por execução). Irrelevante à escala do projeto; a proposta de truncar ou gravar em JSONL mantém-se para execuções muito longas |
 | C8 (processos) | Todos os agentes num processo | [runner.py](../src/isia/simulation/runner.py) | Adiado | Um processo por agente ligado ao XMPP; mudança grande, trabalho futuro |
 
@@ -190,7 +190,7 @@ Antes dizíamos «o sistema foi desenhado para aguentar falhas». Agora dizemos 
 | Reenvio de mensagens | [reenvio.csv](../results/stress/reenvio.csv) | Com 10 % de perda e 1 reenvio fecha 17/20, como sem perda (7/20 sem reenvio). Com 20 %: 1, 10 e 16 de 20 com 0, 1 e 2 reenvios. Com 30 %: 0, 3 e 9. Ver [reenvio](#reenvio-de-mensagens-antes-e-depois) |
 | Aviso entre iniciadores | [alerta.csv](../results/stress/alerta.csv) | Com 4 iniciadores a ouvir a mesma ameaça, 40 ocorrências e 40 idas de patrulha passam a 10 e 10; duas ameaças a 4 células não se fundem. Ver [aviso](#aviso-entre-iniciadores-antes-e-depois) |
 | Informadores humanos | [humano.csv](../results/stress/humano.csv) | Um informador humano fiável corrobora como uma câmara (40 de 40). Com 30 % de falhas, erro de 1 célula e confiança 0,5, são mobilizadas 30 de 40. Ver [informadores humanos](#informadores-humanos-no-lugar-das-câmaras) |
-| Cenário E, «reserva alargada» | [runs.csv](../results/scenario-e/runs.csv) | 16 ameaças ao mesmo tempo e 20 fontes: 129 de 160 fechadas, 23 expiradas sem corroboração, 0 por resolver, 0 duplas reservas; último fecho aos 119 s, em média. Ver [cenário E](#cenário-e--reserva-alargada) |
+| Cenário E, «reserva alargada» | [runs.csv](../results/scenario-e/runs.csv) | 16 ameaças ao mesmo tempo e 20 fontes: 132 de 160 fechadas, 13 expiradas sem corroboração, 7 por resolver (guardas sem autonomia), 0 duplas reservas; último fecho aos 118 s, em média. Ver [cenário E](#cenário-e--reserva-alargada) |
 
 ### F1 — só parâmetros
 
@@ -675,16 +675,16 @@ Código: [incident.py](../src/isia/agents/incident.py) (`allocate` e `mission_re
 
 **O problema.** Com vários sensores a iniciar, cada um que ouve a mesma ameaça abre a sua ocorrência: duas patrulhas e dois guardas para um caçador. Era a razão para só o `sensor-1` iniciar nos cenários A, B e C (limite C7 e ponto cego em (7,0)).
 
-**O que mudou.** `alert_distance=D` em `run_mvp`, desligado por omissão. Cada iniciador com uma leitura envia um `ALERT` (`inform`, protocolo `verification`) aos iniciadores vizinhos e espera pelos deles durante um prazo. Se um vizinho leu a mesma ameaça (até D células e dentro da janela temporal da corroboração) **antes**, ou no mesmo instante mas com um identificador menor, o iniciador desiste e fecha com o motivo `duplicate_alert`. Os dois lados calculam a mesma ordem, por isso só um desiste. Não há despachante: o runner só diz quem é vizinho (os sensores cujo alcance se pode sobrepor), como já dizia as posições base no C1. Código: `yields_to_neighbour` em [incident.py](../src/isia/agents/incident.py).
+**O que mudou.** `alert_distance=D` em `run_mvp`, desligado por omissão. Cada iniciador com uma leitura envia um `ALERT` (`inform`, protocolo `verification`) aos iniciadores vizinhos e espera pelos deles durante um prazo. Se um vizinho leu a mesma ameaça (até D células e dentro da janela temporal da corroboração) **antes**, ou no mesmo instante mas com um identificador menor, o iniciador desiste e fecha com o motivo `duplicate_alert`. Os dois lados calculam a mesma ordem, por isso só um desiste. Numa segunda volta, cada iniciador diz aos vizinhos que lhe cederiam se fica com a ameaça (um `ALERT` com `keeps`), e só se cede a quem fica: numa fila de ameaças vizinhas, quem cederia a um vizinho que também desistiu trata a sua. Depois da espera, o iniciador volta a ler o sensor e é essa leitura que segue para a corroboração (correção de 18-11-2026, ver [ata](approvals.md#registo-de-alterações-ao-código)). Não há despachante: o runner só diz quem é vizinho (os sensores cujo alcance se pode sobrepor), como já dizia as posições base no C1. Código: `yields_to_neighbour` em [incident.py](../src/isia/agents/incident.py).
 
 **Resultados** ([alerta.csv](../results/stress/alerta.csv), 10 execuções por linha, fontes sem ruído com alcance 1,5):
 
 | Caso | Aviso | Ocorrências tratadas | Desistências | Idas de patrulha | Idas do guarda | Energia por execução | Mensagens por execução |
 |---|---|---|---|---|---|---|---|
 | 2 iniciadores, 1 ameaça entre eles | sem | 20 | 0 | 20 | 20 | 36 p.p. | 40 |
-| 2 iniciadores, 1 ameaça entre eles | até 1 célula | 10 | 10 | 10 | 10 | 20 p.p. | 17 |
+| 2 iniciadores, 1 ameaça entre eles | até 1 célula | 10 | 10 | 10 | 10 | 20 p.p. | 18 |
 | 4 iniciadores, 1 ameaça ao centro | sem | 40 | 0 | 40 | 40 | 72 p.p. | 119 |
-| 4 iniciadores, 1 ameaça ao centro | até 1 célula | 10 | 30 | 10 | 10 | 20 p.p. | 27 |
+| 4 iniciadores, 1 ameaça ao centro | até 1 célula | 10 | 30 | 10 | 10 | 20 p.p. | 33 |
 | 2 iniciadores, 2 ameaças a 4 células | sem | 20 | 0 | 20 | 20 | 36 p.p. | 40 |
 | 2 iniciadores, 2 ameaças a 4 células | até 1 célula | 20 | 0 | 20 | 20 | 36 p.p. | 44 |
 
@@ -693,9 +693,11 @@ Código: [incident.py](../src/isia/agents/incident.py) (`allocate` e `mission_re
 
 **Desvantagens e limitações**
 
-- Um `ALERT` perdido deixa os dois iniciadores a tratar a mesma ameaça, como sem aviso.
+- Um `ALERT` perdido, da primeira ou da segunda volta, deixa os dois iniciadores a tratar a mesma ameaça, como sem aviso.
+- Numa fila de quatro ou mais ameaças vizinhas, dois iniciadores seguidos podem ficar os dois com a sua: sobra trabalho duplicado, nunca uma ameaça sem resposta.
+- A segunda volta custa uma mensagem por par de vizinhos com a mesma ameaça (18 em vez de 17 e 33 em vez de 27 mensagens por execução, na tabela acima).
 - Quem desiste não entrega a sua leitura ao vizinho: seria evidência independente para a corroboração e fica por aproveitar.
-- Um vizinho sem leitura não responde, e o iniciador espera o prazo todo (0,5 s reais) antes de avançar.
+- Um vizinho sem leitura não responde, e o iniciador espera o prazo todo (0,5 s reais) antes de avançar. Entretanto o relógio simulado anda com as missões dos outros; se a ameaça deixar de ser vista, a ocorrência fecha `expired/threat_expired`.
 - D pequeno deixa passar duplicados quando há erro de posição; D grande funde ameaças próximas. Só foi medido D = 1.
 - Só no transporte local, onde existem os iniciadores adicionais.
 
@@ -732,28 +734,31 @@ PYTHONPATH=src python scripts/scenario_e.py     # câmaras contra informadores h
 | Desfecho | Ocorrências |
 |---|---|
 | Ameaças sem alerta (falso negativo do sensor iniciador) | 8 de 160 |
-| Fechadas como confirmadas, com patrulha e guarda | 129 |
-| Expiradas sem corroboração | 23 |
-| Não resolvidas | 0 |
+| Fechadas como confirmadas, com patrulha e guarda | 132 |
+| Expiradas sem corroboração | 13 |
+| Não resolvidas: a patrulha confirmou, mas nenhum guarda tinha autonomia | 7 |
 | Duplas reservas | 0 |
 
-| Quem corrobora ([informants.csv](../results/scenario-e/informants.csv)) | Com alerta | Corroboradas | Fechadas | Expiradas |
+| Quem corrobora ([informants.csv](../results/scenario-e/informants.csv)) | Com alerta | Corroboradas | Fechadas | Expiradas | Por resolver |
+|---|---|---|---|---|---|
+| Câmara | 76 de 80 | 74 | 72 | 1 | 3 |
+| Informador humano | 76 de 80 | 60 | 60 | 12 | 4 |
+
+| Gravidade | Confirmadas | Fecho médio | Último fecho | Por resolver |
 |---|---|---|---|---|
-| Câmara | 76 de 80 | 68 | 70 | 6 |
-| Informador humano | 76 de 80 | 53 | 59 | 17 |
+| Grave | 39 | 29,7 s | 71 s | 0 |
+| Média | 68 | 72,7 s | 115 s | 0 |
+| Leve | 25 | 110,2 s | 126 s | 7 |
 
-| Gravidade | Confirmadas | Fecho médio | Último fecho |
-|---|---|---|---|
-| Grave | 39 | 29,7 s | 74 s |
-| Média | 61 | 71,1 s | 105 s |
-| Leve | 29 | 112,1 s | 136 s |
+Por execução: último fecho aos 118 s, em média, 1188 mensagens e 344 pontos percentuais de energia.
 
-Por execução: último fecho aos 119 s, em média, 1086 mensagens e 333 pontos percentuais de energia.
+- **Dezasseis ocorrências em paralelo, sem despachante:** 16 iniciadores disputam 6 recursos e a fila fecha 132 das 139 mobilizadas.
+- **Os guardas esgotam a autonomia:** as 7 por resolver são todas leves, as últimas da fila. A patrulha confirmou a ameaça, mas os dois guardas já não tinham energia para ir e voltar com a reserva de 10 % e recusaram (`autonomy_insufficient`). Numa segunda recolha igual ficaram 2 por resolver e fecharam 137: a ordem na fila depende do relógio real e decide que guarda gasta a autonomia.
+- **O informador humano corrobora menos:** 60 de 76 contra 74 de 76 com câmara, e 12 ocorrências expiram em vez de 1. As ocorrências graves são mobilizadas mesmo sem corroboração (limiar de 0,08), por isso há mais mobilizadas do que corroboradas.
+- **A gravidade ordena o atendimento:** as graves fecham em média aos 30 s, as médias aos 73 s e as leves aos 110 s.
+- **O gargalo são os recursos:** com 6 recursos para 16 ocorrências, a última fecha aos 2 minutos simulados, e a autonomia dos guardas não chega para todas.
 
-- **Dezasseis ocorrências em paralelo, sem despachante e sem nenhuma por resolver:** 16 iniciadores disputam 6 recursos e a fila fecha todas as que foram mobilizadas.
-- **O informador humano corrobora menos:** 53 de 76 contra 68 de 76 com câmara, e 17 ocorrências expiram em vez de 6. As ocorrências graves são mobilizadas mesmo sem corroboração (limiar de 0,08), por isso há mais fechadas do que corroboradas.
-- **A gravidade ordena o atendimento:** as graves fecham em média aos 30 s, as médias aos 71 s e as leves aos 112 s.
-- **O gargalo são os recursos:** com 6 recursos para 16 ocorrências, a última fecha aos 2 minutos simulados.
+**Recolha anterior.** Até à correção de 18-11-2026 ao aviso entre iniciadores, esta tabela dizia 129 fechadas, 23 expiradas e 0 por resolver. Dez das 23 expiradas não eram falta de corroboração: o iniciador esperava pelos vizinhos, o relógio simulado andava com as missões dos outros e o informador respondia `no_data` a um pedido com a hora do arranque. Com a correção, essas ocorrências são corroboradas e mobilizadas; passa a haver mais trabalho para os mesmos dois guardas, e é aí que a autonomia deixa de chegar.
 
 **Limitações**
 

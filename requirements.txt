@@ -1,3 +1,3 @@
-
 spade==4.1.4
-sqlalchemy[asyncio]
+pyjabber==0.4.5
+SQLAlchemy[asyncio]==2.1.8
