@@ -4,16 +4,16 @@
 
 **Duração alvo:** cerca de 12 minutos, 13 diapositivos, cerca de 55 segundos cada. A demonstração gravada ocupa o diapositivo 10. O diapositivo 14 é de reserva, para perguntas.
 
-**Diapositivos (18-11-2026):** <https://claude.ai/artifact/C5kRVniNyws5ZcU1z3SaXs>, feitos a partir deste roteiro, com notas do orador. A ligação é privada até ser partilhada no menu Share; para a entrega, exportar para PDF ou PowerPoint e guardar em `docs/presentation/`. Falta preencher os nomes do grupo no diapositivo 1.
+**Diapositivos (18-11-2026):** <https://claude.ai/artifact/C5kRVniNyws5ZcU1z3SaXs>, feitos a partir deste roteiro, com notas do orador. A ligação é privada até ser partilhada no menu Share; para a entrega, exportar para PDF ou PowerPoint (Share › Export) e guardar em `docs/presentation/`. Grupo, por ordem alfabética: Afonso Pereira, Guilherme Gomes e Guilherme Kotchergenko. Revistos a 18-11-2026: capa com os nomes, restrição → resposta no diapositivo 2, código do `setup()` no 4, diagrama de sequência no 5 e definição das métricas no 6; não foram pré-visualizados no ecrã.
 
 | # | Diapositivo | Conteúdo | Fonte |
 |---|---|---|---|
-| 1 | Título | Tema C — monitorização descentralizada e patrulhas anti-caça furtiva; SPADE; nomes do grupo | — |
-| 2 | Problema e abordagem | Sensores com ruído, recursos limitados, sem despachante. Abordagem B1: quem deteta coordena a sua ocorrência. Ciclo: observação → corroboração → Contract Net → missão → resultado | [README](../../README.md#o-projeto) |
+| 1 | Título | Tema C — monitorização descentralizada e patrulhas anti-caça furtiva; SPADE; nomes do grupo; 579 testes, 560 execuções (Etapa 9) e 3500 (Bloco G) | — |
+| 2 | Problema e abordagem | Três restrições e a resposta a cada uma: ruído → corroboração; recursos limitados → Contract Net; sem despachante → B1. Ciclo: observação → corroboração → Contract Net → missão → resultado | [README](../../README.md#o-projeto) |
 | 3 | Mapa e agentes | Grelha 8×8: `sensor-1` (2,2), `sensor-2` (4,2), drone (0,2), veículo (0,0), guarda (5,5). O ambiente guarda a verdade só para o avaliador | [runner.py](../../src/isia/simulation/runner.py) |
-| 4 | **P1** — construção dos agentes | Três camadas e as três ligações de autonomia | [p1-agentes.md](p1-agentes.md) |
-| 5 | **P2** — protocolos e arquitetura | FIPA Request + Contract Net; dois contras medidos | [p2-protocolos.md](p2-protocolos.md) |
-| 6 | Cenários e variantes | A normal, B ruído, C falhas/escassez; variantes `full`, `no_reputation`, `no_corroboration`, `nearest`; 20 repetições por episódio | [experiments.md](../experiments.md#cenários-configscenariosjson) |
+| 4 | **P1** — construção dos agentes | Três camadas, o `setup()` do recurso móvel (abreviado) e as três ligações de autonomia | [p1-agentes.md](p1-agentes.md), [mobile.py](../../src/isia/agents/mobile.py) |
+| 5 | **P2** — protocolos e arquitetura | Diagrama de sequência de uma ocorrência (15 mensagens): FIPA Request, Contract Net e segunda ronda para o guarda; dois contras medidos | [p2-protocolos.md](p2-protocolos.md), [protocols.md](../protocols.md#3-tipos-de-mensagens-e-intenção) |
+| 6 | Cenários, variantes e métricas | A normal, B ruído, C falhas/escassez; variantes `full`, `no_reputation`, `no_corroboration`, `nearest`; o que contam precision, recall, FPR e «não resolvidas»; 20 repetições por episódio | [experiments.md](../experiments.md#unidade-de-avaliação-e-métricas) |
 | 7 | Resultados A e C | A/full: precision 1,00, recall 0,85. C/full: recall 0,80, mas 10/20 ameaças `unresolved` (uma mensagem perdida no único recurso elegível) | [experiments.md](../experiments.md#resultados) |
 | 8 | Resultado B — o compromisso da corroboração | FPR 0,75 → 0,25 e precision 0,35 → 0,57, ao custo de recall 0,80 → 0,65. Os 10 FP restantes vêm de `thunder+tourist` | [experiments.md](../experiments.md#discussão) |
 | 9 | **P3** — escalabilidade | Ponto cego (7,0), série 8/10 → 8/20 → 8/30, tabela C1–C8 | [p3-escalabilidade.md](p3-escalabilidade.md) |

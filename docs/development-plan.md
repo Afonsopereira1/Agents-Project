@@ -572,16 +572,16 @@ merge ou PR. Esta validação usa transporte local; não foi repetido XMPP real.
 
 **Tarefas concretas:**
 
-- [ ] Mostrar em grelha as fontes, ocorrências, patrulhas, estados e deslocações.
-- [ ] Representar as mensagens principais e a passagem por estados do incidente.
-- [ ] Mostrar métricas acumuladas e resultado final do cenário.
-- [ ] Garantir que o observador/visualizador não toma decisões por agentes.
-- [ ] Documentar instalação, servidor XMPP, configuração e comando único de execução.
-- [ ] Descrever arquitetura, formatos de mensagem, protocolos, algoritmos, falhas e escolhas descartadas.
-- [ ] Inserir dados verdadeiros dos três cenários, gráficos e limitações na apresentação.
-- [ ] Fazer ensaio da demonstração com um colega a seguir apenas o `README`.
-- [ ] Rever autorias, licenças e não publicar credenciais, dados privados nem materiais docentes sem autorização.
-- [ ] Preparar demo interativa **ou** gravada e pacote de entrega segundo Moodle/docentes.
+- [x] Mostrar em grelha as fontes, ocorrências, patrulhas, estados e deslocações. — [scripts/replay.py](../scripts/replay.py), repetição do relatório JSON ([Bloco D](delivery-todo.md#bloco-d--entregáveis-oficiais)).
+- [x] Representar as mensagens principais e a passagem por estados do incidente. — mensagens por instante na repetição; gravações em [results/demo/](../results/demo/).
+- [x] Mostrar métricas acumuladas e resultado final do cenário. — energia por recurso e total de mensagens no fim da repetição.
+- [x] Garantir que o observador/visualizador não toma decisões por agentes. — a repetição só lê a `timeline` do relatório; não corre agentes.
+- [x] Documentar instalação, servidor XMPP, configuração e comando único de execução. — [README, «Comandos por ordem»](../README.md#comandos-por-ordem).
+- [x] Descrever arquitetura, formatos de mensagem, protocolos, algoritmos, falhas e escolhas descartadas. — [architecture.md](architecture.md), [message-contract.md](message-contract.md), [protocols.md](protocols.md) e [faults.md](faults.md).
+- [x] Inserir dados verdadeiros dos três cenários, gráficos e limitações na apresentação. — 13 diapositivos e um de reserva; cada número com a fonte no [roteiro](presentation/roteiro.md).
+- [ ] Fazer ensaio da demonstração com um colega a seguir apenas o `README`. — **Por fazer.** O ensaio de 18-11-2026 foi na mesma máquina e não conta ([delivery-todo.md](delivery-todo.md#pendentes-deixados-pelo-bloco-d)).
+- [x] Rever autorias, licenças e não publicar credenciais, dados privados nem materiais docentes sem autorização. — Verificado a 18-11-2026 nos ficheiros versionados: nenhuma credencial (as palavras-passe do README são marcadores e `local-demo` é a do servidor local de demonstração), `server.db` e `temp/` ignorados pelo Git, nenhum PDF nem enunciado dos docentes. O repositório não tem ficheiro de licença; os commits são dos três elementos do grupo.
+- [ ] Preparar demo interativa **ou** gravada e pacote de entrega segundo Moodle/docentes. — **Parcial:** demonstração gravada em [results/demo/](../results/demo/) (terminal e `mvp.mp4`). Falta o pacote: `git bundle create isia.bundle --all` ou ZIP do clone com `.git`, e o PDF dos diapositivos.
 
 **Dependências:** Etapas 0–9 e análise da Etapa 9A, embora documentação e protótipo de visualização possam avançar em paralelo.
 
