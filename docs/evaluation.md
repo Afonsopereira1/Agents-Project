@@ -1,154 +1,143 @@
 # Plano de testes, cenários e avaliação experimental
 
-> **Estado:** este documento é o plano. Os resultados medidos na Etapa 9 estão em [experiências](experiments.md). O enunciado exige **pelo menos três cenários contrastantes** e discussão de métricas, trade-offs e limitações.
+> **Estado:** plano cumprido. Este documento diz o que se avalia e como. Os números estão em [experiências](experiments.md) e em [sensibilidade](sensitivity.md).
 
 [README](../README.md) · [Plano](development-plan.md) · [Estratégia](architecture.md#estratégia-técnica-e-algoritmos) · [Requisitos e fontes](../README.md#requisitos-e-fontes)
 
-## 1. Questões de investigação
+## Em resumo
 
-1. A corroboração reduz os falsos alertas sem diminuir excessivamente a deteção de incidentes verdadeiros?
-2. A reputação baseada em histórico melhora decisões face a fontes heterogéneas?
-3. A negociação de recursos oferece vantagens sobre escolher apenas a patrulha disponível mais próxima?
-4. Como se degradam a resposta e a disponibilidade com atrasos, perdas e recursos limitados?
-5. Que compromisso emerge entre rapidez, precisão, energia e mensagens trocadas?
+- O enunciado pede pelo menos três cenários contrastantes, métricas, trade-offs e limitações. Temos **três cenários (A normal, B ruído, C falhas e escassez) × 4 variantes × 20 sementes = 560 execuções**, mais 3500 execuções de sensibilidade.
+- A unidade é a execução. Medimos TP, FP, TN e FN, precision, recall e FPR, tempo até à verificação e até ao guarda, energia, mensagens e ocorrências não resolvidas.
+- A corroboração corta falsos alarmes em B (FPR 0,25 contra 0,75) e custa recall (0,65 contra 0,80). A reputação quase não muda decisões (1 execução em 140 pares). O custo composto não se distingue de `nearest` na classificação.
+- Com falhas e escassez (C), 10 das 16 ameaças mobilizadas ficam por resolver.
+- A amostra é pequena (20 ameaças por cenário) e não há testes de significância.
 
-Estas são **hipóteses de análise**, não efeitos já demonstrados.
+## 1. Questões de investigação e respostas
+
+| # | Pergunta | Resposta medida | Onde |
+|---:|---|---|---|
+| 1 | A corroboração reduz os falsos alertas sem perder demasiada deteção? | Em B: 10 falsos alarmes em vez de 30 (FPR 0,25 contra 0,75); recall 0,65 em vez de 0,80. A comparação muda também o limiar, por isso não isola a corroboração. | [Discussão](experiments.md#discussão) |
+| 2 | A reputação melhora as decisões? | Não se observa. `full` e `no_reputation` diferem numa execução em 140 pares (C, repetição 19). | [Discussão](experiments.md#discussão) |
+| 3 | Negociar por custo composto é melhor do que escolher a patrulha mais próxima? | Não se mede vantagem. A classificação é igual; `nearest` verifica aos 4 s em vez de 6 s e gasta 6,8 p.p. em vez de 8,5 (A). A carga que o custo composto evita não tem custo físico no simulador. | [Discussão](experiments.md#discussão) |
+| 4 | Como se degrada o sistema com atrasos, perdas e recursos limitados? | Em C, 6 ameaças chegam à intervenção do guarda, contra 17 em A; 10 ficam `unresolved`; o guarda responde aos 17 s em vez de 12 s. | [Desfechos](experiments.md#desfechos-observados) |
+| 5 | Que compromisso existe entre rapidez, precisão, energia e mensagens? | Menos falsos alarmes custa recall. Em B, subir o limiar de patrulha de 0,25 para 0,35 leva o FPR a 0,025 e o recall a 0,10. Menos energia significa muitas vezes menos ameaças atendidas. | [Sensibilidade](sensitivity.md#resultados-por-parâmetro) |
+
+As respostas valem para estes cenários e estes parâmetros. Não são efeitos demonstrados em geral.
 
 ## 2. Cenários contrastantes
 
-| Cenário | Configuração a comparar | Pergunta principal |
+| Cenário | O que configura | Pergunta principal |
 |---|---|---|
-| **A — Operação normal** | Conectividade elevada, níveis moderados de ruído e recursos suficientes | Linha de base de deteção e resposta |
-| **B — Sensores ruidosos** | Mais falsos positivos, fontes com fiabilidade distinta e evidência contraditória | Robustez da corroboração e reputação |
-| **C — Perturbação/escassez** | Atrasos/perda de mensagens, recursos ocupados e pouca autonomia | Degradação, coordenação e recuperação |
+| **A — Operação normal** | Fontes pouco ruidosas (FP 5 %, FN 5 % e 10 %), sem falhas, recursos com 100 % de autonomia | Linha de base de deteção e resposta |
+| **B — Sensores ruidosos** | FP 60 % e 50 %, FN 20 % e 25 %, erro de posição ±1, confiança 0,7; episódios benignos `thunder` e `thunder+tourist` | Robustez da corroboração e da reputação |
+| **C — Falhas e escassez** | Fontes de A; perda de 10 % das mensagens, atraso de 0,05 s, resultados duplicados; drone com 15 % de autonomia | Degradação, coordenação e recuperação |
 
-**Parâmetros ainda não fixados:** dimensão do mapa, nº de agentes por papel, incidentes por execução, distribuição espacial, probabilidades de erro, atrasos/perdas, velocidade, bateria e políticas de resposta. Defini-los **antes** da recolha final de resultados, na configuração versionada. Não usar números arbitrários como se fossem medidos no mundo real.
+Os três vivem em `config/scenarios/{A,B,C}.json` e correm 20 repetições com as sementes 1000 a 1019. Os valores foram escolhidos pela equipa; não são medições de campo. O detalhe está em [cenários](experiments.md#cenários-configscenariosjson).
 
-## 3. Baselines e ablações
+Os cenários D e E (várias ocorrências em simultâneo e informadores humanos) são demonstrações à parte, descritas em [escalabilidade](scalability.md).
 
-Comparar quando possível a solução completa com:
+## 3. Variantes de comparação
 
-- **Sem corroboração:** uma observação isolada desencadeia a política de referência.
-- **Sem reputação:** todas as fontes recebem o mesmo peso inicial.
-- **Seleção nearest-available:** escolhe-se o recurso elegível mais próximo, sem negociação por custo composto.
-- **Sem injeção de falhas:** isolamos a influência das perturbações de comunicação.
+Cada cenário corre em quatro variantes, com as mesmas sementes e os mesmos episódios ([`collector.VARIANTS`](../src/isia/evaluation/collector.py)):
 
-Na recolha implementada, `no_corroboration` ignora a evidência do par e também
-reduz o limiar de patrulha para `0.01`. Esta baseline compara pipelines com duas
-diferenças; não isola o efeito causal da corroboração. As conclusões devem indicar
-essa alteração conjunta, sem a apresentar como ablação de uma única variável.
+| Variante | Para que serve |
+|---|---|
+| `full` | Solução completa |
+| `no_corroboration` | Ignora o par e baixa o limiar de patrulha para 0,01: um alerta isolado mobiliza |
+| `no_reputation` | Reputação reposta no prior em cada execução |
+| `nearest` | Escolhe a patrulha só por ETA, sem energia nem carga |
 
-Comparar sempre sob as **mesmas sequências de incidentes e configurações**, quando tecnicamente possível. O uso de sementes comuns reduz a variabilidade devida ao ambiente, mas não garante determinismo completo de escalonamento assíncrono.
+Duas ressalvas:
 
-## 4. Definição de métricas
+- `no_corroboration` muda a evidência e o limiar ao mesmo tempo. Compara dois pipelines; não é uma ablação de uma só variável.
+- Não há uma variante «sem falhas». O efeito das falhas lê-se comparando C com A, que têm as mesmas fontes. C muda também a autonomia e a carga do drone, por isso a comparação não isola as falhas.
 
-Antes de medir, escolher a **unidade de classificação** (sugestão: incidente no horizonte experimental). Para calcular verdadeiros negativos, definir também o conjunto de oportunidades negativas: por exemplo, zonas-intervalos sem incidente. Se não existir tal definição, **não calcular FPR** nem TN fictícios.
+Sementes comuns reduzem a variabilidade do ambiente. Não garantem a mesma ordem de envios assíncronos em C.
 
-| Métrica | Definição operacional proposta | Interpretação |
-|---|---|---|
-| `TP` | Incidentes verdadeiros detetados e classificados como ameaça | Acertos positivos |
-| `FP` | Casos negativos classificados como ameaça | Alarmes falsos |
-| `FN` | Incidentes verdadeiros não detetados no prazo definido | Falhas de deteção |
-| `TN` | Casos negativos corretamente não sinalizados (requer conjunto negativo definido) | Acertos negativos |
-| Precision | `TP / (TP + FP)` | Qualidade dos alertas positivos |
-| Recall | `TP / (TP + FN)` | Cobertura de incidentes reais |
-| FPR | `FP / (FP + TN)` | Alarmes falsos relativos a negativos |
-| Tempo de deteção | `t_primeiro_alerta - t_início_incidente` | Rapidez da deteção |
-| Tempo de resposta | `t_chegada_recurso - t_início_incidente` | Rapidez de intervenção |
-| Sucesso das missões | Missões concluídas / missões iniciadas | Fiabilidade operacional |
-| Energia consumida | Energia total gasta por papel/cenário | Custo operacional |
-| Mensagens por incidente | Nº de mensagens emitidas ou entregues / nº incidentes | Custo de comunicação |
-| Conflitos de missão | Tentativas incompatíveis / nº missões | Qualidade de coordenação |
-| Não resolvidos | Incidentes terminados sem decisão/resposta confirmada | Casos pendentes |
+## 4. Métricas
 
-**Se o denominador de uma métrica for zero:** marcar `N/A` e explicar, em vez de devolver 0 ou 1 silenciosamente. Os tempos devem indicar unidade e relógio. Registar atrasos e perdas na aplicação separadamente de falhas do XMPP.
+As definições completas estão em [unidade de avaliação e métricas](experiments.md#unidade-de-avaliação-e-métricas). O que ficou do plano:
 
-Na implementação da Etapa 9, `missions_done` e `missions_failed` contam apenas
-estados terminais conhecidos pelo coordenador. Um resultado perdido pode deixar
-uma missão localmente concluída fora dessas contagens; não equivale a falha da
-execução móvel. `energy_used` soma pontos percentuais de autonomia, e fica
-indisponível quando alguma autonomia inicial ou final é desconhecida. As
-definições concretas da unidade, tempos e restantes campos estão em
-[experiências](experiments.md#unidade-de-avaliação-e-métricas).
+| Métrica planeada | Como ficou implementada (`metrics.py`) |
+|---|---|
+| TP, FP, TN, FN | Por execução. Positivo real: o episódio tem um evento `threat`. Positivo previsto: a decisão mobiliza patrulha ou guarda. |
+| Precision, recall, FPR | `TP/(TP+FP)`, `TP/(TP+FN)`, `FP/(FP+TN)`; `N/A` com denominador zero |
+| Tempo de deteção | Não se reporta: eventos e alerta começam em `t=0`, logo é sempre 0 |
+| Tempo de resposta | Dois tempos em segundos simulados: até ao resultado da verificação e até ao resultado do guarda |
+| Sucesso das missões | Contagens `missions_done` e `missions_failed` conhecidas pelo coordenador; não é uma taxa |
+| Energia consumida | Soma dos pontos percentuais de autonomia gastos pelos três recursos; `N/A` se alguma autonomia for desconhecida |
+| Mensagens por incidente | Tentativas de envio por execução, incluindo as perdidas; perdidas e duplicadas contam-se à parte |
+| Conflitos de missão | Não se calcula em A, B e C: há um só iniciador, logo não há concorrência pelos recursos |
+| Não resolvidos | Execuções que terminam com a ocorrência em `unresolved` |
 
-## 5. Protocolo experimental
+Os verdadeiros negativos existem porque metade dos episódios de A e C, e dois terços dos de B, não têm ameaça.
 
-1. Definir `scenario_id`, versão de código/commit, versão do contrato, parâmetros e semente.
-2. Fixar horizonte temporal e critério de terminação.
-3. Executar cada cenário e cada baseline, idealmente com várias sementes independentes.
-4. Guardar ficheiro de configuração, log estruturado, métricas por execução e eventuais falhas.
-5. Validar contagens internas e detetar missões/incident states incompletos.
-6. Calcular medidas-resumo apropriadas (média, mediana, dispersão e nº execuções).
-7. Comparar cenários e políticas; indicar variabilidade e mecanismos plausíveis.
-8. Registar limitações do simulador e hipóteses não confirmadas.
+## 5. Protocolo seguido
 
-**Formato de resultados sugerido** (estrutura, não medições):
+1. Cenários, sementes e parâmetros ficam em ficheiros versionados antes da recolha.
+2. O coletor corre cenário × variante × repetição × episódio, em sequência. Em `full`, a reputação passa de uma execução para a seguinte.
+3. Guarda-se uma linha por execução (`runs.csv`), o resumo com média, mediana, desvio-padrão e `n` (`summary.csv`) e o commit usado (`manifest.json`).
+4. Os testes verificam as métricas e a repetição com a mesma semente.
+5. A sensibilidade varia um parâmetro de cada vez sobre os mesmos cenários.
 
 ```text
-results/
-  scenario-A/
-    run-001-config.json
-    run-001-events.jsonl
-    run-001-metrics.json
-  scenario-B/
-  scenario-C/
-  summary.csv
+results/experiments/
+  runs.csv  summary.csv  manifest.json
+  charts/taxas.svg  charts/custo.svg
+  runs/<cenário>/<variante>/<run_id>.json   (relatórios completos, não versionados)
+results/sensitivity/
+  summary.csv  completion-manifest.json
 ```
 
-Não inserir métricas fictícias na apresentação. Um gráfico só é resultado experimental depois de executar e validar as respetivas simulações.
+Comandos em [como reproduzir](experiments.md#como-reproduzir).
 
-## 6. Testes unitários e de integração
+## 6. Testes automáticos
 
-| ID | Caso | Tipo | Condição esperada |
-|---|---|---|---|
-| UT01 | Posição inválida | Unitário | Modelo rejeita fora dos limites |
-| UT02 | JSON sem campo obrigatório | Unitário | Mensagem inválida é rejeitada |
-| UT03 | Mesmo `event_id` retransmitido | Unitário | Uma única evidência contabilizada |
-| UT04 | Divergência temporal/espacial | Unitário | Observações não agrupadas indevidamente |
-| UT05 | Reputação com poucos dados | Unitário | Prior impede extremos injustificados |
-| UT06 | Denominador zero em métrica | Unitário | `N/A` explícito |
-| UT07 | Recurso sem bateria | Unitário | Não apresenta proposta elegível |
-| IT01 | Troca request/response | Integração | Mensagem SPADE recebe resposta correlacionada |
-| IT02 | Contratação com dois recursos | Integração | Um recurso reserva missão, outros rejeitados |
-| IT03 | Duas missões simultâneas | Integração | Sem dupla reserva incompatível |
-| IT04 | Proposta atrasada | Integração | Não altera missão já fechada |
-| IT05 | Perda de mensagem | Integração | Timeout e estado recuperável |
-| E2E01 | Incidente completo | End-to-end | Observação → verificação → missão → fecho |
-| E2E02 | Falso positivo | End-to-end | Decisão coerente, sem alegar evento real |
-| E2E03 | Iniciador indisponível | End-to-end | Recuperação prevista ou falha explícita |
+O enunciado considera os testes opcionais. O repositório tem 560 funções de teste em `tests/` (unitários, integração e cenários).
 
-**O enunciado considera testes automáticos opcionais**, mas esta estratégia recomenda executá-los para tornar o resultado verificável.
+```bash
+PYTHONPATH=src python -m unittest discover -s tests
+```
+
+Onde estão os casos previstos no plano:
+
+| Caso | Teste |
+|---|---|
+| Posição inválida é rejeitada | `tests/test_models.py` (`test_coordenadas_negativas`) |
+| Mensagem sem campo obrigatório é rejeitada | `tests/test_messages.py` (`test_campos_obrigatorios`) |
+| Observação repetida conta uma vez | `tests/unit/test_policy.py` (`test_duplicate_forwarded_and_reordered_observations_do_not_change_score`) |
+| Reputação com poucos dados não vai a extremos | `tests/unit/test_reputation.py` (`test_new_source_and_small_sample_are_smoothed`) |
+| Denominador zero dá `N/A` | `tests/unit/test_metrics.py` (`test_zero_denominators_are_none`) |
+| Recurso sem autonomia não parte | `tests/scenarios/test_mvp.py` (`test_outside_map_and_insufficient_round_trip_never_move`) |
+| Proposta atrasada ou duplicada é ignorada | `tests/unit/test_allocation.py` (`test_ignores_invalid_duplicate_and_late_proposals`) |
+| Mensagem perdida termina em timeout | `tests/test_sensor_timeout.py` (`test_termina_sem_resposta_e_regista_timeout`) |
+| Dois iniciadores sem dupla reserva | `tests/integration/test_stress_extensions.py` (`test_two_initiators_share_resources_without_double_booking`) |
+| Ocorrência completa, do alerta ao fecho | `tests/scenarios/test_mvp.py` (`test_alert_to_closure_two_sensors_two_candidates_and_ranger`) |
+| Falso positivo fecha sem chamar o guarda | `tests/scenarios/test_mvp.py` (`test_not_confirmed_closes_without_ranger`) |
+| Mesma semente, mesmas métricas | `tests/scenarios/test_experiments.py` (`test_same_seed_repeats_same_metrics_and_stores_runs`) |
+
+O caso «iniciador indisponível» do plano não tem teste dedicado. Existe o do par indisponível, em `tests/scenarios/test_runner_audit_corrections.py`.
 
 ## 7. Matriz requisito → evidência
 
-| Fonte/requisito | Método de verificação | Artefacto esperado |
-|---|---|---|
-| Tema C — descentralização | Ausência de despacho global: o runner não escolhe vencedores nem fecha incidentes. Várias ocorrências/iniciadores em paralelo: **o desenho permite; não medido** (todas as execuções têm um só iniciador, `sensor-1`) | Diagrama + logs de conversação |
-| Tema C — deteção | Injetar eventos conhecidos e conferir observações | TP/FP/FN e timeline |
-| Tema C — corroboração | Sensores com evidência diferente | Registo de pedidos e agregação |
-| `requirements` RF3 — reputação | Fontes com históricos distintos | Histórico e decisões justificadas |
-| Tema C — coordenação de patrulhas | Propostas, aceitação, recusa e execução | Sequência Contract Net |
-| Tema C — falsos positivos | Cenário B | Precision/Recall ou métricas justificadas |
-| Tema C — conectividade intermitente | Cenário C | Timeouts e comparação de latências |
-| Tema C — recursos limitados | Cenário C | Energia/ocupação/recusas |
-| Enunciado — 3 cenários | A, B e C | Configurações e resultados distintos |
-| Enunciado — documentação/demonstração | Instalação limpa + visualização | README + slides + gravação ou interface |
+| Requisito | Evidência |
+|---|---|
+| Tema C — descentralização | Não há despacho global: o runner não escolhe vencedores nem fecha ocorrências. Em A, B e C há um só iniciador (`sensor-1`); vários iniciadores em paralelo só são medidos no [cenário D](scalability.md#cenário-d--dia-movimentado). |
+| Tema C — deteção | TP e FN por cenário: recall 0,85 (A), 0,65 (B) e 0,80 (C) em `full` |
+| Tema C — corroboração | `full` contra `no_corroboration` em B: FPR 0,25 contra 0,75 |
+| RF3 — reputação | `full` contra `no_reputation`: uma decisão diferente em 140 pares; reputação final do `sensor-1` de 0,90 (A), 0,67 (B) e 0,86 (C) |
+| Tema C — coordenação de patrulhas | Contract Net com custo composto contra `nearest`: veículo contra drone, mesma classificação |
+| Tema C — falsos positivos | Cenário B: precision 0,57, FPR 0,25; os 10 FP vêm todos de `thunder+tourist` |
+| Tema C — conectividade intermitente | Cenário C: 10 ocorrências `unresolved`, cada uma com uma mensagem perdida |
+| Tema C — recursos limitados | Cenário C: o drone com 15 % recusa os 12 pedidos que recebe |
+| Enunciado — três cenários | `config/scenarios/{A,B,C}.json` e [`results/experiments/`](../results/experiments/) |
+| Enunciado — trade-offs e limitações | [Discussão](experiments.md#discussão), [limitações](experiments.md#limitações-e-incerteza) e [sensibilidade](sensitivity.md) |
 
 ## 8. Como interpretar os resultados
 
-- Confirmar que eventuais ganhos em Precision não escondem perda excessiva de Recall.
-- Diferenciar custo de mensagens **enviadas** e **entregues** em cenários de perda.
-- Não confundir quantidade de propostas com qualidade da alocação.
-- Documentar limites de validade: sensores simulados, topologia simplificada, probabilidades escolhidas pelo grupo, sem calibração de campo e dependência de XMPP.
-- Evitar inferência causal a partir de uma única execução; repetir e comparar condições equivalentes.
-
-## 9. Checklist
-
-- [ ] Definições de TP/FP/FN/TN e unidade de análise aprovadas.
-- [ ] Configurações A, B e C versionadas.
-- [ ] Baselines e ablações definidos.
-- [ ] Logs com IDs, tempos, decisões e resultado de referência.
-- [ ] Métricas unitariamente verificadas.
-- [ ] Cenários executados e resultados armazenados.
-- [ ] Comparações e limitações redigidas.
-- [ ] Material de apresentação fiel às execuções realizadas.
+- Um ganho de precision só conta se o recall não cair demasiado. Ler sempre os dois.
+- Menos energia ou menos mensagens pode ser só menos ameaças atendidas.
+- Em cenários com perdas, as mensagens contadas são tentativas de envio, não entregas.
+- Os tempos médios só incluem execuções cujo resultado chegou. Ver sempre o `n`.
+- Uma diferença de uma ou duas execuções em 20 não é um efeito. Não há testes de significância.
+- Limites de validade: sensores simulados, mundo 8×8, probabilidades escolhidas pela equipa, falhas só no transporte local.

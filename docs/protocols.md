@@ -1,479 +1,458 @@
 # Comunicação, mensagens e protocolos
 
-> **Estado revisto (12-11-2026):** Etapa 6 implementada: o sensor iniciador integra corroboração, Contract Net, execução e resultados, incluindo intervenção do guarda. Validada em testes locais dos comportamentos e numa demonstração ligada a XMPP com agentes no mesmo processo; esta última pode usar entrega interna do SPADE. A Etapa 7 acrescenta reputação e adjudicação posterior à execução, sujeita aos critérios de independência e cobertura. As aprovações formais do grupo e a avaliação final permanecem pendentes.
+[README](../README.md) · [Arquitetura](architecture.md) · [Falhas](faults.md) · [Reputação e política](reputation-policy.md) · [Escalabilidade](scalability.md)
 
-[README](../README.md) · [Arquitetura](architecture.md) · [Plano](development-plan.md) · [Decisões](architecture.md#decisões-pendentes)
+> **Em resumo**
+>
+> - Há dois protocolos, ambos inspirados em FIPA: **verificação** (FIPA Request) e **atribuição** (Contract Net com uma confirmação extra, o `STATUS`).
+> - As mensagens são JSON validado, transportadas pelo SPADE. A performativa vai nos metadados; o tipo (`CFP`, `PROPOSAL`, ...) vai no corpo.
+> - Uma ocorrência completa no MVP troca 15 mensagens: 2 de verificação e 13 de duas negociações (patrulha e guarda).
+> - `INCIDENT_CLOSED` nunca é enviado. `ALERT` só é enviado com a opção `alert_distance` (cenário E).
+> - Fila, prazo dinâmico, reenvio e aviso entre iniciadores são **opções**. Os resultados dos cenários A, B e C foram recolhidos com todas desligadas.
+
+Verificado contra o código em 18-11-2026 (branch `fix/auditoria-correcoes`).
 
 ## 1. Camadas da comunicação
 
-| Camada | Responsabilidade | Proposta |
+| Camada | Responsabilidade | Implementação |
 |---|---|---|
-| Transporte | Entrega assíncrona entre identidades | SPADE + XMPP |
-| Metadados da mensagem | Intenção, protocolo e associação à conversa | Campos/`metadata` com semântica FIPA-ACL |
-| Corpo da mensagem | Dados do domínio | JSON UTF-8 validado e versionado |
-| Protocolo | Ordem de mensagens, prazos, recusa e falhas | `verification`, `contract-net` |
-| Lógica de domínio | Corroboração, reputação e decisões | Funções locais em `reasoning/`, sem gestor global |
+| Transporte | Entrega assíncrona entre agentes | SPADE 4.1.4 sobre XMPP, ou filas locais no mesmo processo |
+| Metadados | Intenção, protocolo e conversa | `performative`, `ontology` (`isia`), `protocol`, `conversation-id`, `reply-with`, `in-reply-to` |
+| Corpo | Dados do domínio | JSON validado, `schema_version` 1 ([messages.py](../src/isia/communication/messages.py)) |
+| Protocolo | Ordem das mensagens, prazos e recusas | `verification` e `contract-net` |
+| Decisão | Corroboração, reputação, custo | Funções em [reasoning/](../src/isia/reasoning/), sem gestor global |
 
-**Nota:** `ALERT`, `VERIFY_REQUEST` etc. são **tipos de conteúdo do domínio**. `inform`, `request`, `cfp`, `propose`, `refuse`, `accept-proposal`, `reject-proposal` são *performatives* FIPA. Não devem ser confundidos.
+**Não confundir tipo com performativa.** `CFP`, `PROPOSAL` ou `REJECT` são tipos do corpo (`message_type`). `cfp`, `propose`, `refuse` ou `reject-proposal` são performativas FIPA, nos metadados. O mesmo tipo `REJECT` viaja com duas performativas diferentes ([secção 3](#3-tipos-de-mensagens-e-intenção)).
 
 ## 2. Modelo base para mensagens
 
-Proposta de contrato para o **corpo JSON** (campos obrigatórios mínimos marcados com `*`):
+### Corpo JSON
 
-| Campo | Tipo | Significado |
+| Campo | Obrigatório | Significado |
 |---|---|---|
-| `schema_version`* | inteiro | Versão do contrato: começa em 1 |
-| `message_id`* | string | Identificador global da mensagem, para deduplicar |
-| `message_type`* | string | Tipo do conteúdo: `ALERT`, `CFP`, `PROPOSAL`, ... |
-| `created_at`* | número finito não negativo | Instante da emissão em segundos simulados |
-| `event_id` | string | Identificador de uma observação, **não** do incidente |
-| `incident_id` | string | Identificador de ocorrência agrupando evidência relacionada |
-| `mission_id` | string | Identificador da missão negociada/executada |
-| `source_id` | string | Fonte original da observação, quando aplicável |
-| `payload`* | objeto JSON | Dados específicos do tipo de mensagem |
+| `schema_version` | sim | Sempre o inteiro `1` |
+| `message_id` | sim | Identificador da mensagem; mantém-se num reenvio |
+| `message_type` | sim | Um dos dez tipos da secção 3 |
+| `created_at` | sim | Instante de emissão em **segundos simulados**, finito e não negativo |
+| `payload` | sim | Objeto JSON com os dados do tipo |
+| `conversation_id` | em `CFP` e `MISSION_RESULT`; na prática, em todas as enviadas | Identificador da conversa. O transporte exige o metadado `conversation-id` e que os dois coincidam |
+| `incident_id`, `mission_id` | em `CFP` e `MISSION_RESULT` | Ocorrência e missão |
+| `source_id` | em `MISSION_RESULT` | Fonte da observação ou recurso emissor |
+| `event_id` | não | Identificador de **uma observação**, não da ocorrência |
 
-### Contrato implementado na Etapa 1
+Regras de validação em `Message` (lança erro, não corrige):
 
-O módulo `isia.communication.messages` implementa este contrato sem depender de
-SPADE ou XMPP. A versão atual usa:
+- Identificadores são strings não vazias.
+- `payload` só aceita JSON estrito: `NaN`, `Infinity`, chaves não textuais e objetos Python são rejeitados. `null` é aceite.
+- `CFP` exige `task`, `target` (`x`, `y` inteiros não negativos), `required_capability`, `priority` (inteiro ≥ 0) e `deadline`. `round_number` é opcional.
+- `MISSION_RESULT` exige `accept_message_id`, `resource_id` (igual a `source_id`), `task`, `outcome`, `reason` e `completed_at ≤ created_at`.
 
-- `schema_version`: inteiro `1`.
-- `message_id`, `event_id`, `incident_id`, `mission_id`, `source_id` e
-  `conversation_id`: strings não vazias; cada identificador tem o seu domínio
-  semântico e não deve ser reutilizado entre entidades.
-- `message_type`: um dos tipos `ALERT`, `VERIFY_REQUEST`, `VERIFY_RESPONSE`,
-  `CFP`, `PROPOSAL`, `ACCEPT`, `REJECT`, `MISSION_RESULT`, `STATUS` ou
-  `INCIDENT_CLOSED`.
-- `conversation_id`: identificador da conversa; é obrigatório em `CFP` e
-  correlaciona mensagens relacionadas sem substituir `message_id`.
-- `created_at`: número finito e não negativo em segundos de tempo simulado. O
-  relógio começa em `0.0`; este campo não é um timestamp de parede nem uma data
-  ISO-8601. Valores negativos, `NaN` e infinitos são inválidos.
-- `payload`: objeto JSON, validado como dicionário no limite do contrato. A
-  validação rejeita valores não serializáveis, chaves que não sejam strings,
-  `NaN` e infinito. A validação específica do conteúdo de cada tipo será
-  aprofundada nas etapas de verificação e negociação.
+Os outros tipos não têm validação própria em `Message`. Quem recebe confere os campos de que precisa e ignora a mensagem se não baterem.
 
-As mensagens podem ser convertidas com `Message.to_json()` e
-`Message.from_json()`. Os modelos de domínio suportados podem ser convertidos
-com `model_to_dict()`/`model_from_dict()`, usando enums pelos seus valores
-JSON e tuplos como listas JSON. Cada agente ignora repetições pelo `message_id`
-no seu próprio comportamento; não existe um registo de deduplicação partilhado
-(`MessageDeduplicator` foi removido em 18-11-2026, sem nunca ter sido usado).
+### Metadados SPADE
 
-As unidades partilhadas dos modelos são: posições inteiras não negativas numa
-grelha 2D; distância euclidiana em unidades da grelha; tempo simulado e ETA em
-segundos, iniciados em `0.0` e separados dos timeouts reais do SPADE; autonomia
-como percentagem entre `0` e `100`; `Bid.energy_cost` em pontos percentuais de
-autonomia, podendo exceder `100` quando a missão é estimada como inviável;
-`Mission.priority` como inteiro não negativo, em que valores maiores são mais
-urgentes; e `Bid.load` entre `0` e `1`.
+`build_spade_message` ([transport.py](../src/isia/communication/transport.py)) escreve sempre `performative`, `ontology`, `protocol` e `conversation-id`. As respostas levam `in-reply-to` com o `message_id` do pedido. Só o `VERIFY_REQUEST` leva `reply-with`.
 
-`Observation.confidence_score` é uma pontuação entre `0` e `1` sobre a
-confiança da fonte no sinal. `intensity_score`, quando representado, é um
-campo opcional separado entre `0` e `1`; a relação semântica entre ambos deve
-ser mantida distinta. Os IDs devem ser únicos dentro da sua entidade e podem
-usar UUID quando forem gerados novos; os IDs históricos legíveis continuam
-compatíveis.
+`parse_spade_message` rejeita a mensagem se a ontologia ou o protocolo não forem os esperados, se faltar `conversation-id` ou se este não coincidir com o do corpo.
 
-Os estados de incidente implementados em `domain.incident_state` são
-`DETECTED`, `VERIFYING`, `ASSESSING`, `WATCHING`, `ALLOCATING`, `RESPONDING`,
-`CLOSED`, `EXPIRED` e `UNRESOLVED`. As transições seguem o diagrama da
-arquitetura e são imutáveis: cada mudança devolve um novo `IncidentState`.
+O remetente é o JID dado pelo transporte. O `source_id` do corpo não autentica ninguém; os agentes comparam-no com o remetente real.
 
-`CFP` exige `mission_id`, `incident_id` e `conversation_id`, além de um
-`payload` com `task`, `target` (`x`/`y`), `required_capability`, `priority` e
-`deadline` em segundos simulados. Esta validação é estrutural; a negociação e
-a reserva pertencem a etapas posteriores.
+### Unidades
 
-Os contratos de negociação usados atualmente estão implementados em
-`src/isia/reasoning/allocation.py`, e o adaptador SPADE/XMPP está em
-`src/isia/communication/transport.py`. A implementação não impõe UUID aos IDs
-existentes, mas gera IDs locais únicos para CFPs, conversas, ACCEPTs e estados.
+| Grandeza | Unidade |
+|---|---|
+| Tempo, ETA, `created_at`, `deadline` | Segundos simulados, a partir de 0 |
+| Prazos de espera por respostas | Segundos **reais** (não avançam o relógio simulado) |
+| Posição | Célula da grelha, inteiros não negativos |
+| Distância entre observações | Euclidiana, em células |
+| Distância de deslocação | Manhattan, em células |
+| Autonomia, `Bid.energy_cost` | Pontos percentuais (0 a 100) |
+| `Bid.load` | Fração entre 0 e 1 |
+| `Mission.priority` | Inteiro: 0 leve, 1 média, 2 grave |
+| `confidence_score` | Entre 0 e 1; **não** é uma probabilidade calibrada |
 
-Metadados SPADE recomendados: `performative`, `ontology`, `protocol`, `conversation-id` (ou correlação por `thread`, a validar no SPADE escolhido), `reply-with` e `in-reply-to` quando aplicáveis. O endereço do remetente/destinatário deverá ser obtido e validado pela infraestrutura SPADE, evitando confiar cegamente num `source_id` declarado no corpo.
+### Exemplos reais
 
-### Exemplo — observação de um sensor
+Pedido de propostas e proposta do drone, tirados de uma execução do MVP (identificadores encurtados):
 
 ```json
 {
   "schema_version": 1,
-  "message_id": "msg-001",
-  "message_type": "ALERT",
-  "created_at": 120.0,
-  "event_id": "obs-001",
-  "incident_id": "incident-07",
-  "source_id": "sensor_01",
+  "message_id": "message-45dc",
+  "message_type": "CFP",
+  "created_at": 0.0,
+  "conversation_id": "conversation-9a06",
+  "incident_id": "incident-obs-000001",
+  "mission_id": "mission-incident-obs-000001-mobile-verification",
   "payload": {
-    "event_type": "gunshot_like_sound",
-    "position": {"x": 6, "y": 9},
-    "confidence_score": 0.82,
-    "intensity_score": 0.65,
-    "sensor_modality": "acoustic"
+    "task": "verify_incident",
+    "target": {"x": 3, "y": 2},
+    "required_capability": "mobile_verification",
+    "priority": 1,
+    "deadline": 100.0,
+    "round_number": 1
   }
 }
 ```
 
-Aqui `confidence_score` é a pontuação atribuída pela fonte ao sinal e **não** uma probabilidade calibrada de caça furtiva; a sua relação final com intensidade ainda requer aprovação. `created_at` usa segundos de tempo simulado, iniciado em zero.
+```json
+{
+  "schema_version": 1,
+  "message_id": "proposal-drone-message-45dc",
+  "message_type": "PROPOSAL",
+  "created_at": 0.0,
+  "conversation_id": "conversation-9a06",
+  "incident_id": "incident-obs-000001",
+  "mission_id": "mission-incident-obs-000001-mobile-verification",
+  "source_id": "drone",
+  "payload": {
+    "cfp_message_id": "message-45dc",
+    "bid": {"mission_id": "mission-incident-obs-000001-mobile-verification",
+            "resource_id": "drone", "eta": 3.0, "energy_cost": 6.0, "load": 0.0}
+  }
+}
+```
 
-Exemplo inválido (não pode ser aceite pelo contrato):
+Exemplo inválido: `created_at` negativo e `NaN` no payload são ambos rejeitados.
 
 ```json
 {"schema_version": 1, "message_id": "msg-err", "message_type": "ALERT", "created_at": -1.0, "payload": {"value": NaN}}
 ```
 
-Além do instante negativo, `NaN` não pertence ao JSON estrito. A implementação
-rejeita ambos, bem como `Infinity`, objetos Python não serializáveis e JSON
-malformado.
-
-### Exemplo — pedido de propostas
-
-```json
-{
-  "schema_version": 1,
-  "message_id": "msg-014",
-  "message_type": "CFP",
-  "created_at": 128.0,
-  "conversation_id": "conversation-03",
-  "incident_id": "incident-07",
-  "mission_id": "mission-03",
-  "payload": {
-    "task": "verify_incident",
-    "target": {"x": 6, "y": 9},
-    "required_capability": "mobile_verification",
-    "deadline": 138.0,
-    "priority": 2
-  }
-}
-```
-
-A prioridade é um inteiro não negativo no modelo atual, mas a unidade/escala e
-os campos obrigatórios específicos de `CFP` continuam por aprovar; não significa
-que exista atualmente uma escala de severidade aprovada.
-
 ## 3. Tipos de mensagens e intenção
 
-A tabela descreve o que o código envia hoje (verificado em 16-11-2026).
+O que o código envia hoje. «Iniciador» é o `IncidentSensorAgent` da ocorrência.
 
-| Tipo lógico | Performative enviada | Emissor → destinatário | Resposta esperada | Código |
-|---|---|---|---|---|
-| `ALERT` | **não enviado** por omissão; `inform` com `alert_distance` | — (linha temporal do iniciador). Com `alert_distance`: iniciador → iniciadores vizinhos | Um segundo `ALERT` com `keeps` (fica ou não com a ameaça) a quem lhe cederia; quem leu a mesma ameaça depois de um vizinho que fica desiste (`duplicate_alert`) | `yields_to_neighbour` em [incident.py](../src/isia/agents/incident.py) |
-| `VERIFY_REQUEST` | `request` | Iniciador (`sensor-1`) → uma fonte par (`informant_jid`) | `VERIFY_RESPONSE` ou timeout | [sensor.py:186](../src/isia/agents/sensor.py#L186) |
-| `VERIFY_RESPONSE` | `inform` (nunca `refuse`) | Fonte → iniciador | `status`: `observations_available`, `no_data` ou `informative_absence` | [informant.py:120](../src/isia/agents/informant.py#L120) |
-| `CFP` | `cfp` | Iniciador → recursos candidatos | `PROPOSAL` ou `REJECT` | [incident.py:144](../src/isia/agents/incident.py#L144) |
-| `PROPOSAL` | `propose` | Recurso → iniciador | `ACCEPT` ou `REJECT` | [mobile.py:312](../src/isia/agents/mobile.py#L312) |
-| `REJECT` (recusa do CFP) | `refuse` | Recurso → iniciador | Nenhuma | [mobile.py:314](../src/isia/agents/mobile.py#L314) |
-| `ACCEPT` | `accept-proposal` | Iniciador → recurso vencedor | `STATUS` | [incident.py:216](../src/isia/agents/incident.py#L216) |
-| `REJECT` (perdedores) | `reject-proposal` | Iniciador → outros proponentes | Nenhuma | [incident.py:221](../src/isia/agents/incident.py#L221) |
-| `STATUS` | `inform` | Recurso vencedor → iniciador | `reserved` ou `reservation_failed` | [mobile.py:436](../src/isia/agents/mobile.py#L436) |
-| `MISSION_RESULT` | `inform` (também com `outcome=failed`; nunca `failure`) | Recurso → iniciador | Nenhuma | [mobile.py:211](../src/isia/agents/mobile.py#L211) |
-| `INCIDENT_CLOSED` | **não enviado** | — (só entra na linha temporal do iniciador) | — | [incident.py:363](../src/isia/agents/incident.py#L363) |
+| Tipo | Performativa | Protocolo | De → para | Resposta esperada | Onde |
+|---|---|---|---|---|---|
+| `ALERT` | `inform` | `verification` | Iniciador → iniciadores vizinhos. **Só com `alert_distance`** | Segundo `ALERT` com `keeps` (veredicto) | `yields_to_neighbour`, [incident.py](../src/isia/agents/incident.py) |
+| `VERIFY_REQUEST` | `request` | `verification` | Iniciador → a sua fonte de corroboração (uma) | `VERIFY_RESPONSE` ou prazo esgotado | `VerificationBehaviour`, [sensor.py](../src/isia/agents/sensor.py) |
+| `VERIFY_RESPONSE` | `inform` (nunca `refuse`) | `verification` | Fonte → iniciador | Nenhuma | `VerificationBehaviour`, [informant.py](../src/isia/agents/informant.py) |
+| `CFP` | `cfp` | `contract-net` | Iniciador → recursos candidatos | `PROPOSAL` ou `REJECT` | `allocate`, [incident.py](../src/isia/agents/incident.py) |
+| `PROPOSAL` | `propose` | `contract-net` | Recurso → iniciador | `ACCEPT` ou `REJECT` | `ContractNetBehaviour`, [mobile.py](../src/isia/agents/mobile.py) |
+| `REJECT` (recusa do CFP) | `refuse` | `contract-net` | Recurso → iniciador | Nenhuma | `ContractNetBehaviour`, [mobile.py](../src/isia/agents/mobile.py) |
+| `ACCEPT` | `accept-proposal` | `contract-net` | Iniciador → recurso vencedor | `STATUS` | `allocate`, [incident.py](../src/isia/agents/incident.py) |
+| `REJECT` (perdedores) | `reject-proposal` | `contract-net` | Iniciador → outros proponentes | Nenhuma | `allocate`, [incident.py](../src/isia/agents/incident.py) |
+| `STATUS` | `inform` | `contract-net` | Recurso vencedor → iniciador | `status`: `reserved` ou `reservation_failed` | `AcceptBehaviour`, [mobile.py](../src/isia/agents/mobile.py) |
+| `MISSION_RESULT` | `inform` (também com `outcome=failed`) | `contract-net` | Recurso → iniciador | Nenhuma | `ExecutionBehaviour`, [mobile.py](../src/isia/agents/mobile.py) |
+| `INCIDENT_CLOSED` | **nunca enviado** | — | Fica só na linha temporal do iniciador | — | `IncidentBehaviour.run`, [incident.py](../src/isia/agents/incident.py) |
 
-`ALERT` e `INCIDENT_CLOSED` existem em `MessageType` para quando houver vários iniciadores a avisar vizinhos. Nos cenários A, B e C nenhum é enviado. Desde 18-11-2026, a opção `alert_distance` faz os iniciadores com cobertura sobreposta trocarem `ALERT` para não tratarem a mesma ameaça duas vezes ([medição](scalability.md#aviso-entre-iniciadores-antes-e-depois)), em duas voltas: a leitura de cada um e, depois, se fica com a ameaça; `INCIDENT_CLOSED` continua a não ser enviado.
+Notas:
 
-Nem todos os esquemas correspondem formalmente a um protocolo FIPA completo. Devemos dizer **«inspirado em FIPA»**; os desvios estão na [secção 9](#9-porquê-estes-protocolos-alternativas-prós-e-contras).
+- Sem `alert_distance`, `ALERT` também fica só na linha temporal. É o caso do MVP e dos cenários A, B, C e D.
+- Motivos de recusa de um CFP (`payload.reason`): `resource_unavailable`, `capability_mismatch`, `autonomy_insufficient`, `autonomy_unknown`, `cfp_expired`, `target_outside_map` e, com fila ordenada, `waiting_turn`.
+- O esquema é **«inspirado em FIPA»**, não conforme. Os desvios estão na [secção 9](#9-porquê-estes-protocolos-alternativas-prós-e-contras).
 
 ## 4. Verificação distribuída
 
 ```mermaid
 sequenceDiagram
-  participant S1 as sensor-1 / iniciador local
-  participant S2 as sensor-2 (InformantAgent)
+  participant S1 as Iniciador (IncidentSensorAgent)
+  participant S2 as Fonte (InformantAgent)
   S1->>S2: request / VERIFY_REQUEST
-  alt Tem observações compatíveis
+  alt Tem observações na janela
     S2-->>S1: inform / VERIFY_RESPONSE (observations_available)
-  else Não tem dados
+  else Não tem
     S2-->>S1: inform / VERIFY_RESPONSE (no_data ou informative_absence)
   else Sem resposta no prazo
-    Note over S1: timeout; nunca conta como ausência informativa
+    Note over S1: prazo esgotado, nunca conta como ausência
   end
-  Note over S1: Validar janela temporal, área e IDs; tratar timeout
-  Note over S1: Calcular evidência local sem acesso à verdade
+  Note over S1: Validar remetente, conversa e pedido
+  Note over S1: Avaliar a evidência e decidir
 ```
 
-**Critérios de compatibilidade a parametrizar:** raio espacial, janela temporal, modalidades, independência aproximada e validade das fontes. Duas mensagens da **mesma observação** nunca contam como fontes distintas. A falta de deteção só pesa contra a hipótese de ameaça se o sensor tinha capacidade e oportunidade de observar.
+Como funciona:
 
-O `VERIFY_REQUEST` pode incluir o campo opcional `hypothesis`, sem alterar
-`schema_version`, com `hypothesis_id`, `event_type`, `position`, `valid_from` e
-`valid_until`. Pedidos antigos sem este campo continuam válidos. Uma resposta
-`VERIFY_RESPONSE` pode ecoar a hipótese e declarar
-`evidence_relation: "contradictory"`; essa relação só produz
-`contradictory` quando o iniciador fornece uma regra de incompatibilidade
-explícita. Tipos de evento diferentes não são contraditórios por omissão.
-Para `compatible`, tipos diferentes também exigem uma regra explícita de
-compatibilidade; por omissão, só tipos iguais são compatíveis. Sem essa regra,
-a observação é preservada e classificada como `inconclusive`.
+1. O iniciador envia **um** pedido a **uma** fonte. No MVP e nos cenários A, B e C é o `sensor-2`. Nos cenários D e E, cada iniciador pergunta ao informador mais próximo.
+2. O pedido leva a observação inicial e uma `hypothesis` (tipo de evento, posição e intervalo).
+3. A fonte responde com as observações da sua janela (5 s simulados). Não filtra nem avalia: devolve o que tem.
+4. O iniciador valida a resposta (remetente, `conversation-id`, `in-reply-to`, `request_message_id`) e classifica cada observação.
 
-Uma fonte só pode produzir `status: "informative_absence"` quando declara
-explicitamente `declared_non_detection: true` e fornece `absence` com a
-hipótese, intervalo observado e `coverage` validada: posição, raio, capacidade
-validada e oportunidade confirmada. `no_data`, timeout, `refuse` ou falha de
-comunicação nunca são ausência informativa. A ausência pode contar para a
-cobertura de informação, mas não é evidência compatível nem prova de
-inexistência do evento; falsos negativos continuam a ser uma limitação.
+**Quando é que uma observação corrobora.** Tem de vir de outra fonte, estar a 3,0 células ou menos e a 2,0 s ou menos da observação inicial, e ser do mesmo tipo ou de um tipo declarado compatível. Nos cenários A a D, a regra diz que um `gunshot_like_sound` (som) pode ser corroborado por um `suspicious_movement` (câmara); o cenário E acrescenta `suspicious_activity_report` (relato humano). Sem regra, tipos diferentes ficam `inconclusive`.
 
-Na versão atual do simulador, a capacidade é a modalidade `Source.kind`:
-`acoustic` → `gunshot_like_sound`, `visual` → `suspicious_movement`,
-`human` → `suspicious_activity_report` (constante `SIGNALS`). Para ausência
-informativa, a modalidade declarada deve corresponder ao tipo de sinal
-na hipótese. Tipos desconhecidos ou metadados antigos sem hipótese/capacidade
-resultam conservadoramente em `no_data` no informador. Esta verificação
-estabelece compatibilidade semântica, não sensibilidade perfeita ou uma
-probabilidade calibrada; não utiliza `ground_truth`.
+**Prazo de espera**, em segundos reais:
 
-Quando a mesma avaliação contém evidência compatível e contraditória,
-mesmo na mesma resposta, o resultado é `inconclusive`, preservando os
-identificadores de ambas. A classificação é feita por observação: uma
-`evidence_relation: "contradictory"` só habilita a categoria contraditória
-para tipos cobertos por uma regra de incompatibilidade e hipótese correlacionada;
-não elimina observações compatíveis presentes na resposta. A decisão
-`request_mobile_verification` é uma ação para obter mais evidência, não uma
-confirmação do incidente: também pode ser adequada perante conflito,
-sem antecipar a reputação da Etapa 7. As regras
-concretas de incompatibilidade, os limiares de cobertura e a interpretação das
-taxas de falsos negativos continuam dependentes de aprovação do grupo.
+| Situação | Prazo |
+|---|---|
+| `SensorAgent` isolado | 10 s (`RESPONSE_TIMEOUT_SECONDS`) |
+| Cenários A, B e C publicados | 0,5 s |
+| MVP por omissão, cenário D | 2 s |
+| Cenário E (um reenvio) | 4 s, com o pedido repetido aos 2 s |
+
+Regra: `min(10, max_receive_timeout × (1 + retransmit))`.
+
+**Como o iniciador lê a resposta:**
+
+| Resposta | Efeito |
+|---|---|
+| `observations_available` com observação compatível | Conta como apoio |
+| `observations_available` sem observação compatível | `inconclusive`: não conta a favor nem contra |
+| `no_data` | Não conta contra |
+| Prazo esgotado | Decisão `observe` com motivo `timeout`. Com a política ativa, decide só com a evidência local (uma ameaça grave ainda pode mobilizar) |
+
+**Implementado, mas não exercitado pelas execuções medidas:**
+
+- `informative_absence`: a fonte declara «olhei e não vi». Exige cobertura configurada (posição, raio, capacidade e oportunidade confirmada). O `run_mvp` não configura cobertura, por isso nas execuções a fonte só responde `observations_available` ou `no_data`.
+- Evidência `contradictory`: exige uma regra de incompatibilidade dada pelo iniciador e uma resposta que a declare. O `InformantAgent` nunca a declara.
+
+Ambos estão cobertos por testes unitários ([tests/unit/](../tests/unit/)).
+
+### Aviso entre iniciadores (opcional)
+
+Com vários iniciadores, dois sensores que ouvem a mesma ameaça abrem duas ocorrências e mandam duas patrulhas. A opção `alert_distance=D` evita-o, **antes** da verificação:
+
+1. Cada iniciador com uma leitura envia um `ALERT` aos vizinhos, com o tipo, a posição, o instante e a confiança.
+2. Espera pelos `ALERT` dos vizinhos, até um prazo de receção.
+3. Dois `ALERT` são «a mesma ameaça» se estiverem a D células ou menos e a 2,0 s ou menos.
+4. Tem prioridade a leitura mais antiga; em caso de empate, o menor `source_id`. Os dois lados calculam a mesma ordem.
+5. Segunda volta: cada um diz a quem lhe cederia se fica com a ameaça (`{"keeps": true}` ou `false`).
+6. Só se cede a um vizinho que fica. Quem cede fecha como `closed` / `duplicate_alert`.
+
+Um `ALERT` ou um veredicto perdido deixa os dois a tratar a ameaça: falha para o lado seguro (duas respostas em vez de nenhuma).
+
+Custos: um vizinho sem leitura não responde, por isso a espera dura o prazo todo. Depois da espera, o iniciador volta a ler o sensor; se a ameaça já não for vista, fecha como `expired` / `threat_expired`.
+
+Vizinhos são os iniciadores cujos alcances se podem sobrepor. A lista é calculada pelo `run_mvp` a partir das posições; não há descoberta dinâmica.
+
+Medição: com 2 iniciadores e 1 ameaça entre eles, passa de 2 para 1 missão de patrulha e de 40 para 18 mensagens por execução ([scalability.md](scalability.md#aviso-entre-iniciadores-antes-e-depois), `results/stress/alerta.csv`).
 
 ## 5. Atribuição distribuída: Contract Net simplificado
 
 ```mermaid
 sequenceDiagram
-  participant M as Iniciador do incidente
+  participant M as Iniciador
   participant D as Drone
   participant V as Veículo
   M->>D: cfp / CFP
   M->>V: cfp / CFP
   D-->>M: propose / PROPOSAL ou refuse / REJECT
   V-->>M: propose / PROPOSAL ou refuse / REJECT
-  Note over M: Prazo: ignorar propostas tardias e avaliar elegibilidade
-  alt Proposta válida aceite
+  Note over M: Fim do prazo: escolher o menor custo
+  alt Há proposta válida
     M->>D: accept-proposal / ACCEPT
     M->>V: reject-proposal / REJECT
-    D-->>M: inform / STATUS(reserved)
-    Note over M: Só depois da confirmação: Mission.PROPOSED → RESERVED
-  else Reserva recusada explicitamente
-    D-->>M: inform / STATUS(reservation_failed)
-    Note over M: Nova ronda limitada, com novo CFP/conversa
-  else Confirmação desconhecida
-    Note over M: Timeout real; não enviar outro ACCEPT
-  else Sem proposta elegível
-    Note over M: Marcar incidente não resolvido ou tentar nova ronda
+    alt Reserva feita
+      D-->>M: inform / STATUS(reserved)
+      Note over M: Missão passa a RESERVED e a RUNNING
+      D-->>M: inform / MISSION_RESULT
+    else Reserva recusada
+      D-->>M: inform / STATUS(reservation_failed)
+      Note over M: Nova ronda, com novo CFP e nova conversa
+    else Sem STATUS no prazo
+      Note over M: confirmation_unknown, sem outro ACCEPT
+    end
+  else Sem proposta válida
+    Note over M: no_eligible_proposals
   end
 ```
 
 ### Regras operacionais
 
-1. Cada CFP contém `conversation-id`, `mission_id`, `incident_id`, capacidades mínimas e `deadline`.
-2. O recurso avalia localmente se pode executar, rejeitando missões incompatíveis com a sua disponibilidade ou autonomia.
-3. A proposta calcula ETA, consumo energético e custo dentro de unidades explicitadas.
-4. O iniciador ignora propostas tardias, duplicadas e de missões diferentes.
-5. A aceitação só se torna **missão confirmada** após o recurso garantir uma reserva válida.
-6. `STATUS(reserved)` confirma a reserva; `STATUS(reservation_failed)` é uma recusa explícita. Um timeout depois de `ACCEPT` produz `confirmation_unknown` e não autoriza outro `ACCEPT` automático.
-7. O `deadline` do CFP é inclusivo em segundos simulados: uma resposta com `created_at == deadline` é válida; apenas uma resposta posterior é tardia. O timeout real de receção XMPP é independente.
-7. A nova ronda só é permitida após recusa explícita, usa novos IDs e está limitada a duas rondas (`CONTRACT_MAX_ROUNDS`); ausência de propostas produz `no_eligible_proposals`.
-8. O encerramento deve ser idempotente: mensagens repetidas não criam novas missões nem reservas incompatíveis. A perda do iniciador continua sem política de recuperação distribuída.
+1. O `CFP` leva `mission_id`, `incident_id`, `conversation_id`, a capacidade exigida, a prioridade e um `deadline`.
+2. O recurso avalia **localmente** se pode executar. Recusa se estiver ocupado, sem a capacidade ou sem energia para ir e voltar.
+3. A proposta leva uma `Bid` com ETA (s), energia (pontos percentuais) e carga.
+4. Propor não reserva. A reserva só acontece quando o recurso processa o `ACCEPT`.
+5. O iniciador aceita uma resposta por candidato e ignora o que não bate com o CFP: outra conversa, outra missão, performativa errada ou data fora do prazo.
+6. `STATUS(reserved)` confirma. `STATUS(reservation_failed)` é recusa explícita e permite nova ronda. Sem `STATUS` no prazo, o resultado é `confirmation_unknown` e **não** há outro `ACCEPT`: o silêncio não prova que o recurso ficou livre.
+7. O `deadline` do CFP é inclusivo e em segundos simulados (`created_at + 100`). Quem limita a espera na prática é o prazo real de receção.
+8. Cada nova ronda usa um CFP novo, com `message_id`, `conversation_id` e `round_number` novos. O recurso ignora rondas mais antigas do que a última que viu.
+9. Mensagens repetidas não criam segunda reserva nem segunda missão.
 
-O CFP pode incluir `payload.round_number`, inteiro estrito positivo, sem alterar
-`schema_version`; a sua omissão mantém o contrato anterior. O ordinal ordena
-rondas do mesmo iniciador (JID sem recurso) e `mission_id`: tem de crescer sem
-regredir `created_at`. Um ordinal repetido com outro CFP é um conflito; os IDs
-são arbitrários e não estabelecem ordem. Nos CFPs antigos ou mistos, apenas um
-`created_at` estritamente maior estabelece sucessão; perante empate sem ordem
-explícita, preservam-se os contextos existentes sem os invalidar nem presumir a
-ordem de emissão pela chegada das mensagens.
+**Prazo de receção**, em segundos reais: 0,5 s no transporte local e 2,0 s com XMPP (`receive_timeout`). O `STATUS` espera até `max_receive_timeout`. O resultado da missão espera até 10 prazos de receção.
+
+### Custo da proposta
+
+```text
+custo = w_eta × ETA / 60 + w_energia × energia / 100 + w_carga × carga / 1
+```
+
+Pesos 1,0 por omissão; ganha o menor custo; o desempate é por `resource_id` e depois por `message_id` (`select_best_proposal`, [allocation.py](../src/isia/reasoning/allocation.py)). As escalas (60 s, 100 %) são parâmetros de engenharia, não uma calibração física.
+
+Exemplo do MVP: drone com ETA 3 s e energia 6 % custa 0,11; veículo com ETA 5 s e 10 % custa 0,18. Ganha o drone.
+
+Nos cenários A e B o drone tem carga 0,5, o que soma 0,5 ao seu custo: ganha o veículo em todas as execuções `full` de `results/experiments/runs.csv`. No cenário C o drone tem 15 % de autonomia e recusa (precisa de 6 % para a missão mais 10 % de reserva mínima).
+
+A variante `nearest` do coletor põe os pesos da energia e da carga a zero: fica só a ETA, ou seja, a patrulha mais próxima. Em A e B passa a ganhar o drone.
 
 ### Resultados da ronda
 
-O iniciador expõe quatro resultados distintos, sem os converter
-silenciosamente em estados de missão:
-
-| Resultado | Condição | Estado da missão |
+| Resultado | Condição | Efeito |
 |---|---|---|
-| `reservation_confirmed` | `STATUS/inform` válido com `status=reserved` | `RESERVED` |
-| `no_eligible_proposals` | nenhuma `PROPOSAL` válida antes do `ACCEPT` | permanece `PROPOSED` |
-| `reservation_rejected` | recurso respondeu `STATUS/inform` com `reservation_failed` | permanece `PROPOSED` |
-| `confirmation_unknown` | nenhum `STATUS` correlacionado chegou no timeout real | permanece `PROPOSED`; não há novo `ACCEPT` automático |
-
-As propostas são comparadas por custo normalizado:
-`w_eta * ETA/eta_scale + w_energy * energy/energy_scale +
-w_load * load/load_scale`. O desempate é determinístico por `resource_id` e
-`message_id`. Uma proposta não reserva o recurso; a reserva ocorre apenas ao
-processar `ACCEPT` no agente móvel através de `LocalResourceReservation`.
+| Reserva confirmada (evento `reserved`) | `STATUS` válido com `status=reserved` | Ocorrência passa a `RESPONDING` |
+| `no_eligible_proposals` | Nenhuma `PROPOSAL` válida no prazo | Fila, se estiver ligada e alguém estiver ocupado; senão `unresolved` |
+| `reservation_rejected` | `STATUS` com `reservation_failed` | Nova ronda, até `max_attempts` (2) |
+| `confirmation_unknown` | Nenhum `STATUS` válido no prazo | `unresolved`; sem novo `ACCEPT` |
 
 ### Missões e intervenção — Etapa 6
 
-O `IncidentSensorAgent` herda a verificação do sensor e cria a missão através de
-`MissionRegistry`. Cada recurso decide se propõe e reserva localmente; o runner
-fornece ambiente, tempo e transporte, sem escolher vencedores nem fechar incidentes.
+O `IncidentSensorAgent` cria a missão a partir da decisão (`MissionRegistry.create_from_decision`). O alvo é a posição da primeira observação.
 
-Após `STATUS(reserved)`, o recurso executa `RESERVED → MOVING → VERIFYING →
-RETURNING → AVAILABLE`. A missão passa por `RESERVED → RUNNING → DONE/FAILED`.
-A verificação termina antes do regresso: o resultado pode fechar o incidente,
-mas o recurso só fica disponível quando regressa. A reserva inclui energia de
-ida e volta mais o mínimo configurado; não há recarga automática. Interrupção
-permite `MOVING → RETURNING`; perda de energia permite `MOVING/VERIFYING/
-RETURNING → UNAVAILABLE`, com libertação explícita da reserva.
+| Decisão | Missão | Capacidade | Candidatos |
+|---|---|---|---|
+| `request_mobile_verification` | `verify_incident` | `mobile_verification` | Todas as patrulhas |
+| `request_rangers` | `respond_incident` | `incident_response` | Todos os guardas |
+| `observe` | Nenhuma | — | — |
 
-`MISSION_RESULT` usa `protocol=contract-net`, `performative=inform` e
-`in-reply-to=<ACCEPT.message_id>`, incluindo quando `outcome=failed`.
-O corpo exige `mission_id`, `incident_id`, `conversation_id` e `source_id`.
-O payload exige:
+Depois de `STATUS(reserved)`, o recurso percorre `RESERVED → MOVING → VERIFYING → RETURNING → AVAILABLE` e a missão `RESERVED → RUNNING → DONE` ou `FAILED`. O resultado sai antes do regresso: a ocorrência pode fechar com o recurso ainda a caminho da base.
+
+O `MISSION_RESULT` vai com `performative=inform`, `protocol=contract-net` e `in-reply-to=<ACCEPT.message_id>`. O payload:
 
 | Campo | Valor |
 |---|---|
-| `accept_message_id` | ACCEPT que autorizou esta execução |
-| `resource_id` | Recurso emissor; igual a `source_id` |
-| `task` | `verify_incident` ou `respond_incident` no MVP |
+| `accept_message_id` | O `ACCEPT` que autorizou a missão |
+| `resource_id` | O recurso emissor; igual a `source_id` |
+| `task` | `verify_incident` ou `respond_incident` |
 | `outcome` | `confirmed`, `not_confirmed`, `inconclusive` ou `failed` |
-| `reason` | Motivo textual, incluindo falha de inspeção/interrupção |
-| `completed_at` | Segundos simulados, entre a aceitação e a emissão |
+| `reason` | Por exemplo `local_inspection`, `energy_exhausted`, `mission_interrupted` |
+| `completed_at` | Segundos simulados |
+| `position` | Célula inspecionada; o avaliador usa-a para verificar a cobertura |
 
-O executor acrescenta `position` (`{"x", "y"}`), a célula onde a missão terminou ou
-foi inspecionada. O sensor não o exige; o avaliador usa-o para verificar cobertura.
+O que o iniciador faz com cada resultado:
 
-O iniciador verifica remetente, destinatário, conversa, missão, incidente,
-ACCEPT, tarefa e cronologia. Replays de aceitações terminadas não voltam a
-reservar recursos. O envio de resultado preserva ID e corpo se uma chamada de
-envio falhar; não implementa confirmação de entrega nem recuperação distribuída.
+| `outcome` | Efeito |
+|---|---|
+| `confirmed` numa verificação | Cria **nova missão** `respond_incident` para os guardas, com o mesmo protocolo. Só o resultado do guarda fecha a ocorrência |
+| `confirmed` ou `not_confirmed` do guarda | Fecha: `closed`, com esse motivo |
+| `not_confirmed` numa verificação | Fecha: `closed` / `not_confirmed`, sem chamar o guarda. Não é uma refutação: a patrulha não viu nada naquela célula, naquele instante |
+| `inconclusive` ou `failed` | Volta a `ALLOCATING`, exclui o recurso já tentado e negoceia outra missão. Até 2 tentativas por tarefa; depois, `unresolved` |
+| Nenhum resultado no prazo | `unresolved` / `mission_result_unknown`. Não se deduz falha física nem se atribui outra missão |
 
-- `not_confirmed`: fecha o incidente com esse resultado, sem pedir um guarda.
-  Não equivale a refutação fundamentada nem atualiza reputações. Desde 18-11-2026,
-  a intervenção do guarda também o devolve quando chega e a ameaça já lá não está
-  (antes era sempre `confirmed`); a Etapa 9 repetida deu resultados iguais, byte a byte.
-- `confirmed` na verificação: cria **nova missão** `respond_incident`, capacidade
-  `incident_response`, para os `RangerAgent` conhecidos. Usa o mesmo protocolo
-  CFP → PROPOSAL → ACCEPT → STATUS → MISSION_RESULT. Só o resultado da resposta
-  permite fechar o incidente confirmado.
-- `inconclusive` ou `failed`: `RESPONDING → ALLOCATING`, exclui o recurso já
-  tentado e negoceia outra missão. O MVP permite até duas tentativas por tarefa;
-  sem alternativa ou com tentativas esgotadas termina `UNRESOLVED`.
-- Sem confirmação/resultados dentro do timeout real: não deduz falha física,
-  termina `UNRESOLVED` e não atribui novamente a mesma tarefa. O recurso continua
-  o ciclo local se estiver operacional. A recuperação fica na Etapa 8.
+O guarda devolve `not_confirmed` quando chega e a ameaça já lá não está. A intervenção não remove o evento do ambiente.
 
-`ALERT` e `INCIDENT_CLOSED` ficam registados na linha temporal local do sensor;
-não há difusão de encerramento aos pares nesta etapa. Sem corroboração suficiente,
-a demonstração de uma única janela passa por `WATCHING → EXPIRED`.
+A inspeção é idealizada: o recurso recebe a classificação da célula que visitou, sem erro e sem acesso aos eventos reais.
 
-**Extensões opcionais da fila (18-11-2026).** Não há mensagens novas:
+### Opções da fila, do reenvio e do aviso
 
-- **Prazo de validade** (`expire_unseen`): antes de cada `CFP`, o iniciador volta a ler
-  o seu sensor. Com a janela do feed vazia (5 s simulados, 6 leituras seguidas), a
-  ocorrência passa de `ALLOCATING` para `EXPIRED`, com motivo `threat_expired`, e
-  ninguém é enviado.
-- **`busy_until` na recusa:** um recurso ocupado numa missão acrescenta ao payload do
-  `REJECT` (`resource_unavailable`) o instante simulado em que prevê ficar livre. O
-  campo é opcional e informativo; com `queue_until_free`, o iniciador espera até lá
-  em vez de voltar a perguntar de 5 em 5 s.
-- **Missões encadeadas** (`chain_missions`): no regresso à base, com o
-  `MISSION_RESULT` já enviado, o recurso responde ao `CFP` com `PROPOSAL` calculada
-  a partir da posição atual (ida ao alvo mais regresso à base). O `ACCEPT` termina
-  o regresso nesse ponto e a missão seguinte parte daí.
+Nenhuma destas opções cria tipos de mensagem novos. Valores por omissão de `run_mvp` e valores usados em cada recolha:
 
-Medições em [escalabilidade](scalability.md#mitigações-da-espera-na-fila-antes-e-depois).
+| Opção | O que faz | `run_mvp` | A, B, C publicados | D | E |
+|---|---|---|---|---|---|
+| `max_receive_timeout` | Prazo dinâmico: sem nenhuma proposta ao fim do prazo-base, espera até este teto | 2,0 s | desligado | 2,0 s | 2,0 s |
+| `queue_rounds` | Fila: com os recursos ocupados, espera 5 s simulados e volta a pedir, até N vezes | 60 | 0 | 60 | 60 |
+| `silent_invalid` | O recurso não responde a um `ACCEPT` que não bate com a sua proposta | ligado | desligado | ligado | ligado |
+| `queue_priority` | Fila ordenada no recurso: primeiro a ocorrência mais grave, depois a que espera há mais tempo. Os outros recebem `waiting_turn` | desligado | desligado | ligado | ligado |
+| `expire_unseen` | Antes de cada CFP, o iniciador volta a ler o sensor. Janela vazia (5 s simulados): `expired` / `threat_expired` | desligado | desligado | ligado | ligado |
+| `queue_until_free` | A recusa por ocupação traz `busy_until`; o iniciador espera até lá em vez de 5 em 5 s | desligado | desligado | ligado | ligado |
+| `chain_missions` | No regresso à base, com o resultado já entregue, o recurso propõe a partir da posição atual | desligado | desligado | ligado | ligado |
+| `retransmit` | Reenvio: sem resposta, o mesmo `VERIFY_REQUEST`, `CFP` ou `ACCEPT` (mesmo `message_id`) volta a sair até N vezes; o destinatário repete a resposta já dada | 0 | 0 | 0 | 1 |
+| `alert_distance` | [Aviso entre iniciadores](#aviso-entre-iniciadores-opcional) | desligado | desligado | desligado | 1,0 |
+| `cfp_limit` | CFP só às K patrulhas com base mais próxima do alvo | desligado | desligado | desligado | desligado |
 
-O movimento usa segundos simulados e distância Manhattan, primeiro x e depois y.
-No exemplo, velocidade 1 célula/s, custo 1 ponto percentual/célula e inspeção de 1 s
-sem consumo adicional. A tolerância numérica de energia é de `1e-10` pontos
-percentuais. O relógio do exemplo avança enquanto há missões em execução; os
-prazos de receção usam segundos reais e não avançam esse relógio.
-A inspeção é local e idealizada, consultada apenas na célula visitada; o agente
-recebe a classificação, sem acesso aos eventos de referência. A intervenção
-simulada do guarda só é bem-sucedida com a ameaça ainda na célula e não remove
-eventos globais. Estes limites antecedem os
-cenários e a política de resposta das Etapas 7–9.
+As três primeiras estão ligadas por omissão em `run_mvp`. O coletor e os scripts de medição desligam-nas (`PUBLISHED_CONDITIONS`, [runner.py](../src/isia/simulation/runner.py)) para reproduzir os resultados publicados; as opções de um cenário (`options` em D e E) sobrepõem-se.
 
-A política opcional da Etapa 7 reutiliza este contrato e o mesmo ciclo. Pode
-pedir diretamente `respond_incident`, com capacidade `incident_response`, sem
-uma verificação móvel prévia. O avaliador distingue o resultado operacional de
-uma referência suficiente para aprendizagem: só uma verificação confirmada,
-independente da fonte avaliada, com `position` válida e instante dentro dos
-limites experimentais de cobertura, pode atualizar a reputação. Posição ausente
-ou inválida não invalida a mensagem operacional, mas não comprova cobertura.
-`not_confirmed`, falhas, resultados inconclusivos e a intervenção do guarda
-não fundamentam essa atualização. A adjudicação ocorre depois de o sensor
-terminar; a decisão dessa execução conserva os pesos históricos anteriores.
-Os parâmetros experimentais continuam sujeitos a aprovação formal;
-ver [reputação e política](reputation-policy.md).
+Limites: a fila não é uma fila no recurso com garantia de ordem global, é o iniciador a insistir. O `busy_until` é uma previsão. Com o relógio simulado parado, um prazo real impede a espera infinita.
+
+Medições antes e depois de cada opção: [scalability.md](scalability.md#mitigações-da-espera-na-fila-antes-e-depois) e [reenvio](scalability.md#reenvio-de-mensagens-antes-e-depois).
 
 ## 6. Estado e ordenação
 
-- `Observation`: identificada por `event_id`; permanece imutável após emissão.
-- `Incident`: agrupa observações; pode ter revisões de avaliação.
-- `Mission`: tem `mission_id` único e transições validadas (`PROPOSED` → `RESERVED` → `RUNNING` → `DONE`/`FAILED`).
-- Guardar `message_id` processados por uma janela finita para evitar duplicação, com política de expiração.
-- Mensagens fora de ordem devem ser rejeitadas ou reconciliadas com base em estado/versão.
-- O transporte não garante, por si só, execução de missão; distinguir **mensagem recebida**, **pedido aceite** e **tarefa concluída**.
+| Entidade | Identificador | Regra |
+|---|---|---|
+| Observação | `event_id` | Imutável depois de emitida |
+| Ocorrência | `incident_id` = `incident-<event_id da primeira leitura>` | Estados em [architecture.md](architecture.md#5-ciclo-de-vida-de-um-incidente) |
+| Missão | `mission_id` | `PROPOSED → RESERVED → RUNNING → DONE` ou `FAILED` |
+| Conversa | `conversation_id` | Uma por pedido de verificação e uma por CFP |
+
+Repetições e mensagens fora de ordem são tratadas por cada agente, no seu comportamento. Não há registo partilhado de mensagens já vistas.
+
+| Quem | Regra |
+|---|---|
+| Iniciador | Uma resposta por candidato em cada CFP; ignora mensagens com data no futuro, de outra conversa ou de outro remetente |
+| Iniciador | Duas mensagens da mesma observação (`event_id`) contam uma vez |
+| Recurso | CFP repetido com o mesmo `message_id`: devolve a mesma proposta. CFP já recusado: ignora, ou repete a recusa se o reenvio estiver ligado |
+| Recurso | `ACCEPT` de uma missão já terminada: nunca volta a reservar |
+| Recurso | Uma proposta não aceite caduca 10 s simulados depois do `deadline` do CFP |
+
+Receber uma mensagem, aceitar um pedido e concluir uma tarefa são três coisas diferentes. Por isso existem `STATUS` (aceitei) e `MISSION_RESULT` (concluí).
 
 ## 7. Gestão de erros e falhas
 
-| Falha | Tratamento proposto | Teste |
-|---|---|---|
-| Fonte indisponível | Prazo de verificação e marcação de evidência incompleta | Desligar sensor durante pedido |
-| Mensagem duplicada | Deduplicação por `message_id`/`event_id` | Reenviar mensagem idêntica |
-| Mensagem perdida | Por omissão, timeout e estado explícito. Com `retransmit=N`, o mesmo pedido volta a sair e o destinatário repete a resposta | Perder a primeira `PROPOSAL`, `STATUS` ou `VERIFY_RESPONSE` |
-| Mensagem tardia | Conferir `deadline` e estado da conversa | Atrasar uma proposta após o fecho |
-| Dupla atribuição | Reserva atómica por recurso | Duas conversas concorrentes |
-| Recurso sem energia | `refuse` / `REJECT` com motivo | Bateria inferior à reserva mínima |
-| Falha de missão | `inform` / `MISSION_RESULT` com `outcome=failed`, libertação/reavaliação | Interromper recurso em movimento |
-| Falha do iniciador | Política de substituição ainda pendente | Simular desaparecimento do iniciador |
-| Mensagem inválida | Validação + rejeição sem crash | JSON malformado ou campos ausentes |
-| Conectividade degradada | Perda/atraso no adaptador de transporte | Comparar cenários de rede |
+O protocolo responde a cada falha com um estado explícito, nunca com silêncio:
+
+| Falha | Resposta do protocolo |
+|---|---|
+| Fonte não responde | Prazo esgotado; decisão `observe` (`timeout`) |
+| Recurso sem energia ou ocupado | `refuse` / `REJECT` com motivo |
+| Proposta tardia | Ignorada; sem outra, `no_eligible_proposals` |
+| Recurso ocupado entre a proposta e o `ACCEPT` | `STATUS(reservation_failed)` e nova ronda |
+| `ACCEPT` ou `STATUS` perdido | `confirmation_unknown` |
+| `MISSION_RESULT` perdido | `mission_result_unknown` |
+| Missão falha a meio | `MISSION_RESULT` com `outcome=failed`; nova tentativa com outro recurso |
+| Mensagem duplicada ou inválida | Ignorada, sem segundo efeito e sem erro |
+| Iniciador desaparece | **Sem recuperação**: a ocorrência fica parada |
+
+A injeção de falhas, os estados resultantes medidos e o reenvio estão em [faults.md](faults.md).
 
 ## 8. Implementação e compatibilidade SPADE
 
-Na Etapa 3 foram verificados com SPADE 4.1.4: `spade.agent.Agent`, `OneShotBehaviour`, `CyclicBehaviour`, `spade.message.Message`, `Template`, `send`/`receive` e metadados, com demonstração real XMPP. Na Etapa 5, `MobileResourceAgent` reutiliza `CyclicBehaviour` e `Template` para `CFP` e `accept-proposal`; o iniciador (`IncidentSensorAgent`) usa `OneShotBehaviour`. `PeriodicBehaviour` não foi necessário. O suporte de mensagens com metadados não implica validação integral de conformidade FIPA-ACL, que exigiria teste específico.
+Com SPADE 4.1.4 ([requirements.txt](../requirements.txt)) usamos `Agent`, `OneShotBehaviour`, `CyclicBehaviour`, `Message`, `Template` e metadados. `PeriodicBehaviour` e `FSMBehaviour` não foram precisos.
 
-Os contratos atuais estão implementados em `src/isia/communication/messages.py`, o adaptador SPADE/XMPP em `src/isia/communication/transport.py`, a lógica de alocação em `src/isia/reasoning/allocation.py`, e a correlação nos comportamentos dos agentes e no demo. Não existe `communication/protocols.py` separado. `DroneAgent`, `VehicleAgent` e `RangerAgent` reutilizam o ciclo comum de `src/isia/agents/mobile.py`; `IncidentSensorAgent` integra o ciclo do incidente. A injeção parametrizada de perda/latência permanece proposta para etapas posteriores. Os testes de serialização e mocks não substituem testes de entrega real XMPP; na Etapa 5 o cenário normal foi executado com XMPP e os cenários de falha foram testados localmente com mocks/determinismo.
+| Ficheiro | Conteúdo |
+|---|---|
+| [messages.py](../src/isia/communication/messages.py) | `Message`, `MessageType`, conversão dos modelos para JSON |
+| [transport.py](../src/isia/communication/transport.py) | Performativas, ontologia, `build_spade_message`, `parse_spade_message` |
+| [allocation.py](../src/isia/reasoning/allocation.py) | Construção e validação de `CFP`, `ACCEPT`, `STATUS`; escolha da proposta; reserva |
+| [agents/](../src/isia/agents/) | Os comportamentos que conduzem os dois protocolos |
+
+Para correr o MVP com XMPP real:
+
+```bash
+spade run --host localhost --memory                                         # terminal 1
+XMPP_PASSWORD=<palavra-passe> PYTHONPATH=src python -m isia.simulation.runner --xmpp   # terminal 2
+```
+
+Limites do que foi validado sobre XMPP:
+
+- Só o MVP base (5 agentes). Falhas injetadas, iniciadores e recursos adicionais existem apenas no transporte local.
+- Os agentes correm no mesmo processo, e o SPADE pode entregar mensagens internamente. Não é uma prova de rede com processos separados.
+- Usar metadados FIPA não é conformidade FIPA-ACL integral.
 
 ## 9. Porquê estes protocolos: alternativas, prós e contras
 
-Os prós e contras abaixo são **do desenho**, salvo quando indicam uma medição. Os números medidos estão em [experiments.md](experiments.md) e na verificação de 16-11-2026 de [delivery-todo.md](delivery-todo.md#verificação-de-partida-16-11-2026).
+Os prós e contras são **do desenho**, salvo quando indicam uma medição. Os números estão em [experiments.md](experiments.md) e [scalability.md](scalability.md).
 
 ### Verificação: porquê FIPA Request
 
 | Opção | Como funciona | Prós | Contras | Escolhida? |
 |---|---|---|---|---|
-| **FIPA Request** | Pede uma vez e recebe uma resposta | Simples; correlação por `in-reply-to`; timeout fácil | Só dá uma «fotografia»: evidência posterior ao pedido não chega | **Sim** |
+| **FIPA Request** | Pede uma vez e recebe uma resposta | Simples; correlação por `in-reply-to`; prazo fácil | Só dá uma «fotografia»: evidência posterior ao pedido não chega | **Sim** |
 | FIPA Query-ref | Pergunta «qual é o valor de X?» | Semanticamente certo para pedir dados | Para este caso, igual ao Request | Não: sem ganho |
-| FIPA Subscribe | O par avisa sempre que observar algo | Recebe evidência que surge depois do pedido | Mais mensagens; é preciso cancelar a subscrição | Não: trabalho futuro (várias janelas) |
+| FIPA Subscribe | A fonte avisa sempre que observar algo | Recebe evidência que surge depois do pedido | Mais mensagens; é preciso cancelar a subscrição | Não: trabalho futuro (várias janelas) |
 | Difusão a todos os sensores | Todos respondem | Mais evidência | O(n) mensagens e respostas a correlacionar | Não: não escala |
 | Blackboard partilhado | Todos escrevem num quadro comum | Sem troca de mensagens | O quadro é uma entidade central, o que contradiz o tema | Não |
+
+Contra medido: corroborar com uma só fonte custa recall. No cenário B, 0,65 com corroboração contra 0,80 sem ela, em troca de FPR 0,25 contra 0,75 ([experiments.md](experiments.md)).
 
 ### Atribuição: porquê Contract Net
 
 | Opção | Como funciona | Prós | Contras | Escolhida? |
 |---|---|---|---|---|
-| **Contract Net** (leilão inverso, propostas fechadas, uma ronda) | O iniciador anuncia; os recursos propõem ou recusam; ganha o menor custo | Uma ronda, ~3N mensagens por ronda; cada recurso decide localmente se propõe; protocolo das aulas (ISIA 3); recusas são explícitas | Escolha gulosa por ocorrência; não é *strategy-proof*; espera pelo prazo quando um recurso não responde | **Sim** |
+| **Contract Net** (leilão inverso, propostas fechadas, uma ronda) | O iniciador anuncia; os recursos propõem ou recusam; ganha o menor custo | Uma ronda, cerca de 3N mensagens; cada recurso decide localmente se propõe; recusas explícitas | Escolha gulosa por ocorrência; não é *strategy-proof*; espera pelo prazo quando um recurso não responde | **Sim** |
 | Atribuição direta | O iniciador escolhe e ordena | 2 mensagens | O iniciador teria de conhecer o estado de todos; sem autonomia do recurso; é um despachante disfarçado | Não |
 | Primeiro a voluntariar-se | Ganha a primeira proposta que chegar | Rápido | Ganha a rede mais rápida, não o melhor recurso | Não |
 | Leilão inglês | Lances públicos em rondas ascendentes | Revela informação | Várias rondas; lento e com muitas mensagens | Não |
 | Leilão holandês | O «preço» desce até alguém aceitar | Uma aceitação | Precisa de relógio partilhado; escolhe por velocidade de resposta | Não |
 | Vickrey (segundo preço) | Ganha o melhor, «paga» o segundo | Dizer a verdade é estratégia dominante | Sem pagamentos não há incentivo; os agentes são cooperativos | Não |
-| Leilão combinatório / VCG | Atribui vários recursos a várias ocorrências de uma vez | Eficiência global | NP-difícil; exige pagamentos; só existe uma ocorrência por janela | Não: trabalho futuro |
+| Leilão combinatório / VCG | Atribui vários recursos a várias ocorrências de uma vez | Eficiência global | NP-difícil; exige pagamentos e alguém que veja todas as ocorrências | Não: trabalho futuro |
+
+Contra medido: com um recurso silencioso, cada execução espera mais um prazo de receção (0,5 s reais). O prazo dinâmico e o reenvio são as mitigações opcionais.
 
 ### Porquê o `STATUS` depois do `ACCEPT`
 
-No Contract Net clássico, `accept-proposal` vale como compromisso. Entre propor e ser aceite, o recurso pode ter sido reservado por outra ocorrência; sem `STATUS`, o iniciador acreditaria ter um recurso que não tem. A falha `occupied_after_proposal` ([test_faults.py:69](../tests/integration/test_faults.py#L69)) testa este caso: o recurso responde `reservation_failed` e o iniciador renegoceia uma vez.
+No Contract Net clássico, `accept-proposal` vale como compromisso. Aqui, entre propor e ser aceite, o recurso pode ter sido reservado por outra ocorrência. Sem `STATUS`, o iniciador acreditaria ter um recurso que não tem.
+
+O teste `test_resource_occupied_after_proposal_renegotiates_once` ([test_faults.py](../tests/integration/test_faults.py)) cobre este caso: o recurso responde `reservation_failed` e o iniciador renegoceia uma vez.
 
 - **Pró:** nunca há duas missões no mesmo recurso.
 - **Contra:** mais uma mensagem e mais um ponto onde uma perda deixa a ocorrência `unresolved` (`confirmation_unknown`).
 
 ### Desvios ao FIPA assumidos como decisão
 
-| Desvio | FIPA | Código | Porquê não alterar |
+| Desvio | FIPA | Código | Porquê |
 |---|---|---|---|
 | Confirmação de reserva | não existe | `inform` / `STATUS` depois do `ACCEPT` | Evita a condição de corrida descrita acima |
-| Falha de missão | `failure` | `inform` / `MISSION_RESULT` com `outcome=failed` | Um único tipo de resultado com `outcome`; o iniciador valida um só caminho |
+| Falha de missão | `failure` | `inform` / `MISSION_RESULT` com `outcome=failed` | Um único tipo de resultado; o iniciador valida um só caminho |
 | Fonte sem dados | `refuse` ou `failure` | `inform` com `status=no_data` | «Não vi» é informação, não recusa |
-| Conteúdo | FIPA-SL | JSON validado | Compatível com SPADE e testável sem XMPP; não é conformidade FIPA-ACL integral |
+| Conteúdo | FIPA-SL | JSON validado | Compatível com SPADE e testável sem XMPP |
 
-**Corrigido a 16-11-2026:** o recurso recusava o CFP com `reject-proposal`, que no FIPA é a performativa do iniciador para as propostas não escolhidas. Passou a enviar `refuse` ([mobile.py:314](../src/isia/agents/mobile.py#L314)), e o iniciador valida-a ([incident.py:176](../src/isia/agents/incident.py#L176)). O tipo de domínio continua `REJECT` nos dois casos.
-
-## 10. Checklist de aprovação
-
-- [ ] Escolher versão final do contrato e unidade do relógio.
-- [ ] Acordar IDs, destinatários, convenção de correlação e prazos.
-- [ ] Definir campos mínimos de `Observation`, `Mission` e `Bid`.
-- [ ] Confirmar performatives/protocolos suportados pela versão SPADE usada.
-- [ ] Documentar recusa, timeout, deduplicação, reserva e recuperação.
-- [ ] Escrever primeiro os testes dos fluxos de verificação e de atribuição.
+A recusa de um CFP segue o FIPA: o recurso envia `refuse` e o iniciador envia `reject-proposal` às propostas não escolhidas. O tipo do corpo é `REJECT` nos dois casos.

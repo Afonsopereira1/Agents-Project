@@ -1,5 +1,9 @@
 # Organização do grupo — tarefas flexíveis
 
+> **Estado (18-11-2026).** Regras de colaboração do grupo, escritas no início; não lista tarefas nem resultados.
+> - **Na prática:** o trabalho foi integrado por *pull requests* (25 integrados até 18-11-2026). As GitHub Issues descritas abaixo não chegaram a ser usadas: o repositório não tem nenhuma. As tarefas foram seguidas no [plano](development-plan.md) e, desde 16-11-2026, em [delivery-todo.md](delivery-todo.md).
+> - **Para o que falta fazer:** [delivery-todo.md](delivery-todo.md). Para correr o sistema: [README](../README.md).
+
 Somos três elementos. **Não há uma divisão fixa por sensores, patrulhas ou simulação.** Cada elemento escolhe tarefas conforme a sua disponibilidade, respeitando as prioridades e dependências do [plano de desenvolvimento](development-plan.md).
 
 ## 1. Como escolher uma tarefa

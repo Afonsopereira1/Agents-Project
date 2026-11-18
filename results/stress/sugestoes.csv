@@ -1,0 +1,26 @@
+grupo,valor,runs,ameacas,com_alerta,chegam_ao_guarda,unresolved,t_fecho_sim_mean,msgs_mean
+distancia,"guarda a 5 células, ameaça de 15 s",5,5,5,5,0,12.0,15.0
+distancia,"guarda a 6 células, ameaça de 15 s",5,5,5,5,0,13.0,15.0
+distancia,"guarda a 7 células, ameaça de 15 s",5,5,5,5,0,14.0,15.0
+distancia,"guarda a 8 células, ameaça de 15 s",5,5,5,0,0,,15.0
+distancia,"guarda a 9 células, ameaça de 15 s",5,5,5,0,0,,15.0
+cobertura,"ameaça em (7,0), só o sensor-1 inicia",10,10,0,0,0,,0.0
+cobertura,"ameaça em (7,0), mais um iniciador em (6,1)",10,10,10,9,0,16.0,13.7
+guardas,2 guardas para 16 ameaças,10,160,152,136,3,121.2,1178.4
+guardas,3 guardas para 16 ameaças,10,160,152,139,0,102.6,1148.9
+guardas,4 guardas para 16 ameaças,10,160,152,139,0,94.1,1163.5
+reenvios,"perda 10%, 0 reenvios",20,20,19,7,8,,9.6
+reenvios,"perda 10%, 1 reenvios",20,20,19,17,0,,13.15
+reenvios,"perda 10%, 2 reenvios",20,20,19,17,0,,13.15
+reenvios,"perda 10%, 3 reenvios",20,20,19,17,0,,13.15
+reenvios,"perda 10%, 4 reenvios",20,20,19,17,0,,13.15
+reenvios,"perda 20%, 0 reenvios",20,20,19,1,11,,6.8
+reenvios,"perda 20%, 1 reenvios",20,20,19,10,4,,11.8
+reenvios,"perda 20%, 2 reenvios",20,20,19,16,1,,16.0
+reenvios,"perda 20%, 3 reenvios",20,20,19,17,0,,16.15
+reenvios,"perda 20%, 4 reenvios",20,20,19,17,0,,16.15
+reenvios,"perda 30%, 0 reenvios",20,20,19,0,10,,4.95
+reenvios,"perda 30%, 1 reenvios",20,20,19,3,8,,10.4
+reenvios,"perda 30%, 2 reenvios",20,20,19,9,7,,17.25
+reenvios,"perda 30%, 3 reenvios",20,20,19,15,1,,19.05
+reenvios,"perda 30%, 4 reenvios",20,20,19,16,1,,20.3
