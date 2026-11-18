@@ -47,7 +47,7 @@ class MissionExecution:
 
     def __init__(self, reservation, mission, world, *, now, speed=1.0,
                  energy_per_cell=1.0, service_seconds=1.0, minimum_energy=0.0,
-                 inspect):
+                 inspect, home=None):
         for name, value in (("now", now), ("speed", speed),
                             ("energy_per_cell", energy_per_cell),
                             ("service_seconds", service_seconds),
@@ -60,7 +60,7 @@ class MissionExecution:
             raise ValueError("A missão precisa de uma reserva local confirmada.")
         self.reservation, self.world = reservation, world
         self.mission = replace(mission, status=MissionStatus.RESERVED).change_status(MissionStatus.RUNNING)
-        self.home = state.position
+        self.home = home or state.position  # encadear: a base não é a posição de partida
         self.speed, self.energy_per_cell = speed, energy_per_cell
         self.service_seconds, self.minimum_energy = service_seconds, minimum_energy
         self.inspect = inspect
@@ -74,7 +74,8 @@ class MissionExecution:
         try:
             world.validate_position(self.home)
             world.validate_position(mission.target)
-            cost = 2 * distance(self.home, mission.target) * energy_per_cell
+            cost = (distance(state.position, mission.target)
+                    + distance(mission.target, self.home)) * energy_per_cell
             if state.autonomy_percent is None or (state.autonomy_percent < cost + minimum_energy and not isclose(
                     state.autonomy_percent, cost + minimum_energy, rel_tol=0, abs_tol=1e-10)):
                 raise ValueError("autonomy_insufficient")
@@ -106,6 +107,20 @@ class MissionExecution:
             self.mission = self.mission.change_status(
                 MissionStatus.FAILED if outcome == "failed" else MissionStatus.DONE)
             self._record("MISSION_RESULT", at, outcome=outcome, reason=reason)
+
+    def free_at(self, returning=False):
+        """Instante simulado previsto em que o recurso fica livre: na base ou, com returning, ao iniciar o regresso."""
+        state = self.resource
+        if state.status is ResourceStatus.RETURNING:
+            return self.phase_at if returning else self.phase_at + distance(self.origin, self.home) / self.speed
+        served = self.phase_at + self.service_seconds + (0 if state.status is ResourceStatus.VERIFYING else
+                                                         distance(self.origin, self.mission.target) / self.speed)
+        return served if returning else served + distance(self.mission.target, self.home) / self.speed
+
+    def release(self):
+        """Encadear missões: terminar o regresso na posição atual para aceitar a seguinte."""
+        if not self.finished and self.resource.status is ResourceStatus.RETURNING:
+            self._state(self.resource.change_status(ResourceStatus.AVAILABLE), self.now, release=True)
 
     def interrupt(self, reason="mission_interrupted"):
         """Interromper no último instante avançado; regressar ou imobilizar."""

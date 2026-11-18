@@ -12,7 +12,7 @@ from pathlib import Path
 from isia.evaluation.collector import load_scenario
 from isia.evaluation.metrics import run_metrics
 from isia.reasoning.reputation import ReputationBook
-from isia.simulation.runner import run_mvp
+from isia.simulation.runner import PUBLISHED_CONDITIONS, run_mvp
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "results" / "stress" / "longa.csv"
@@ -34,7 +34,7 @@ async def go():
         print(out[-1], flush=True)
     line(0)
     for i in range(N):
-        report = await run_mvp(response_settings=s, reputation=book, max_seconds=30.0,
+        report = await run_mvp(response_settings=s, reputation=book, max_seconds=30.0, **PUBLISHED_CONDITIONS,
             scenario={"run_id": f"longa-{i:04d}", "seed": 1000 + i, "sources": base["sources"],
                       "events": base["episodes"][0]["events"], "resources": base["resources"]})
         row = run_metrics(report)

@@ -13,7 +13,7 @@ from pathlib import Path
 from isia.evaluation.collector import load_scenario
 from isia.evaluation.metrics import run_metrics
 from isia.reasoning.reputation import ReputationBook
-from isia.simulation.runner import run_mvp
+from isia.simulation.runner import PUBLISHED_CONDITIONS, run_mvp
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "results" / "stress"
@@ -71,7 +71,7 @@ async def case(name, resources, faults, reps):
     for rep in range(reps):
         seed = 1000 + rep
         report = await run_mvp(response_settings=s, reputation=ReputationBook(**s["reputation"]),
-            faults=None if faults is None else {**faults, "seed": seed}, max_seconds=30.0,
+            faults=None if faults is None else {**faults, "seed": seed}, max_seconds=30.0, **PUBLISHED_CONDITIONS,
             scenario={"run_id": f"f1-{rep}", "seed": seed, "sources": base["sources"],
                       "events": EVENTS, "resources": resources})
         rows.append(run_metrics(report))

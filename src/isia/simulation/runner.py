@@ -21,6 +21,7 @@ from isia.domain.models import Position, ResourceState
 from isia.domain.validation import is_finite_number
 from isia.reasoning.policy import ResponsePolicy
 from isia.reasoning.reputation import ReputationBook, result_from_mission
+from isia.simulation.movement import distance
 from isia.simulation.world import World
 from isia.simulation.scenario import Scenario, Source, Event, event_from_dict
 
@@ -67,6 +68,9 @@ def fault_settings(faults):
 MVP_RESOURCES = {"drone": Position(0, 2), "vehicle": Position(0, 0), "ranger": Position(5, 5)}
 RESOURCE_KEYS = {"position", "autonomy_percent", "load"}
 CORROBORATION_DEFAULTS = {"max_distance": 3.0, "max_time_difference": 2.0}
+# Prazo fixo, sem fila e com resposta a ACCEPT incoerente: as condições dos resultados publicados
+# (Etapa 9, P3, Blocos F1 e G). O coletor e os scripts passam-nas a run_mvp para os reproduzir.
+PUBLISHED_CONDITIONS = {"max_receive_timeout": None, "queue_rounds": 0, "silent_invalid": False}
 
 
 def validate_experimental_settings(*, xmpp=False, corroboration_settings=None,
@@ -134,9 +138,11 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                   interrupt_resource=None, max_seconds=None,
                   response_settings=None, reputation=None, faults=None,
                   scenario=None, corroborate=True, selection_weights=None, run_id=None,
-                  extra_initiators=None, extra_patrols=None, cfp_limit=None, max_receive_timeout=None,
-                  queue_rounds=0, silent_invalid=False, queue_priority=False,
-                  corroboration_settings=None, receive_timeout=None, minimum_autonomy_percent=10.0):
+                  extra_initiators=None, extra_patrols=None, cfp_limit=None, max_receive_timeout=2.0,
+                  queue_rounds=60, silent_invalid=True, queue_priority=False,
+                  corroboration_settings=None, receive_timeout=None, minimum_autonomy_percent=10.0,
+                  extra_rangers=None, extra_informants=None, map_size=(8, 8), sensor_positions=None,
+                  expire_unseen=False, queue_until_free=False, chain_missions=False):
     """O runner só fornece ambiente, relógio e transporte; agentes decidem.
 
     inspection_outcomes e interrupt_resource permitem testes determinísticos.
@@ -161,10 +167,11 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     ganha um sensor no mapa e um IncidentSensorAgent próprio, que só trata o que
     a sua fonte deteta. O runner não escolhe quem trata cada ameaça. Os campos
     de topo do relatório continuam a ser os do sensor-mvp.
-    max_receive_timeout ativa o prazo dinâmico do iniciador (ver configure_mvp);
-    por omissão o prazo é fixo, como nos resultados recolhidos.
-    queue_rounds ativa a fila do iniciador (ver configure_mvp). silent_invalid faz os
-    recursos ignorarem um ACCEPT incoerente em vez de responderem reservation_failed.
+    max_receive_timeout é o teto do prazo dinâmico do iniciador (ver configure_mvp), queue_rounds
+    a fila do iniciador e silent_invalid faz os recursos ignorarem um ACCEPT incoerente em vez de
+    responderem reservation_failed. As três opções estão ligadas por omissão desde 18-11-2026;
+    PUBLISHED_CONDITIONS desliga-as, como nos resultados recolhidos. Um receive_timeout acima
+    do teto exige um max_receive_timeout maior (ou None).
     queue_priority ordena a fila em cada recurso: primeiro a ocorrência mais grave e,
     em caso de empate, a que espera há mais tempo. A gravidade de cada iniciador vem de
     response_settings["severity"] ou, por fonte, de response_settings["severity_by_source"].
@@ -175,6 +182,14 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     omissões 3.0 células e 2.0 s simulados. receive_timeout substitui o prazo
     base (0.5 s local, 2.0 s XMPP); não liga o prazo dinâmico do Bloco F.
     minimum_autonomy_percent é a reserva mínima de todas as patrulhas e do guarda.
+    map_size e sensor_positions (C4 completo) substituem o mapa 8x8 e as posições de
+    sensor-1 e sensor-2. extra_rangers associa novos IDs de guarda a posições base.
+    extra_informants associa fontes do cenário a posições: cada uma ganha um InformantAgent,
+    e cada iniciador adicional passa a corroborar com o informador mais próximo (sensor-2
+    incluído); um dicionário vazio liga a corroboração só com o sensor-2. Sem ele, os
+    iniciadores adicionais não corroboram, como antes.
+    expire_unseen, queue_until_free (ver configure_mvp) e chain_missions (o recurso aceita a
+    missão seguinte durante o regresso à base) são mitigações da espera na fila, desligadas.
     """
     corroboration, receive_timeout, minimum_autonomy_percent = validate_experimental_settings(
         xmpp=xmpp, corroboration_settings=corroboration_settings, receive_timeout=receive_timeout,
@@ -191,14 +206,20 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     if scenario_run_id is not None and run_id != scenario_run_id:
         raise ValueError("run_id deve coincidir com scenario.run_id.")
     extra_initiators = dict(extra_initiators or {})
-    extra_patrols = dict(extra_patrols or {})
-    if (extra_initiators or extra_patrols) and xmpp:
-        raise ValueError("Iniciadores e patrulhas adicionais só existem no transporte local.")
-    if set(extra_patrols) & set(MVP_RESOURCES):
-        raise ValueError("extra_patrols exige IDs diferentes de drone, vehicle e ranger.")
-    if set(extra_initiators) & {"sensor-1", "sensor-2"} or set(extra_initiators) - set(sources):
-        raise ValueError("extra_initiators exige fontes do cenário diferentes de sensor-1 e sensor-2.")
-    world = World(8, 8, {"sensor-1": Position(2, 2), "sensor-2": Position(4, 2), **extra_initiators})
+    extra_patrols, extra_rangers = dict(extra_patrols or {}), dict(extra_rangers or {})
+    informants = dict(extra_informants or {})
+    if (extra_initiators or extra_patrols or extra_rangers or informants) and xmpp:
+        raise ValueError("Iniciadores, informadores e recursos adicionais só existem no transporte local.")
+    if (set(extra_patrols) | set(extra_rangers)) & set(MVP_RESOURCES) or set(extra_patrols) & set(extra_rangers):
+        raise ValueError("extra_patrols e extra_rangers exigem IDs diferentes entre si e de drone, vehicle e ranger.")
+    if ((set(extra_initiators) | set(informants)) & {"sensor-1", "sensor-2"}
+            or (set(extra_initiators) | set(informants)) - set(sources) or set(extra_initiators) & set(informants)):
+        raise ValueError("extra_initiators e extra_informants exigem fontes do cenário distintas, "
+                         "diferentes de sensor-1 e sensor-2.")
+    base_sensors = {"sensor-1": Position(2, 2), "sensor-2": Position(4, 2)}
+    if set(sensor_positions or {}) - set(base_sensors):
+        raise ValueError("sensor_positions aceita apenas sensor-1 e sensor-2.")
+    world = World(*map_size, {**base_sensors, **(sensor_positions or {}), **extra_initiators, **informants})
     scenario = Scenario(world, sources, events, seed=seed, observation_prefix=prefix)
     sensor = IncidentSensorAgent("sensor-mvp@localhost", password, "sensor-peer-mvp@localhost")
     peer = InformantAgent("sensor-peer-mvp@localhost", password)
@@ -206,15 +227,23 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     sensor.set_corroboration_context(("sensor-2",) if corroborate else (),
                                      corroboration["max_distance"], corroboration["max_time_difference"], 1,
                                      compatibility_rules=(response_settings or {}).get("compatibility_rules"))
+    peers = {"sensor-2": peer}
+    for source_id in informants:
+        peers[source_id] = InformantAgent(f"{source_id}-mvp@localhost", password)
+        peers[source_id].set_local_observation_feed(scenario.source(source_id), source_id, 0.0)
     extras = {}
-    for source_id in extra_initiators:
+    for source_id, position in extra_initiators.items():
+        # C6: cada iniciador adicional pergunta ao informador mais próximo. Sem extra_informants
+        # não corrobora (o sensor-2 responde, mas a resposta não conta), como no Bloco F2.
+        # shortcut: os iniciadores adicionais não atualizam a reputação; alargar a adjudicação se for preciso.
+        nearest = min(peers, key=lambda key: distance(world.sensors[key], position))
         extras[source_id] = extra = IncidentSensorAgent(
-            f"{source_id}-mvp@localhost", password, "sensor-peer-mvp@localhost")
+            f"{source_id}-mvp@localhost", password, str(peers[nearest].jid))
         extra.set_local_observation_feed(scenario.source(source_id), 0.0)
-        # shortcut: sem corroboração nem aprendizagem de reputação (o par responde, mas a
-        # resposta não conta); dar um par a cada iniciador quando C6 for implementado.
-        extra.set_corroboration_context((), corroboration["max_distance"],
-                                        corroboration["max_time_difference"], 1)
+        extra.set_corroboration_context(
+            (nearest,) if corroborate and extra_informants is not None else (),
+            corroboration["max_distance"], corroboration["max_time_difference"], 1,
+            compatibility_rules=(response_settings or {}).get("compatibility_rules"))
     initiators = [sensor, *extras.values()]
     if response_settings is not None:
         if reputation is None:
@@ -234,13 +263,15 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         (VehicleAgent, "vehicle", "mobile_verification"),
         (RangerAgent, "ranger", "incident_response"),
         *((DroneAgent, name, "mobile_verification") for name in extra_patrols),
+        *((RangerAgent, name, "incident_response") for name in extra_rangers),
     ):
         options = resource_settings.get(name, {})
         origin = (model_from_dict(options["position"], Position) if "position" in options
-                  else extra_patrols[name] if name in extra_patrols else MVP_RESOURCES[name])
+                  else {**MVP_RESOURCES, **extra_patrols, **extra_rangers}[name])
         world.validate_position(origin)
+        kind = "drone" if name in extra_patrols else "ranger" if name in extra_rangers else name
         agent = agent_class(f"{name}-mvp@localhost", password,
-                            ResourceState(name, "drone" if name in extra_patrols else name, origin, True,
+                            ResourceState(name, kind, origin, True,
                                           options.get("autonomy_percent", 100.0)),
                             (capability,), minimum_autonomy_percent=minimum_autonomy_percent, eta_seconds=0.0,
                             energy_cost_percent=0.0, load=options.get("load", 0.0))
@@ -248,12 +279,16 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         inspect = scenario.inspect if outcome is None else lambda position, now, task, value=outcome: value
         agent.configure_execution(world, inspect)
         agent.silent_invalid, agent.ordered_queue = silent_invalid, queue_priority
+        agent.chain_missions = chain_missions
         mobiles.append(agent)
+    jids = lambda capability, present: {str(a.jid): a.resource.resource_id for a in mobiles
+                                        if (capability in a.capabilities) is present}
     for initiator in initiators:
-        initiator.configure_mvp({str(a.jid): a.resource.resource_id for a in mobiles if a is not mobiles[2]},
-                                {str(mobiles[2].jid): "ranger"}, receive_timeout=receive_timeout,
+        initiator.configure_mvp(jids("incident_response", False), jids("incident_response", True),
+                                receive_timeout=receive_timeout,
                                 selection_weights=selection_weights, cfp_limit=cfp_limit,
                                 max_receive_timeout=max_receive_timeout, queue_rounds=queue_rounds,
+                                expire_unseen=expire_unseen, queue_until_free=queue_until_free,
                                 base_positions={str(a.jid): a.resource.position for a in mobiles})
     initial_resources = [model_to_dict(agent.resource) for agent in mobiles]
     if max_seconds is None:
@@ -264,7 +299,7 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                        + 2 * sensor.max_attempts
                        * ((1 + queue_rounds) * 2 * sensor.max_receive_timeout
                           + (10 + queue_rounds) * sensor.receive_timeout) + 1.0)
-    agents = [*mobiles, peer, *initiators]
+    agents = [*mobiles, *peers.values(), *initiators]
     tasks, started, transcript, fault_log = [], [], [], []
     rng = random.Random(faults["seed"] if faults else 0)
     by_resource = {agent.resource.resource_id: agent for agent in mobiles}
@@ -400,6 +435,8 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                 "minimum_autonomy_percent": minimum_autonomy_percent,
                 # Só para o avaliador, depois de a execução terminar.
                 "ground_truth": scenario.ground_truth,
+                "world": {"width": world.width, "height": world.height,
+                          "sensors": {key: model_to_dict(p) for key, p in world.sensors.items()}},
                 "initial_resources": initial_resources,
                 "reputation_scores": sensor.reputation_scores,
                 "reputation_updates": updates,

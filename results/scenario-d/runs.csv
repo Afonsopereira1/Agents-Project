@@ -1,0 +1,11 @@
+scenario,variant,repetition,episode,seed,threat,alert,dispatched,decision,confirmed,status,reason,unresolved,verification_time,response_time,energy_used,messages_sent,messages_lost,messages_duplicated,missions_done,missions_failed,first_patrol,incidents,incidents_closed,incidents_expired,incidents_unresolved,last_close_time,reputation_sensor_1
+D,full,0,busy,1000,True,True,True,request_mobile_verification,True,closed,confirmed,False,17.0,23.0,74.0,186,0,0,2,0,drone-2,5,5,0,0,30.0,0.6
+D,full,1,busy,1001,True,True,False,observe,False,expired,insufficient_corroboration,False,N/A,N/A,62.0,135,0,0,0,0,drone-2,5,4,1,0,23.0,0.6
+D,full,2,busy,1002,True,True,True,request_mobile_verification,True,closed,confirmed,False,16.0,22.0,54.0,142,0,0,2,0,drone-2,5,4,1,0,23.0,0.6666666666666666
+D,full,3,busy,1003,True,True,True,request_mobile_verification,True,closed,confirmed,False,17.0,23.0,84.0,258,0,0,2,0,drone-2,6,5,1,0,39.0,0.7142857142857143
+D,full,4,busy,1004,True,True,True,request_mobile_verification,True,closed,confirmed,False,16.0,22.0,84.0,208,0,0,2,0,drone-2,5,5,0,0,36.0,0.75
+D,full,5,busy,1005,True,True,False,observe,False,expired,insufficient_corroboration,False,N/A,N/A,60.0,145,0,0,0,0,drone-2,5,4,1,0,28.0,0.75
+D,full,6,busy,1006,True,True,True,request_mobile_verification,True,closed,confirmed,False,17.0,23.0,62.0,188,0,0,2,0,drone-2,6,4,2,0,24.0,0.7777777777777778
+D,full,7,busy,1007,True,True,True,request_mobile_verification,True,closed,confirmed,False,11.0,17.0,66.0,133,0,0,2,0,drone-2,4,4,0,0,26.0,0.8
+D,full,8,busy,1008,True,True,True,request_mobile_verification,True,closed,confirmed,False,11.0,17.0,86.0,207,0,0,2,0,drone-3,5,5,0,0,31.0,0.8181818181818182
+D,full,9,busy,1009,True,True,True,request_mobile_verification,True,closed,confirmed,False,16.0,22.0,84.0,258,0,0,2,0,drone-2,6,5,1,0,37.0,0.8333333333333334

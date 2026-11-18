@@ -185,16 +185,15 @@ class Scenario:
         """Inspeção local idealizada do MVP; não expõe eventos nem ground_truth.
 
         Só classifica a célula visitada no instante indicado. A intervenção
-        do guarda é uma ação simulada bem-sucedida, não remove eventos globais.
+        do guarda só é bem-sucedida se a ameaça ainda lá estiver; um guarda
+        que chega tarde devolve not_confirmed. Não remove eventos globais.
         Sensibilidade e falhas de inspeção ficam para os cenários posteriores.
         """
         self.world.validate_position(position)
         nonnegative(now, "now")
         if now > self.world.clock.now:
             raise ValueError("A inspeção não pode consultar o futuro.")
-        if task == "respond_incident":
-            return "confirmed"
-        if task != "verify_incident":
+        if task not in ("verify_incident", "respond_incident"):
             return "failed"
         return "confirmed" if any(
             event.kind == "threat" and event.active(now) and event.position_at(now) == position

@@ -1,0 +1,12 @@
+{
+  "commit": "d81330fdc938e21a5f33e3a8d4a78e2f23e6c9c3",
+  "dirty": true,
+  "scenarios": [
+    "config/scenarios/demo/D.json"
+  ],
+  "variants": {
+    "full": {}
+  },
+  "repetitions_override": null,
+  "runs": 10
+}

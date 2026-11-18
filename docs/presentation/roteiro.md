@@ -2,7 +2,9 @@
 
 > Ordem fixa e conteúdo de cada diapositivo. Os números vêm de `results/`: Etapa 9 (560 execuções), P3 (`results/scalability/`) e Bloco G (3500 execuções alternativas válidas). Cada diapositivo aponta para a fonte; as recolhas têm âmbitos distintos.
 
-**Duração alvo:** cerca de 12 minutos, 13 diapositivos, cerca de 55 segundos cada. A demonstração gravada ocupa o diapositivo 10.
+**Duração alvo:** cerca de 12 minutos, 13 diapositivos, cerca de 55 segundos cada. A demonstração gravada ocupa o diapositivo 10. O diapositivo 14 é de reserva, para perguntas.
+
+**Diapositivos (18-11-2026):** <https://claude.ai/artifact/C5kRVniNyws5ZcU1z3SaXs>, feitos a partir deste roteiro, com notas do orador. A ligação é privada até ser partilhada no menu Share; para a entrega, exportar para PDF ou PowerPoint e guardar em `docs/presentation/`. Falta preencher os nomes do grupo no diapositivo 1.
 
 | # | Diapositivo | Conteúdo | Fonte |
 |---|---|---|---|
@@ -19,6 +21,7 @@
 | 11 | **Bloco G — sensibilidade** | Em B, patrulha 0,35 reduz recall 0,65→0,10 e FPR 0,25→0,025; gravidade 0,9 eleva recall a 0,80 e FPR a 0,75. São os dois maiores efeitos absolutos observados nas taxas de classificação | [sensitivity.md](../sensitivity.md#síntese-dos-efeitos-e-ausência-de-diferenças), tabela abaixo |
 | 12 | Limites | Uma ocorrência por janela; 20 sementes com aprendizagem dependente; intervalos G descritivos; scores não calibrados; 1/1 bloqueado; falhas só no transporte local. A reputação mudou 1 decisão em 560 na Etapa 9 | [experiments.md](../experiments.md#limitações-e-incerteza), [sensitivity.md](../sensitivity.md#limitações-e-interpretação-científica), [scalability.md](../scalability.md) |
 | 13 | Conclusão e trabalho futuro | Ciclo completo, recusa autónoma e compromissos medidos entre deteção, alarmes e custo. Próximos passos: trajetórias independentes, observações temporalmente separadas, agrupamento de ocorrências, retransmissões e decisão sobre 1/1 | [sensitivity.md](../sensitivity.md#conclusões-e-trabalho-que-permanece-condicionado), [delivery-todo.md](../delivery-todo.md#bloco-g--sensibilidade-dos-parâmetros-no-final) |
+| 14 | Reserva — testes de stress | Seis limites encontrados e a resposta medida a cada um: prazo dinâmico, fila, gravidade, validade, missões encadeadas e segundo guarda | [scalability.md](../scalability.md#mapa-de-limites) |
 
 ## Notas para os diapositivos 7, 8, 11 e 12
 
@@ -73,3 +76,11 @@ Para gravar vídeo, correr o comando acima com um gravador de ecrã aberto. O qu
 5. **Métricas:** energia gasta (drone 6, guarda 10, veículo 0) e 15 mensagens no transcrito.
 
 O visualizador só lê o relatório: não corre agentes nem decide nada.
+
+**Segunda gravação, para perguntas sobre várias ocorrências:** o [cenário D](../scalability.md#cenário-d--dia-movimentado), com seis ameaças ao mesmo tempo num mapa 12×8.
+
+```bash
+scriptreplay --log-timing results/demo/replay-d.tim --log-out results/demo/replay-d.log
+```
+
+Vídeo da demonstração do MVP, sem terminal: `results/demo/mvp.mp4`.

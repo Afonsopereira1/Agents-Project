@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 810 388" width="810" height="388" role="img" aria-label="Taxas de classificação por cenário e variante">
+<style>
+.bg{fill:#fcfcfb}.t1{fill:#0b0b0b}.t2{fill:#52514e}.mu{fill:#898781}.grid{stroke:#e1e0d9}.axis{stroke:#c3c2b7}
+.s0{fill:#2a78d6}.s1{fill:#eb6834}.s2{fill:#1baf7a}.s3{fill:#eda100}
+text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:12px}
+.title{font-size:15px;font-weight:600}.num{font-variant-numeric:tabular-nums}
+@media (prefers-color-scheme:dark){.bg{fill:#1a1a19}.t1{fill:#f0efec}.t2{fill:#c3c2b7}.grid{stroke:#2c2c2a}.axis{stroke:#383835}
+.s0{fill:#3987e5}.s1{fill:#d95926}.s2{fill:#199e70}.s3{fill:#c98500}}
+</style>
+<rect class="bg" width="810" height="388"/>
+<text class="title t1" x="12" y="22">Taxas de classificação por cenário e variante</text>
+<text class="t2" x="12" y="40">Etapa 9: 560 execuções, 20 sementes por episódio. Fonte: results/experiments/summary.csv</text>
+<rect class="s0" x="12" y="50" width="10" height="10" rx="2"/><text class="t2" x="27" y="59">full</text>
+<rect class="s1" x="162" y="50" width="10" height="10" rx="2"/><text class="t2" x="177" y="59">no_reputation</text>
+<rect class="s2" x="312" y="50" width="10" height="10" rx="2"/><text class="t2" x="327" y="59">no_corroboration</text>
+<rect class="s3" x="462" y="50" width="10" height="10" rx="2"/><text class="t2" x="477" y="59">nearest</text>
+<text class="t1" x="150" y="74" font-weight="600">Precision</text>
+<line class="grid" x1="225.0" x2="225.0" y1="82" y2="366"/><text class="mu num" x="225.0" y="380" text-anchor="middle">0,5</text>
+<line class="grid" x1="300" x2="300" y1="82" y2="366"/><text class="mu num" x="300" y="380" text-anchor="middle">1</text>
+<line class="axis" x1="150" x2="150" y1="82" y2="366"/><text class="mu num" x="150" y="380" text-anchor="middle">0</text>
+<text class="t1" x="370" y="74" font-weight="600">Recall</text>
+<line class="grid" x1="445.0" x2="445.0" y1="82" y2="366"/><text class="mu num" x="445.0" y="380" text-anchor="middle">0,5</text>
+<line class="grid" x1="520" x2="520" y1="82" y2="366"/><text class="mu num" x="520" y="380" text-anchor="middle">1</text>
+<line class="axis" x1="370" x2="370" y1="82" y2="366"/><text class="mu num" x="370" y="380" text-anchor="middle">0</text>
+<text class="t1" x="590" y="74" font-weight="600">FPR</text>
+<line class="grid" x1="665.0" x2="665.0" y1="82" y2="366"/><text class="mu num" x="665.0" y="380" text-anchor="middle">0,5</text>
+<line class="grid" x1="740" x2="740" y1="82" y2="366"/><text class="mu num" x="740" y="380" text-anchor="middle">1</text>
+<line class="axis" x1="590" x2="590" y1="82" y2="366"/><text class="mu num" x="590" y="380" text-anchor="middle">0</text>
+<text class="t1" x="12" y="93" font-weight="600">Cenário A</text>
+<text class="t2" x="24" y="110">full</text>
+<path class="s0" d="M150,100h146.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-146.0z"><title>A full — Precision: 1,00</title></path>
+<text class="t1 num" x="306.0" y="110">1,00</text>
+<path class="s0" d="M370,100h123.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-123.5z"><title>A full — Recall: 0,85</title></path>
+<text class="t1 num" x="503.5" y="110">0,85</text>
+<text class="t1 num" x="596.0" y="110">0,00</text>
+<text class="t2" x="24" y="130">no_reputation</text>
+<path class="s1" d="M150,120h146.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-146.0z"><title>A no_reputation — Precision: 1,00</title></path>
+<text class="t1 num" x="306.0" y="130">1,00</text>
+<path class="s1" d="M370,120h123.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-123.5z"><title>A no_reputation — Recall: 0,85</title></path>
+<text class="t1 num" x="503.5" y="130">0,85</text>
+<text class="t1 num" x="596.0" y="130">0,00</text>
+<text class="t2" x="24" y="150">no_corroboration</text>
+<path class="s2" d="M150,140h146.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-146.0z"><title>A no_corroboration — Precision: 1,00</title></path>
+<text class="t1 num" x="306.0" y="150">1,00</text>
+<path class="s2" d="M370,140h138.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-138.5z"><title>A no_corroboration — Recall: 0,95</title></path>
+<text class="t1 num" x="518.5" y="150">0,95</text>
+<text class="t1 num" x="596.0" y="150">0,00</text>
+<text class="t2" x="24" y="170">nearest</text>
+<path class="s3" d="M150,160h146.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-146.0z"><title>A nearest — Precision: 1,00</title></path>
+<text class="t1 num" x="306.0" y="170">1,00</text>
+<path class="s3" d="M370,160h123.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-123.5z"><title>A nearest — Recall: 0,85</title></path>
+<text class="t1 num" x="503.5" y="170">0,85</text>
+<text class="t1 num" x="596.0" y="170">0,00</text>
+<text class="t1" x="12" y="187" font-weight="600">Cenário B</text>
+<text class="t2" x="24" y="204">full</text>
+<path class="s0" d="M150,194h80.8a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-80.8z"><title>B full — Precision: 0,57</title></path>
+<text class="t1 num" x="240.8" y="204">0,57</text>
+<path class="s0" d="M370,194h93.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-93.5z"><title>B full — Recall: 0,65</title></path>
+<text class="t1 num" x="473.5" y="204">0,65</text>
+<path class="s0" d="M590,194h33.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-33.5z"><title>B full — FPR: 0,25</title></path>
+<text class="t1 num" x="633.5" y="204">0,25</text>
+<text class="t2" x="24" y="224">no_reputation</text>
+<path class="s1" d="M150,214h80.8a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-80.8z"><title>B no_reputation — Precision: 0,57</title></path>
+<text class="t1 num" x="240.8" y="224">0,57</text>
+<path class="s1" d="M370,214h93.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-93.5z"><title>B no_reputation — Recall: 0,65</title></path>
+<text class="t1 num" x="473.5" y="224">0,65</text>
+<path class="s1" d="M590,214h33.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-33.5z"><title>B no_reputation — FPR: 0,25</title></path>
+<text class="t1 num" x="633.5" y="224">0,25</text>
+<text class="t2" x="24" y="244">no_corroboration</text>
+<path class="s2" d="M150,234h48.2a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-48.2z"><title>B no_corroboration — Precision: 0,35</title></path>
+<text class="t1 num" x="208.2" y="244">0,35</text>
+<path class="s2" d="M370,234h116.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-116.0z"><title>B no_corroboration — Recall: 0,80</title></path>
+<text class="t1 num" x="496.0" y="244">0,80</text>
+<path class="s2" d="M590,234h108.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-108.5z"><title>B no_corroboration — FPR: 0,75</title></path>
+<text class="t1 num" x="708.5" y="244">0,75</text>
+<text class="t2" x="24" y="264">nearest</text>
+<path class="s3" d="M150,254h80.8a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-80.8z"><title>B nearest — Precision: 0,57</title></path>
+<text class="t1 num" x="240.8" y="264">0,57</text>
+<path class="s3" d="M370,254h93.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-93.5z"><title>B nearest — Recall: 0,65</title></path>
+<text class="t1 num" x="473.5" y="264">0,65</text>
+<path class="s3" d="M590,254h33.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-33.5z"><title>B nearest — FPR: 0,25</title></path>
+<text class="t1 num" x="633.5" y="264">0,25</text>
+<text class="t1" x="12" y="281" font-weight="600">Cenário C</text>
+<text class="t2" x="24" y="298">full</text>
+<path class="s0" d="M150,288h146.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-146.0z"><title>C full — Precision: 1,00</title></path>
+<text class="t1 num" x="306.0" y="298">1,00</text>
+<path class="s0" d="M370,288h116.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-116.0z"><title>C full — Recall: 0,80</title></path>
+<text class="t1 num" x="496.0" y="298">0,80</text>
+<text class="t1 num" x="596.0" y="298">0,00</text>
+<text class="t2" x="24" y="318">no_reputation</text>
+<path class="s1" d="M150,308h146.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-146.0z"><title>C no_reputation — Precision: 1,00</title></path>
+<text class="t1 num" x="306.0" y="318">1,00</text>
+<path class="s1" d="M370,308h108.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-108.5z"><title>C no_reputation — Recall: 0,75</title></path>
+<text class="t1 num" x="488.5" y="318">0,75</text>
+<text class="t1 num" x="596.0" y="318">0,00</text>
+<text class="t2" x="24" y="338">no_corroboration</text>
+<path class="s2" d="M150,328h146.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-146.0z"><title>C no_corroboration — Precision: 1,00</title></path>
+<text class="t1 num" x="306.0" y="338">1,00</text>
+<path class="s2" d="M370,328h138.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-138.5z"><title>C no_corroboration — Recall: 0,95</title></path>
+<text class="t1 num" x="518.5" y="338">0,95</text>
+<text class="t1 num" x="596.0" y="338">0,00</text>
+<text class="t2" x="24" y="358">nearest</text>
+<path class="s3" d="M150,348h146.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-146.0z"><title>C nearest — Precision: 1,00</title></path>
+<text class="t1 num" x="306.0" y="358">1,00</text>
+<path class="s3" d="M370,348h116.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-116.0z"><title>C nearest — Recall: 0,80</title></path>
+<text class="t1 num" x="496.0" y="358">0,80</text>
+<text class="t1 num" x="596.0" y="358">0,00</text>
+</svg>

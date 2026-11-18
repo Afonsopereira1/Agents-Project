@@ -453,7 +453,7 @@ A injeção não se aplica ao XMPP, que não foi executado nesta validação.
 - [x] Executar diferentes sementes quando há aleatoriedade; registar o número de repetições.
 - [x] Comparar políticas simples: sem corroboração, sem reputação e seleção da patrulha mais próxima.
 - [x] Produzir tabelas e discutir compromissos entre precisão, rapidez e custo.
-- [ ] Produzir gráficos a partir de `summary.csv` — **opcional**; ver [delivery-todo.md](delivery-todo.md#bloco-d--entregáveis-oficiais).
+- [x] Produzir gráficos a partir de `summary.csv` — **opcional**. **Feito (18-11-2026):** [scripts/charts.py](../scripts/charts.py) grava [taxas.svg](../results/experiments/charts/taxas.svg) e [custo.svg](../results/experiments/charts/custo.svg), sem dependências novas.
 - [x] Registar falhas observadas, limitações e incerteza — **sem inventar resultados**.
 
 **Implementação (12-11-2026):** a unidade é a execução (zona 8×8 numa janela
@@ -462,7 +462,7 @@ devolve `None` para denominadores zero; `evaluation/collector.py` corre
 cenários × variantes × sementes e escreve `runs.csv`, `summary.csv` e
 `manifest.json` em `results/experiments/`. `run_mvp` aceita `scenario`,
 `corroborate` e `selection_weights`. Os cenários A, B e C ficam em
-`config/scenarios/`, com 20 repetições cada. Só há tabelas, sem gráficos.
+`config/scenarios/`, com 20 repetições cada. Às tabelas juntaram-se dois gráficos SVG a 18-11-2026.
 Resultados e limitações: [experiências](experiments.md).
 
 **Verificação (12-11-2026):** a suite completa passou **419 testes, OK**.

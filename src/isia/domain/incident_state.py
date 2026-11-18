@@ -29,6 +29,7 @@ _ALLOWED_TRANSITIONS = {
     IncidentStatus.ALLOCATING: {
         IncidentStatus.RESPONDING,
         IncidentStatus.UNRESOLVED,
+        IncidentStatus.EXPIRED,  # prazo de validade: a ameaça deixou de ser vista
     },
     IncidentStatus.RESPONDING: {
         IncidentStatus.CLOSED,

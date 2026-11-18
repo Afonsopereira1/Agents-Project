@@ -16,7 +16,7 @@ Antes dizíamos «o sistema foi desenhado para aguentar falhas». Depois do Bloc
 
 ## As três melhorias
 
-As três estão desligadas por omissão e ligam-se em `run_mvp(max_receive_timeout=2.0, queue_rounds=60, silent_invalid=True)`.
+Desde 18-11-2026 as três estão ligadas por omissão em `run_mvp` (`max_receive_timeout=2.0`, `queue_rounds=60`, `silent_invalid=True`). As recolhas publicadas continuam nas condições antigas (`PUBLISHED_CONDITIONS`), por isso os resultados não mudaram.
 
 ```
  CFP ──► proposta em 0,5 s? ──sim──────────────────► ACCEPT ──► STATUS até 2,0 s?
@@ -71,7 +71,7 @@ As três estão desligadas por omissão e ligam-se em `run_mvp(max_receive_timeo
 1. **O que encontrámos.** Com 8 ocorrências ao mesmo tempo, só 1 fechava. As outras 7 terminavam como não resolvidas, porque encontravam o guarda ocupado e ninguém o voltava a chamar.
 2. **O que fizemos.** Uma fila: recurso ocupado deixa de ser falha; o iniciador espera e volta a pedir. Passaram a fechar as 8, sem reservas duplas.
 3. **O que a fila revelou.** Atender todas não é o mesmo que atender a tempo. Medimos com ameaças que duram pouco ([espera.csv](../../results/stress/espera.csv)).
-4. **O que propomos.** Cinco mitigações, cada uma para um problema medido (tabela abaixo). Uma já está feita: a ordem por gravidade.
+4. **O que fizemos a seguir.** Cinco mitigações, cada uma para um problema medido (tabela abaixo), todas feitas e medidas até 18-11-2026.
 
 **Frase para dizer:** «A fila troca "não atendida" por "atendida mais tarde". O passo seguinte é garantir "atendida a tempo".»
 
@@ -80,20 +80,20 @@ As três estão desligadas por omissão e ligam-se em `run_mvp(max_receive_timeo
 | Duração da ameaça | Confirmadas | Patrulhas em vão | Guarda chega depois do fim |
 |---|---|---|---|
 | 1000 s | 80 | 0 | 0 |
-| 60 s | 70 | 10 | 15 |
-| 30 s | 39 | 41 | 19 |
+| 60 s | 54 | 10 | 16 |
+| 30 s | 20 | 40 | 20 |
 
-Com ameaças de 30 s, só 20 das 80 ocorrências têm o guarda no local a tempo.
+Com ameaças de 30 s, só 20 das 80 ocorrências têm o guarda no local a tempo. (Medição repetida a 18-11-2026: o guarda que chega tarde já não conta como confirmada.)
 
-### Problema, evidência e solução futura
+### Problema, evidência e solução
 
-| Problema | O que medimos | Solução futura | Custo estimado |
+| Problema | O que medimos | Solução | Resultado medido (18-11-2026) |
 |---|---|---|---|
-| A ameaça já lá não está quando chega a vez | Com ameaças de 30 s, 41 de 80 patrulhas chegam em vão | **Prazo de validade:** antes de voltar a pedir, o iniciador relê o seu sensor; se já não vê a ameaça, desiste | ~1,5 h |
-| O guarda único é o gargalo | O último fecho passa de 12 s para 80 s com 8 ocorrências | **Mais guardas:** medir 1, 2 e 4 guardas | ~2 h |
-| Tráfego de quem espera | 352 mensagens contra 123; pede-se o guarda de 5 em 5 s | **O recurso diz quando fica livre:** a recusa leva a hora prevista e o iniciador espera até lá | ~2 h |
+| A ameaça já lá não está quando chega a vez | Com ameaças de 30 s, 41 de 80 patrulhas chegam em vão | **Prazo de validade:** antes de voltar a pedir, o iniciador relê o seu sensor; se já não vê a ameaça, desiste | Patrulhas em vão: 40 → 12; guarda em vão: 20 → 8 |
+| O guarda único é o gargalo | O último fecho passa de 12 s para 80 s com 8 ocorrências | **Mais guardas:** medir 1, 2 e 4 guardas | Com 2 guardas, 1 pedido por ocorrência (antes 3,3); o último fecho só desce de 81 s para 68 s, porque passam a faltar patrulhas |
+| Tráfego de quem espera | 352 mensagens contra 123; pede-se o guarda de 5 em 5 s | **O recurso diz quando fica livre:** a recusa leva a hora prevista e o iniciador espera até lá | Mensagens: 367 → 336; pedidos ao guarda: 3,2 → 2,6 |
 | Sem ordem nem prioridade | Uma ocorrência chega a pedir o guarda 15 vezes (média 2,9); a gravidade não conta | **Ordem na fila:** primeiro a mais grave; em caso de empate, a que espera há mais tempo | **Feito** (ver abaixo) |
-| O guarda volta à base entre missões | Cerca de 10 s simulados a mais por cada ocorrência à frente | **Encadear missões:** aceitar a seguinte durante o regresso | ~3 h |
+| O guarda volta à base entre missões | Cerca de 10 s simulados a mais por cada ocorrência à frente | **Encadear missões:** aceitar a seguinte durante o regresso | Último fecho: 81 s → 54 s |
 
 ### Feito: fila ordenada por gravidade
 
@@ -110,22 +110,23 @@ Com ameaças de 30 s, só 20 das 80 ocorrências têm o guarda no local a tempo.
 - **O que dizer:** «as graves fecham três vezes mais cedo, com as mesmas mensagens; quem paga são as leves».
 - **O que não faz:** não interrompe uma missão em curso, e, com graves a chegar sem parar, as leves ficam à espera para sempre.
 
-**Um limite do simulador que convém dizer:** a intervenção do guarda dá sempre «confirmada», mesmo que a ameaça já tenha terminado. As 19 intervenções tardias foram contadas pelo relógio, não pelo resultado. Corrigir isto é o primeiro passo das mitigações.
+**Um limite do simulador, já corrigido:** a intervenção do guarda dava sempre «confirmada», mesmo que a ameaça já tivesse terminado. Desde 18-11-2026 o guarda que chega tarde devolve «não confirmada»; a Etapa 9 não mudou.
 
-**Se perguntarem «porque não fizeram já?»:** cada mitigação muda o comportamento dos agentes e pede uma medição de antes e depois. Preferimos mostrar os problemas medidos e as soluções desenhadas a apresentar código por medir. A lista está em [pendentes do Bloco F](../delivery-todo.md#pendentes-deixados-pelo-bloco-f).
+**Se perguntarem «e ligadas todas ao mesmo tempo?»:** é o [cenário D](../scalability.md#cenário-d--dia-movimentado): seis ameaças num mapa 12×8, seis iniciadores, quatro patrulhas e dois guardas. Em 10 execuções, nenhuma ocorrência ficou por resolver e não houve duplas reservas; as graves fecham em média aos 10 s e as leves aos 31 s. As mitigações estão desligadas por omissão; tabelas completas em [scalability.md](../scalability.md#mitigações-da-espera-na-fila-antes-e-depois).
 
-## Porque estão desligadas por omissão
+## Porque estiveram desligadas por omissão até 18-11-2026
 
 - **Não mudam os resultados oficiais.** Repetimos a recolha da Etapa 9 (560 execuções, cerca de 4,5 min) com as três ligadas: `summary.csv` e `runs.csv` saíram iguais, byte a byte.
 - **Porque não mudam:** cada execução da Etapa 9 tem uma só ocorrência (o guarda nunca está ocupado, a fila nunca atua) e não tem mensagens inválidas (o silêncio nunca atua). As perdas do cenário C são perdas, não atrasos: uma mensagem perdida nunca chega, por isso esperar mais não ajuda.
 - **O que mudaria:** 4 testes que verificam o comportamento antigo, as curvas do F1 (que passam a ser o «antes») e o contrato de mensagens, porque o silêncio troca uma resposta `reservation_failed` por nenhuma.
-- **Porque não se ligou logo:** pela regra da [ata](../approvals.md), um valor aprovado não muda no código sem decisão do grupo; o prazo (item 5.1) ainda está em exploração no Bloco G.
+- **Porque não se ligou logo:** pela regra da [ata](../approvals.md), um valor aprovado não muda no código sem decisão do grupo; o prazo (item 5.1) estava em exploração no Bloco G.
+- **Como se ligou:** os seis testes do comportamento antigo foram ajustados, e o coletor e os scripts de medição passam `PUBLISHED_CONDITIONS` (prazo fixo, sem fila, com resposta a `ACCEPT` incoerente). A alteração está registada na [ata](../approvals.md#registo-de-alterações-ao-código); a aprovação do item 5.1 continua por assinar.
 
 ## Porque ainda se chama «MVP»
 
 - **É um nome histórico.** MVP (produto mínimo viável) foi o objetivo da Etapa 6: um alerta, corroboração, negociação, missão e fecho, sem despachante. Foi atingido a 12-11-2026.
 - **Depois disso, tudo cresceu sobre o mesmo código:** reputação e política (Etapa 7), falhas (Etapa 8), cenários e avaliação (Etapa 9), stress (Bloco F). A função `run_mvp` e os nomes `sensor-mvp`, `drone-mvp` ficaram.
-- **O que ainda é mínimo:** mapa fixo de 8×8, dois sensores fixos, um guarda, uma ocorrência por janela (C7), todos os agentes no mesmo processo e transporte local por omissão.
+- **O que ainda é mínimo:** nos cenários A, B e C, mapa de 8×8, dois sensores, um guarda e uma ocorrência por janela (C7); todos os agentes no mesmo processo e transporte local por omissão. O [cenário D](../scalability.md#cenário-d--dia-movimentado) já lê o mapa, os sensores e os recursos do ficheiro de cenário.
 - **Mudar o nome não vale a pena agora:** mexe em dezenas de testes e documentos e não muda nenhum comportamento.
 
 ## Perguntas prováveis da banca
@@ -141,8 +142,7 @@ Com ameaças de 30 s, só 20 das 80 ocorrências têm o guarda no local a tempo.
 
 ## Trabalho futuro (para o último diapositivo)
 
-1. Prazo de validade da ocorrência: não enviar ninguém a uma ameaça que já terminou.
-2. Mais guardas e mais informadores: hoje só variámos patrulhas e sensores.
-3. Interromper uma missão leve quando chega uma ocorrência grave, e não deixar as leves à espera para sempre.
-4. Atrasos reais na rede XMPP: os atrasos só foram injetados no transporte local.
-5. Prazo que se ajusta sozinho aos tempos de resposta observados.
+1. Interromper uma missão leve quando chega uma ocorrência grave, e não deixar as leves à espera para sempre.
+2. Patrulhas e guardas a variar em conjunto: com 2 guardas, o gargalo passa para as 2 patrulhas.
+3. Atrasos reais na rede XMPP: pedem agentes em processos separados, porque o SPADE entrega em memória dentro do mesmo processo.
+4. Prazo que se ajusta sozinho aos tempos de resposta observados.

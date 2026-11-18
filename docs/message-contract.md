@@ -222,7 +222,7 @@ Uma **observação completa** contém `event_id`, `source_id`, `event_type`, `po
 | `PROPOSAL` | `resource_id`, `eta_seconds`, `energy_cost_fraction`, `cost`. ETA conta desde a emissão. Energia em `[0, 1]`: fração da capacidade total estimada para executar e regressar. Custo é uma pontuação não negativa, sem unidade; a fórmula ainda precisa de acordo. |
 | `ACCEPT` | `resource_id` da proposta escolhida. Ainda não confirma reserva. |
 | `REJECT` | `resource_id`, `reason`. |
-| `REFUSAL` | `reason`. O pedido recusado é identificado nos metadados. |
+| `REFUSAL` | `reason`. O pedido recusado é identificado nos metadados. Na implementação (corpo `REJECT` com performativa `refuse`), a recusa de um `CFP` por ocupação pode trazer `busy_until`: o instante simulado em que o recurso prevê ficar livre. |
 | `RESERVATION_CONFIRMED` | `resource_id`. Declara a reserva para a missão indicada no corpo. |
 | `RESERVATION_FAILED` | `resource_id`, `reason`. |
 | `MISSION_RESULT` | `resource_id`, `outcome`, `observations`, `reason`. Resultados: `confirmed`, `not_confirmed`, `inconclusive`, `failed`. Os dois primeiros exigem observações; os restantes admitem lista vazia. |

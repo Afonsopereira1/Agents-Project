@@ -28,6 +28,7 @@ class TestStressExtensions(unittest.IsolatedAsyncioTestCase):
         threat = {"kind": "threat", "starts_at": 0.0, "duration": 1000.0}
         report = await run_mvp(
             response_settings=settings, corroborate=False, extra_initiators={"sensor-3": Position(6, 2)},
+            queue_rounds=0,
             scenario={"run_id": "two", "seed": 1, "resources": {},
                       "sources": {"sensor-1": near, "sensor-2": {"kind": "visual", "detection_range": 0.0},
                                   "sensor-3": near},
@@ -58,8 +59,8 @@ class TestStressExtensions(unittest.IsolatedAsyncioTestCase):
 
     async def test_dynamic_deadline_survives_slow_proposals(self):
         slow = {"delay": {"PROPOSAL": 0.6}}
-        fixed = await run_mvp(faults=slow)
-        dynamic = await run_mvp(faults=slow, max_receive_timeout=2.0)
+        fixed = await run_mvp(faults=slow, max_receive_timeout=None)
+        dynamic = await run_mvp(faults=slow)  # teto de 2,0 s por omissão
         # Propostas a 0,6 s: o prazo fixo de 0,5 s desiste; o dinâmico espera porque não tem nenhuma.
         self.assertEqual((fixed["incident_status"], fixed["reason"]), ("unresolved", "no_eligible_proposals"))
         self.assertEqual(dynamic["incident_status"], "closed")
@@ -74,15 +75,15 @@ class TestStressExtensions(unittest.IsolatedAsyncioTestCase):
         settings["sources"]["sensor-3"] = {"modality": "acoustic", "correlation_group": "local_3"}
         settings.update(options.pop("settings", {}))
         near = {"kind": "acoustic", "detection_range": 1.0}
-        threat = {"kind": "threat", "starts_at": 0.0, "duration": 1000.0}
+        threat = {"kind": "threat", "starts_at": 0.0, "duration": options.pop("duration", 1000.0)}
         report = await run_mvp(
             response_settings=settings, corroborate=False, extra_initiators={"sensor-3": Position(6, 2)},
-            queue_rounds=20, max_seconds=30.0, **options,
-            scenario={"run_id": "queue", "seed": 1, "resources": {},
+            queue_rounds=20, max_seconds=30.0,
+            scenario={"run_id": "queue", "seed": 1, "resources": options.pop("resources", {}),
                       "sources": {"sensor-1": near, "sensor-2": {"kind": "visual", "detection_range": 0.0},
                                   "sensor-3": near},
                       "events": [{**threat, "event_id": "a", "position": {"x": 2, "y": 2}},
-                                 {**threat, "event_id": "b", "position": {"x": 6, "y": 2}}]})
+                                 {**threat, "event_id": "b", "position": {"x": 6, "y": 2}}]}, **options)
         closed_at = {e.get("initiator", "sensor-1"): e["time"] for e in report["timeline"]
                      if e["event"] == "INCIDENT_CLOSED"}
         return report, closed_at
@@ -112,11 +113,85 @@ class TestStressExtensions(unittest.IsolatedAsyncioTestCase):
     async def test_silent_invalid_stops_replies_to_incoherent_accepts(self):
         replies = lambda report: sum("junk-" in str(m["body"]) and m["body"]["message_type"] == "STATUS"
                                      for m in report["messages"])
-        loud = await run_mvp(faults={"flood": 2})
-        quiet = await run_mvp(faults={"flood": 2}, silent_invalid=True)
+        loud = await run_mvp(faults={"flood": 2}, silent_invalid=False)
+        quiet = await run_mvp(faults={"flood": 2})  # silêncio por omissão
         # Dois ACCEPT reais (patrulha e guarda), duas variantes de lixo cada, flood 2: 8 respostas.
         self.assertEqual((replies(loud), replies(quiet)), (8, 0))
         self.assertEqual((loud["incident_status"], quiet["incident_status"]), ("closed", "closed"))
+
+    def statuses(self, report):
+        return sorted((report["incident_status"], report["extra_initiators"]["sensor-3"]["incident_status"]))
+
+    async def test_late_ranger_does_not_confirm_and_validity_expires_instead(self):
+        # Ameaças de 16 s e guarda longe, em (7,7): chega à primeira aos 14 s e só fica livre aos 24 s.
+        far = {"duration": 16.0, "resources": {"ranger": {"position": {"x": 7, "y": 7}}}}
+        late, _ = await self.two_threats(**far)
+        outcomes = [r["payload"]["outcome"] for v in (late, late["extra_initiators"]["sensor-3"])
+                    for r in v["results"] if r["payload"]["task"] == "respond_incident"]
+        self.assertEqual(sorted(outcomes), ["confirmed", "not_confirmed"])
+        # Com prazo de validade, quem espera na fila deixa de ver a ameaça e não manda o guarda.
+        report, _ = await self.two_threats(**far, expire_unseen=True)
+        self.assertEqual(self.statuses(report), ["closed", "expired"])
+        self.assertEqual(len(executions(report, "ranger")), 1)
+        self.assertIn("threat_expired", (report["reason"], report["extra_initiators"]["sensor-3"]["reason"]))
+
+    async def test_extra_ranger_serves_the_second_incident(self):
+        report, _ = await self.two_threats(extra_rangers={"ranger-2": Position(6, 4)})
+        self.assertEqual(self.statuses(report), ["closed", "closed"])
+        self.assertEqual([len(executions(report, r)) for r in ("ranger", "ranger-2")], [1, 1])
+        self.assertEqual(report["reservations"], [None] * 4)
+        with self.assertRaises(ValueError):
+            await run_mvp(extra_rangers={"ranger": Position(0, 0)})
+
+    async def test_busy_refusal_says_when_the_resource_is_free(self):
+        report, _ = await self.two_threats(queue_until_free=True)
+        busy = [m["body"] for m in report["messages"] if m["body"]["payload"].get("busy_until") is not None]
+        self.assertTrue(busy)
+        self.assertTrue(all(b["message_type"] == "REJECT" and b["payload"]["busy_until"] > b["created_at"]
+                            for b in busy))
+        self.assertEqual(self.statuses(report), ["closed", "closed"])
+
+    async def test_chained_mission_starts_on_the_way_back(self):
+        report, _ = await self.two_threats(chain_missions=True)
+        starts = [e["position"] for e in executions(report, "ranger")]
+        # A segunda missão do guarda parte do caminho de regresso, não da base (5,5).
+        self.assertEqual((len(starts), starts[0]), (2, {"x": 5, "y": 5}))
+        self.assertNotEqual(starts[1], {"x": 5, "y": 5})
+        self.assertEqual(self.statuses(report), ["closed", "closed"])
+        self.assertEqual(report["resources"][2]["position"], {"x": 5, "y": 5})
+        self.assertEqual(report["reservations"], [None, None, None])
+
+    async def test_extra_informant_corroborates_the_extra_initiator(self):
+        root = Path(__file__).resolve().parents[2]
+        settings = json.loads((root / "config/scenarios/A.json").read_text())["response_settings"]
+        settings["sources"].update({"sensor-3": {"modality": "acoustic", "correlation_group": "local_3"},
+                                    "sensor-4": {"modality": "visual", "correlation_group": "camera_4"}})
+        near = {"kind": "acoustic", "detection_range": 1.0}
+        blind = {"kind": "visual", "detection_range": 0.0}
+        scenario = {"run_id": "informant", "seed": 1, "resources": {},
+                    "sources": {"sensor-1": near, "sensor-2": blind, "sensor-3": near,
+                                "sensor-4": {"kind": "visual", "detection_range": 1.0}},
+                    "events": [{"kind": "threat", "starts_at": 0.0, "duration": 1000.0, "event_id": "b",
+                                "position": {"x": 6, "y": 2}}]}
+        common = dict(response_settings=settings, extra_initiators={"sensor-3": Position(6, 2)},
+                      scenario=scenario, max_seconds=30.0)
+        own = await run_mvp(extra_informants={"sensor-4": Position(7, 2)}, **common)
+        decision = own["extra_initiators"]["sensor-3"]["decision"]
+        self.assertEqual((decision["decision"], list(decision["compatible_source_ids"])),
+                         ("request_mobile_verification", ["sensor-4"]))
+        self.assertEqual(own["extra_initiators"]["sensor-3"]["incident_status"], "closed")
+        # Só com o sensor-2 (cego para esta célula), a mesma ocorrência não é corroborada.
+        scenario["sources"].pop("sensor-4")
+        shared = await run_mvp(extra_informants={}, **common)
+        self.assertEqual(shared["extra_initiators"]["sensor-3"]["incident_status"], "expired")
+
+    async def test_map_and_sensor_positions_come_from_arguments(self):
+        report = await run_mvp(map_size=(10, 6), sensor_positions={"sensor-2": Position(3, 2)})
+        self.assertEqual(report["world"], {"width": 10, "height": 6, "sensors": {
+            "sensor-1": {"x": 2, "y": 2}, "sensor-2": {"x": 3, "y": 2}}})
+        self.assertEqual(report["incident_status"], "closed")
+        with self.assertRaises(ValueError):
+            await run_mvp(sensor_positions={"sensor-9": Position(0, 0)})
 
 
 if __name__ == "__main__":

@@ -7,13 +7,14 @@ from time import monotonic
 
 from spade.template import Template
 
-from isia.agents.sensor import SensorAgent
+from isia.agents.sensor import SensorAgent, _recent_observations
 from isia.communication.messages import Message, MessageType, model_from_dict
 from isia.communication.transport import (
     ONTOLOGY, CONTRACT_NET_PROTOCOL, build_spade_message, parse_spade_message,
 )
 from isia.domain.incident_state import IncidentState, IncidentStatus
 from isia.domain.models import Bid, Incident, Mission, MissionStatus
+from isia.domain.validation import is_finite_number
 from isia.reasoning.allocation import (
     MissionRegistry, build_cfp_message, build_accept_message,
     build_proposal_rejection_message, select_best_proposal,
@@ -36,13 +37,17 @@ class IncidentSensorAgent(SensorAgent):
 
     def configure_mvp(self, patrols, rangers, *, receive_timeout=2.0, max_attempts=2,
                       selection_weights=None, base_positions=None, cfp_limit=None,
-                      max_receive_timeout=None, queue_rounds=0):
+                      max_receive_timeout=None, queue_rounds=0, expire_unseen=False,
+                      queue_until_free=False):
         """base_positions ({jid: Position}) e cfp_limit=K ativam C1: CFP só aos K mais próximos.
 
         max_receive_timeout ativa o prazo dinâmico: sem nenhuma proposta ao fim de
         receive_timeout, o iniciador espera até este teto; o STATUS espera sempre até ao teto.
         queue_rounds ativa a fila: com os recursos ocupados, o iniciador espera
         QUEUE_INTERVAL_SECONDS simulados e volta a pedir, até queue_rounds vezes.
+        queue_until_free: se a recusa trouxer busy_until, espera até esse instante em vez do intervalo.
+        expire_unseen ativa o prazo de validade: antes de cada pedido o iniciador volta a ler o
+        seu sensor; sem nenhuma leitura na janela do feed, fecha como expired e não manda ninguém.
         """
         if type(max_attempts) is not int or max_attempts < 1:
             raise ValueError("max_attempts deve ser positivo.")
@@ -62,6 +67,7 @@ class IncidentSensorAgent(SensorAgent):
         if type(queue_rounds) is not int or queue_rounds < 0:
             raise ValueError("queue_rounds deve ser um inteiro não negativo.")
         self.queue_rounds = queue_rounds
+        self.expire_unseen, self.queue_until_free = expire_unseen, queue_until_free
         self.patrols, self.rangers = dict(patrols), dict(rangers)
         self.receive_timeout, self.max_attempts = receive_timeout, max_attempts
         self.selection_weights = dict(selection_weights or {})
@@ -196,6 +202,8 @@ class IncidentSensorAgent(SensorAgent):
             winner = selection.winner
             if winner is None:
                 self._busy = any(r.payload.get("reason") in ("resource_unavailable", "waiting_turn") for r in responses.values())
+                self._free_at = min((r.payload["busy_until"] for r in responses.values()
+                                     if is_finite_number(r.payload.get("busy_until"))), default=None)
                 return None, "no_eligible_proposals"
             winner_jid = next(jid for jid, body in responses.items() if body.message_id == winner.message_id)
             accept = build_accept_message(cfp, winner, agent.simulated_time, source_id=bare(agent.jid))
@@ -260,7 +268,11 @@ class IncidentSensorAgent(SensorAgent):
             for attempt in range(1, agent.max_attempts + 1):
                 for wait in range(agent.queue_rounds + 1):
                     rounds += 1
-                    self._busy = False
+                    self._busy, self._free_at = False, None
+                    if agent.expire_unseen and not _recent_observations(agent.observation_feed):
+                        # Prazo de validade: a janela do feed (várias leituras seguidas) ficou vazia.
+                        agent.close_reason = "threat_expired"
+                        return None
                     assignment, failure = await self.allocate(mission, remaining, rounds)
                     # Fila: recurso ocupado não é falha; esperar tempo simulado e voltar a pedir.
                     # shortcut: sem ordem de chegada nem prioridade; trocar por fila no recurso se for preciso.
@@ -269,6 +281,8 @@ class IncidentSensorAgent(SensorAgent):
                         break
                     # Relógio parado (ninguém em missão): o prazo real evita esperar para sempre.
                     until, limit = agent.simulated_time + QUEUE_INTERVAL_SECONDS, monotonic() + agent.receive_timeout
+                    if agent.queue_until_free and (self._free_at or 0) > agent.simulated_time:
+                        until = self._free_at  # o prazo real acima limita um busy_until absurdo
                     while agent.simulated_time < until and monotonic() < limit:
                         await asyncio.sleep(0.01)
                 if assignment is None:
@@ -335,7 +349,8 @@ class IncidentSensorAgent(SensorAgent):
                                        RANGER_TASK, mission.target, RANGER_CAPABILITY, mission.priority)
                     result = await self.execute_task(response, agent.rangers)
                 if result is None:
-                    agent.transition(IncidentStatus.UNRESOLVED)
+                    agent.transition(IncidentStatus.EXPIRED if agent.close_reason == "threat_expired"
+                                     else IncidentStatus.UNRESOLVED)
                 else:
                     agent.close_reason = result.payload["outcome"]
                     agent.transition(IncidentStatus.CLOSED)

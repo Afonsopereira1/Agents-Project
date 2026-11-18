@@ -51,6 +51,10 @@ def run_metrics(report):
     faults = [entry["fault"] for entry in report["fault_log"]]
     # Conhecimento do coordenador, não todas as conclusões da timeline móvel.
     statuses = [mission["status"] for mission in report["missions"]]
+    # Vários iniciadores (Bloco F2, cenário D): as colunas acima são as do sensor-1; estas contam todos.
+    extras = report.get("extra_initiators") or {}
+    incidents = [view["incident_status"] for view in (report, *extras.values()) if view["incident_status"]]
+    closed = [e["time"] for e in report["timeline"] if e["event"] == "INCIDENT_CLOSED" and e.get("status") == "closed"]
     return {
         "threat": truth,
         "alert": any(entry["event"] == "ALERT" for entry in report["timeline"]),
@@ -72,7 +76,11 @@ def run_metrics(report):
         # Entradas de execução móvel trazem posição; as do sensor não.
         "first_patrol": next((e["resource_id"] for e in report["timeline"]
                               if e["event"] == "reserved" and "position" in e
-                              and e["resource_id"] != "ranger"), None),
+                              and not e["resource_id"].startswith("ranger")), None),
+        **({"incidents": len(incidents), "incidents_closed": incidents.count("closed"),
+            "incidents_expired": incidents.count("expired"),
+            "incidents_unresolved": incidents.count("unresolved"),
+            "last_close_time": max(closed, default=None)} if extras else {}),
     }
 
 
@@ -90,4 +98,7 @@ def summarize(rows):
     return {"runs": len(rows), **counts, **rates(counts),
             "confirmed_runs": sum(row["confirmed"] for row in rows),
             "unresolved_runs": sum(row["unresolved"] for row in rows),
-            **{name: describe(row[name] for row in rows) for name in NUMERIC}}
+            **{name: describe(row[name] for row in rows) for name in NUMERIC},
+            **({name: sum(row[name] for row in rows)
+                for name in ("incidents", "incidents_closed", "incidents_expired", "incidents_unresolved")}
+               if rows and "incidents" in rows[0] else {})}

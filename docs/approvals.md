@@ -14,7 +14,7 @@
 |---|---|---|---|
 | 0.1 | Documentação em `docs/` aceite como base da entrega | `main` atual | [ ] |
 | 0.2 | Versões | Python 3.12, SPADE 4.1.4 ([requirements.txt](../requirements.txt)) | [ ] |
-| 0.3 | Instalação testada: `PYTHONPATH=src python -m unittest discover -s tests` dá 497 testes OK | num computador | [ ] |
+| 0.3 | Instalação testada: `PYTHONPATH=src python -m unittest discover -s tests` dá 579 testes OK (18-11-2026) | num computador | [ ] |
 
 ## Etapa 1 — contratos (fecha [development-plan.md:91](development-plan.md#L91))
 
@@ -30,7 +30,7 @@
 | 4.1 | Compatibilidade de observações | distância ≤ 3,0 células, janela de 2,0 s, mínimo de 1 fonte compatível ([runner.py](../src/isia/simulation/runner.py)) | [ ] |
 | 4.2 | Ausência de resposta, timeout ou falha de comunicação | `no_data`, nunca ausência informativa | [x] 16-11-2026 (Guilherme) |
 | 4.3 | Sensibilidade e taxas de erro das fontes | as de [config/scenarios/](../config/scenarios/), sem calibração empírica | [ ] |
-| 5.1 | Prazo de espera por propostas e `STATUS` | 0,5 s reais (local), 2,0 s (XMPP). Prazo dinâmico opcional (`max_receive_timeout`), desligado; proposta: teto de 2,0 s ([que teto escolher](scalability.md#que-teto-escolher)) | [ ] |
+| 5.1 | Prazo de espera por propostas e `STATUS` | Prazo-base de 0,5 s reais (local) e 2,0 s (XMPP). Desde 18-11-2026, `run_mvp` liga por omissão o prazo dinâmico com teto de 2,0 s ([que teto escolher](scalability.md#que-teto-escolher)), a fila (`queue_rounds=60`) e o silêncio perante `ACCEPT` incoerente. O coletor e os scripts de medição continuam no prazo fixo, sem fila (`PUBLISHED_CONDITIONS`), por isso os resultados publicados não mudam: a Etapa 9 repetida deu ficheiros iguais, byte a byte | [ ] |
 | 5.2 | Custo da proposta | ETA + energia + carga, pesos 1,0 cada; autonomia mínima de 10 % | [ ] |
 | 5.3 | ~~Desvio ao FIPA na recusa do CFP~~ | Corrigido a 16-11-2026: o recurso envia `refuse` ([protocols.md, secção 9](protocols.md#9-porquê-estes-protocolos-alternativas-prós-e-contras)) | Não se aplica |
 
@@ -46,6 +46,10 @@ Valores de [config/agents.json](../config/agents.json).
 | 7.4 | Gravidade por omissão | 0,5 | [ ] |
 | 7.5 | Adjudicação de uma missão | distância ≤ 1 célula, atraso ≤ 30 s | [ ] |
 | 7.6 | Os limiares são *scores* de engenharia, não probabilidades calibradas | [reputation-policy.md](reputation-policy.md) | [ ] |
+
+## Registo de alterações ao código
+
+- **18-11-2026 — três opções ligadas por omissão** (pendente C do [Bloco F](delivery-todo.md#pendentes-deixados-pelo-bloco-f)): `max_receive_timeout=2.0`, `queue_rounds=60` e `silent_invalid=True` em `run_mvp`. Afeta o MVP na linha de comandos e o modo `--xmpp`; não afeta as recolhas (Etapa 9, P3, Blocos F1 e G), que passam `PUBLISHED_CONDITIONS`. Seis testes que verificavam o comportamento antigo foram ajustados. O silêncio muda o contrato de mensagens: um `ACCEPT` incoerente deixa de ter resposta. Falta a aprovação do item 5.1 por um elemento; para desfazer, basta repor os três valores na assinatura de `run_mvp`.
 
 ## Depois de aprovar
 

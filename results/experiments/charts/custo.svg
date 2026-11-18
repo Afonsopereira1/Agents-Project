@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 810 388" width="810" height="388" role="img" aria-label="Custo por execução, por cenário e variante">
+<style>
+.bg{fill:#fcfcfb}.t1{fill:#0b0b0b}.t2{fill:#52514e}.mu{fill:#898781}.grid{stroke:#e1e0d9}.axis{stroke:#c3c2b7}
+.s0{fill:#2a78d6}.s1{fill:#eb6834}.s2{fill:#1baf7a}.s3{fill:#eda100}
+text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:12px}
+.title{font-size:15px;font-weight:600}.num{font-variant-numeric:tabular-nums}
+@media (prefers-color-scheme:dark){.bg{fill:#1a1a19}.t1{fill:#f0efec}.t2{fill:#c3c2b7}.grid{stroke:#2c2c2a}.axis{stroke:#383835}
+.s0{fill:#3987e5}.s1{fill:#d95926}.s2{fill:#199e70}.s3{fill:#c98500}}
+</style>
+<rect class="bg" width="810" height="388"/>
+<text class="title t1" x="12" y="22">Custo por execução, por cenário e variante</text>
+<text class="t2" x="12" y="40">Etapa 9: 560 execuções, 20 sementes por episódio. Fonte: results/experiments/summary.csv</text>
+<rect class="s0" x="12" y="50" width="10" height="10" rx="2"/><text class="t2" x="27" y="59">full</text>
+<rect class="s1" x="162" y="50" width="10" height="10" rx="2"/><text class="t2" x="177" y="59">no_reputation</text>
+<rect class="s2" x="312" y="50" width="10" height="10" rx="2"/><text class="t2" x="327" y="59">no_corroboration</text>
+<rect class="s3" x="462" y="50" width="10" height="10" rx="2"/><text class="t2" x="477" y="59">nearest</text>
+<text class="t1" x="150" y="74" font-weight="600">Energia gasta (p.p., média)</text>
+<line class="grid" x1="225.0" x2="225.0" y1="82" y2="366"/><text class="mu num" x="225.0" y="380" text-anchor="middle">5</text>
+<line class="grid" x1="300" x2="300" y1="82" y2="366"/><text class="mu num" x="300" y="380" text-anchor="middle">10</text>
+<line class="axis" x1="150" x2="150" y1="82" y2="366"/><text class="mu num" x="150" y="380" text-anchor="middle">0</text>
+<text class="t1" x="370" y="74" font-weight="600">Mensagens (média)</text>
+<line class="grid" x1="445.0" x2="445.0" y1="82" y2="366"/><text class="mu num" x="445.0" y="380" text-anchor="middle">4</text>
+<line class="grid" x1="520" x2="520" y1="82" y2="366"/><text class="mu num" x="520" y="380" text-anchor="middle">8</text>
+<line class="axis" x1="370" x2="370" y1="82" y2="366"/><text class="mu num" x="370" y="380" text-anchor="middle">0</text>
+<text class="t1" x="590" y="74" font-weight="600">Execuções não resolvidas</text>
+<line class="grid" x1="665.0" x2="665.0" y1="82" y2="366"/><text class="mu num" x="665.0" y="380" text-anchor="middle">6</text>
+<line class="grid" x1="740" x2="740" y1="82" y2="366"/><text class="mu num" x="740" y="380" text-anchor="middle">12</text>
+<line class="axis" x1="590" x2="590" y1="82" y2="366"/><text class="mu num" x="590" y="380" text-anchor="middle">0</text>
+<text class="t1" x="12" y="93" font-weight="600">Cenário A</text>
+<text class="t2" x="24" y="110">full</text>
+<path class="s0" d="M150,100h123.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-123.5z"><title>A full — Energia gasta (p.p., média): 8,5</title></path>
+<text class="t1 num" x="283.5" y="110">8,5</text>
+<path class="s0" d="M370,100h117.4a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-117.4z"><title>A full — Mensagens (média): 6,5</title></path>
+<text class="t1 num" x="497.4" y="110">6,5</text>
+<text class="t1 num" x="596.0" y="110">0</text>
+<text class="t2" x="24" y="130">no_reputation</text>
+<path class="s1" d="M150,120h123.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-123.5z"><title>A no_reputation — Energia gasta (p.p., média): 8,5</title></path>
+<text class="t1 num" x="283.5" y="130">8,5</text>
+<path class="s1" d="M370,120h117.4a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-117.4z"><title>A no_reputation — Mensagens (média): 6,5</title></path>
+<text class="t1 num" x="497.4" y="130">6,5</text>
+<text class="t1 num" x="596.0" y="130">0</text>
+<text class="t2" x="24" y="150">no_corroboration</text>
+<path class="s2" d="M150,140h138.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-138.5z"><title>A no_corroboration — Energia gasta (p.p., média): 9,5</title></path>
+<text class="t1 num" x="298.5" y="150">9,5</text>
+<path class="s2" d="M370,140h129.6a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-129.6z"><title>A no_corroboration — Mensagens (média): 7,1</title></path>
+<text class="t1 num" x="509.6" y="150">7,1</text>
+<text class="t1 num" x="596.0" y="150">0</text>
+<text class="t2" x="24" y="170">nearest</text>
+<path class="s3" d="M150,160h98.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-98.0z"><title>A nearest — Energia gasta (p.p., média): 6,8</title></path>
+<text class="t1 num" x="258.0" y="170">6,8</text>
+<path class="s3" d="M370,160h117.4a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-117.4z"><title>A nearest — Mensagens (média): 6,5</title></path>
+<text class="t1 num" x="497.4" y="170">6,5</text>
+<text class="t1 num" x="596.0" y="170">0</text>
+<text class="t1" x="12" y="187" font-weight="600">Cenário B</text>
+<text class="t2" x="24" y="204">full</text>
+<path class="s0" d="M150,194h58.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-58.5z"><title>B full — Energia gasta (p.p., média): 4,2</title></path>
+<text class="t1 num" x="218.5" y="204">4,2</text>
+<path class="s0" d="M370,194h85.4a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-85.4z"><title>B full — Mensagens (média): 4,8</title></path>
+<text class="t1 num" x="465.4" y="204">4,8</text>
+<text class="t1 num" x="596.0" y="204">0</text>
+<text class="t2" x="24" y="224">no_reputation</text>
+<path class="s1" d="M150,214h58.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-58.5z"><title>B no_reputation — Energia gasta (p.p., média): 4,2</title></path>
+<text class="t1 num" x="218.5" y="224">4,2</text>
+<path class="s1" d="M370,214h85.4a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-85.4z"><title>B no_reputation — Mensagens (média): 4,8</title></path>
+<text class="t1 num" x="465.4" y="224">4,8</text>
+<text class="t1 num" x="596.0" y="224">0</text>
+<text class="t2" x="24" y="244">no_corroboration</text>
+<path class="s2" d="M150,234h111.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-111.5z"><title>B no_corroboration — Energia gasta (p.p., média): 7,7</title></path>
+<text class="t1 num" x="271.5" y="244">7,7</text>
+<path class="s2" d="M370,234h142.9a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-142.9z"><title>B no_corroboration — Mensagens (média): 7,8</title></path>
+<text class="t1 num" x="522.9" y="244">7,8</text>
+<text class="t1 num" x="596.0" y="244">0</text>
+<text class="t2" x="24" y="264">nearest</text>
+<path class="s3" d="M150,254h37.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-37.5z"><title>B nearest — Energia gasta (p.p., média): 2,8</title></path>
+<text class="t1 num" x="197.5" y="264">2,8</text>
+<path class="s3" d="M370,254h85.4a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-85.4z"><title>B nearest — Mensagens (média): 4,8</title></path>
+<text class="t1 num" x="465.4" y="264">4,8</text>
+<text class="t1 num" x="596.0" y="264">0</text>
+<text class="t1" x="12" y="281" font-weight="600">Cenário C</text>
+<text class="t2" x="24" y="298">full</text>
+<path class="s0" d="M150,288h63.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-63.5z"><title>C full — Energia gasta (p.p., média): 4,5</title></path>
+<text class="t1 num" x="223.5" y="298">4,5</text>
+<path class="s0" d="M370,288h75.2a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-75.2z"><title>C full — Mensagens (média): 4,2</title></path>
+<text class="t1 num" x="455.2" y="298">4,2</text>
+<path class="s0" d="M590,288h121.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-121.0z"><title>C full — Execuções não resolvidas: 10</title></path>
+<text class="t1 num" x="721.0" y="298">10</text>
+<text class="t2" x="24" y="318">no_reputation</text>
+<path class="s1" d="M150,308h56.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-56.0z"><title>C no_reputation — Energia gasta (p.p., média): 4,0</title></path>
+<text class="t1 num" x="216.0" y="318">4,0</text>
+<path class="s1" d="M370,308h69.6a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-69.6z"><title>C no_reputation — Mensagens (média): 3,9</title></path>
+<text class="t1 num" x="449.6" y="318">3,9</text>
+<path class="s1" d="M590,308h121.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-121.0z"><title>C no_reputation — Execuções não resolvidas: 10</title></path>
+<text class="t1 num" x="721.0" y="318">10</text>
+<text class="t2" x="24" y="338">no_corroboration</text>
+<path class="s2" d="M150,328h86.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-86.0z"><title>C no_corroboration — Energia gasta (p.p., média): 6,0</title></path>
+<text class="t1 num" x="246.0" y="338">6,0</text>
+<path class="s2" d="M370,328h92.1a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-92.1z"><title>C no_corroboration — Mensagens (média): 5,1</title></path>
+<text class="t1 num" x="472.1" y="338">5,1</text>
+<path class="s2" d="M590,328h133.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-133.5z"><title>C no_corroboration — Execuções não resolvidas: 11</title></path>
+<text class="t1 num" x="733.5" y="338">11</text>
+<text class="t2" x="24" y="358">nearest</text>
+<path class="s3" d="M150,348h63.5a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-63.5z"><title>C nearest — Energia gasta (p.p., média): 4,5</title></path>
+<text class="t1 num" x="223.5" y="358">4,5</text>
+<path class="s3" d="M370,348h75.2a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-75.2z"><title>C nearest — Mensagens (média): 4,2</title></path>
+<text class="t1 num" x="455.2" y="358">4,2</text>
+<path class="s3" d="M590,348h121.0a4,4 0 0 1 4,4v4a4,4 0 0 1 -4,4h-121.0z"><title>C nearest — Execuções não resolvidas: 10</title></path>
+<text class="t1 num" x="721.0" y="358">10</text>
+</svg>
