@@ -18,6 +18,7 @@ from isia.communication.transport import (
     PERFORMATIVE_INFORM,
     PERFORMATIVE_REQUEST,
     VERIFICATION_PROTOCOL,
+    bare_jid,
     build_spade_message,
     parse_spade_message,
 )
@@ -29,6 +30,7 @@ from isia.reasoning.corroboration import (
     evaluate_reputation_corroboration,
     validate_source_profiles,
 )
+from isia.domain.incident_state import IncidentState
 from isia.domain.models import Observation
 from isia.domain.validation import is_finite_number
 from isia.reasoning.policy import ResponsePolicy, decide_response
@@ -44,8 +46,8 @@ def response_matches_request(
     expected_sender: str,
 ) -> bool:
     """Valida a correlação e a origem de uma resposta de verificação."""
-    sender = str(getattr(incoming, "sender", "")).split("/", 1)[0].lower()
-    expected = expected_sender.split("/", 1)[0].lower()
+    sender = bare_jid(getattr(incoming, "sender", ""))
+    expected = bare_jid(expected_sender)
     return (
         response.message_type is MessageType.VERIFY_RESPONSE
         and response.conversation_id == request.conversation_id
@@ -132,7 +134,11 @@ class SensorAgent(Agent):
             conversation_id = f"conversation-{uuid.uuid4().hex}"
             agent.conversation_id = conversation_id
 
-            observations = _recent_observations(agent.observation_feed)
+            # O iniciador de ocorrências já leu o feed: a verificação usa essa leitura e o mesmo incidente.
+            observations = getattr(agent, "incident_observations", None)
+            if not isinstance(observations, tuple) or not observations:
+                observations = _recent_observations(agent.observation_feed)
+            state = getattr(agent, "incident_state", None)
 
             if observations:
                 observation = observations[0]
@@ -148,7 +154,8 @@ class SensorAgent(Agent):
                     "question": "Existem observações locais disponíveis para corroborar este sinal?",
                 }
                 event_id = None
-                incident_id = f"incident-{observation.event_id}"
+                incident_id = (state.incident_id if isinstance(state, IncidentState)
+                               else f"incident-{observation.event_id}")
                 source_id = observation.source_id
             else:
                 # Backwards-compatible Etapa 3 demonstration path. The Etapa 4
@@ -183,13 +190,16 @@ class SensorAgent(Agent):
             await self.send(outgoing)
             logger.info("VERIFY_REQUEST enviada para %s", agent.informant_jid)
 
-            response_deadline = monotonic() + RESPONSE_TIMEOUT_SECONDS
             # Reenvio: sem resposta ao fim do prazo curto, o mesmo pedido (mesmo message_id) volta a sair.
             # Só o iniciador configurado (configure_mvp) traz estes dois valores; sem eles não há reenvio.
             resends = getattr(agent, "retransmit", 0)
             resend_after = getattr(agent, "max_receive_timeout", None)
             if type(resends) is not int or not is_finite_number(resend_after):
                 resends, resend_after = 0, 0.0
+            # Com o prazo do iniciador configurado, a espera é a dele (uma por tentativa), como nos
+            # outros pedidos; RESPONSE_TIMEOUT_SECONDS continua a ser o teto.
+            response_deadline = monotonic() + (min(RESPONSE_TIMEOUT_SECONDS, resend_after * (1 + resends))
+                                               if resend_after else RESPONSE_TIMEOUT_SECONDS)
             resend_at = monotonic() + resend_after
             rejected_responses: list[dict[str, object]] = []
             while True:

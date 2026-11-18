@@ -8,6 +8,7 @@ from spade.agent import Agent
 from spade.behaviour import CyclicBehaviour
 from spade.template import Template
 
+from isia.agents.sensor import _recent_observations
 from isia.communication.messages import Message, MessageType, model_from_dict, model_to_dict
 from isia.communication.transport import (
     ONTOLOGY,
@@ -132,17 +133,6 @@ class InformantAgent(Agent):
             }
         )
         self.add_behaviour(self.VerificationBehaviour(), template)
-
-
-def _recent_observations(observation_feed) -> tuple:
-    """Read only the observations exposed by the local feed."""
-    recent = getattr(observation_feed, "recent", None)
-    if not callable(recent):
-        return ()
-    try:
-        return tuple(recent())
-    except TypeError:
-        return ()
 
 
 def _informative_absence_payload(agent, request: Message) -> dict[str, object] | None:

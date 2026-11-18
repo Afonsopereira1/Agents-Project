@@ -24,6 +24,11 @@ PERFORMATIVE_ACCEPT_PROPOSAL = "accept-proposal"
 CONTRACT_NET_PROTOCOL = "contract-net"
 
 
+def bare_jid(value: object) -> str:
+    """JID sem recurso e em minúsculas, para comparar remetentes."""
+    return str(value).split("/", 1)[0].lower()
+
+
 def build_spade_message(
     recipient: str,
     body: Message,

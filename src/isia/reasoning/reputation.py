@@ -129,35 +129,6 @@ class ReputationBook:
         return record
 
 
-def result_from_ground_truth(
-    observation: Observation, incident_id: str, ground_truth: dict,
-    *, evaluated_at: float, run_id: str,
-) -> EvaluationResult:
-    """Adaptador exclusivo do avaliador para ``Scenario.ground_truth``.
-
-    Exige atribuição explícita ao evento terminado. Falta de atribuição não
-    significa falso positivo. O snapshot nunca é entregue ao SensorAgent.
-    """
-    if not isinstance(run_id, str) or not run_id.strip():
-        raise ValueError("run_id deve identificar a execução.")
-    event_id = ground_truth["observations"].get(observation.event_id)
-    matches = [event for event in ground_truth["events"] if event["event_id"] == event_id]
-    if len(matches) > 1:
-        raise ValueError("Evento de referência duplicado.")
-    event = matches[0] if matches else None
-    resolved = event is not None and event["state"] == "ended"
-    if resolved and type(event["is_threat"]) is not bool:
-        raise ValueError("is_threat deve ser booleano.")
-    outcome = ("confirmed" if event["is_threat"] else "refuted") if resolved else "inconclusive"
-    return EvaluationResult(
-        result_id=f"{run_id}:evaluation:{observation.event_id}",
-        incident_id=incident_id, observation_ids=(observation.event_id,),
-        outcome=outcome, basis="ground_truth", evaluated_at=evaluated_at,
-        evidence_ids=(f"{run_id}:ground_truth:{event_id}",) if resolved else (),
-        final=resolved, sufficient_coverage=resolved,
-    )
-
-
 def result_from_mission(
     result, observation: Observation, incident_id: str,
     *, max_distance: float, max_delay_seconds: float,

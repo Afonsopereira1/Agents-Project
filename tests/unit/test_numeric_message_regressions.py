@@ -9,9 +9,8 @@ from unittest.mock import AsyncMock, Mock
 from isia.communication.messages import (
     Message,
     MessageType,
-    deserialize_model,
+    model_from_dict,
     model_to_dict,
-    serialize_model,
 )
 from isia.domain.models import Bid, Observation, Position, ResourceState
 
@@ -78,15 +77,15 @@ class TestNumericModelValidation(unittest.TestCase):
                 data = model_to_dict(model)
                 data[field] = HUGE_INTEGER
                 with self.assertRaises(ValueError):
-                    deserialize_model(json.dumps(data), type(model))
+                    model_from_dict(json.loads(json.dumps(data)), type(model))
 
     def test_representable_large_numbers_and_arbitrary_positions_remain_valid(self):
         position = Position(HUGE_INTEGER, 0)
-        self.assertEqual(deserialize_model(serialize_model(position), Position), position)
+        self.assertEqual(model_from_dict(json.loads(json.dumps(model_to_dict(position))), Position), position)
         observation = Observation("obs", "sensor", "sound", position, 1e308, 1.0, 0.0)
         bid = Bid("mission", "drone", 1e308, 1e308, 1.0)
         for model in (observation, bid):
-            self.assertEqual(deserialize_model(serialize_model(model), type(model)), model)
+            self.assertEqual(model_from_dict(json.loads(json.dumps(model_to_dict(model))), type(model)), model)
         self.assertEqual(Message("request", MessageType.VERIFY_REQUEST, 1e308, {}).created_at, 1e308)
 
 

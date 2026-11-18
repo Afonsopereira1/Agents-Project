@@ -7,7 +7,7 @@ from dataclasses import replace
 from isia.domain.models import Observation, Position
 from isia.communication.messages import Message, MessageType
 from isia.reasoning.reputation import (
-    EvaluationResult, ReputationBook, result_from_ground_truth, result_from_mission,
+    EvaluationResult, ReputationBook, result_from_mission,
 )
 from isia.simulation.scenario import Event, Scenario, Source
 from isia.simulation.world import World
@@ -96,27 +96,6 @@ class TestReputation(unittest.TestCase):
         self.assertEqual(book.score("new"), 0.75)
         book.update(observation(), "incident-1", result(outcome="refuted"))
         self.assertEqual(book.score("sensor-1"), 3 / 5)
-
-    def test_simulator_reference_is_evaluator_only_and_requires_finished_event(self):
-        scenario = Scenario(
-            World(10, 10, {"s": Position(5, 5)}),
-            {"s": Source("acoustic", 2, false_positive_rate=1)},
-            (Event("thunder", "thunder", Position(5, 5), 0, 2),), 1, 5,
-        )
-        obs = scenario.source("s").recent()[0]
-        book = ReputationBook()
-        active = result_from_ground_truth(obs, "i", scenario.ground_truth, evaluated_at=0, run_id="run-1")
-        self.assertFalse(book.update(obs, "i", active)["updated"])
-        scenario.advance(3)
-        final = result_from_ground_truth(obs, "i", scenario.ground_truth, evaluated_at=3, run_id="run-1")
-        self.assertEqual(final.outcome, "refuted")
-        self.assertTrue(book.update(obs, "i", final)["updated"])
-        self.assertEqual(book.score("s"), 0.4)
-        missing = result_from_ground_truth(observation("missing"), "i", scenario.ground_truth,
-                                          evaluated_at=12, run_id="run-1")
-        self.assertEqual(missing.outcome, "inconclusive")
-        self.assertFalse(hasattr(scenario.source("s"), "ground_truth"))
-
 
 
 def mission_result(**payload):

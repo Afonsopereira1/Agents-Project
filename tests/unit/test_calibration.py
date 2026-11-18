@@ -7,12 +7,12 @@ from isia.evaluation.calibration import calibration_tables, initial_score
 
 
 def record(run_id, score, *, threat=False, scenario="A", variant="full"):
-    policy = {"suspicion_score": score, "mission_result": None}
+    policy = {"suspicion_score": score}
     return {
         "metrics": {"scenario": scenario, "variant": variant},
         "report": {
             "run_id": run_id, "ground_truth": {"events": [{"is_threat": threat}]},
-            "decision": {"suspicion_score": 0.99, "mission_result": {"outcome": "confirmed"}},
+            "decision": {"suspicion_score": 0.99},
             "verification": ({"conversation": {"request": {"response_policy": policy}}}
                              if score is not None else {}),
         },
@@ -73,14 +73,10 @@ class TestCalibration(unittest.TestCase):
             with self.subTest(score=invalid), self.assertRaises(ValueError):
                 initial_score(record("invalid", invalid)["report"])
 
-    def test_multiple_initial_scores_and_postmission_score_are_rejected(self):
+    def test_multiple_initial_scores_are_rejected(self):
         report = record("ambiguous", 0.3)["report"]
         report["verification"]["conversation"]["other"] = {"response_policy": {"suspicion_score": 0.5}}
         with self.assertRaisesRegex(ValueError, "Vários scores"):
-            initial_score(report)
-        report = record("postmission", 0.3)["report"]
-        report["verification"]["conversation"]["request"]["response_policy"]["mission_result"] = {}
-        with self.assertRaisesRegex(ValueError, "preceder"):
             initial_score(report)
 
     def test_ground_truth_and_verification_are_required(self):

@@ -22,6 +22,7 @@ from isia.communication.transport import (
     PERFORMATIVE_PROPOSE,
     PERFORMATIVE_REFUSE,
     PERFORMATIVE_REJECT_PROPOSAL,
+    bare_jid as _bare_jid,
     build_spade_message,
     parse_spade_message,
 )
@@ -44,10 +45,6 @@ PROPOSAL_ACCEPTANCE_WINDOW_SECONDS = 10.0
 WAITING_TTL_SECONDS = 10.0
 # shortcut: com o relógio simulado parado só o tempo real retira um pedido; rever se o relógio passar a avançar sempre.
 WAITING_TTL_REAL_SECONDS = 5.0
-
-
-def _bare_jid(value: object) -> str:
-    return str(value).split("/", 1)[0].lower()
 
 
 class MobileResourceAgent(Agent):

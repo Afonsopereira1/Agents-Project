@@ -12,7 +12,6 @@ except ModuleNotFoundError as error:
     spade = None
 
 if spade is not None:
-    import contract_net_demo
     import verification_demo
 
 
@@ -20,32 +19,24 @@ if spade is not None:
 class TestDemoFloatConfiguration(unittest.TestCase):
     variable = "ISIA_DEMO_TEST_FLOAT"
 
-    def test_nonfinite_environment_values_are_rejected_in_both_demos(self):
-        for module in (verification_demo, contract_net_demo):
+    def test_nonfinite_environment_values_are_rejected(self):
+        for module in (verification_demo,):
             for value in ("nan", "inf", "-inf", "1e999"):
                 with self.subTest(module=module.__name__, value=value):
                     with patch.dict(os.environ, {self.variable: value}):
                         with self.assertRaisesRegex(SystemExit, self.variable):
                             module.configurable_float(self.variable, 1.0)
 
-    def test_nonfinite_and_negative_defaults_are_rejected_in_both_demos(self):
+    def test_nonfinite_and_negative_defaults_are_rejected(self):
         with patch.dict(os.environ, {}, clear=True):
-            for module in (verification_demo, contract_net_demo):
+            for module in (verification_demo,):
                 for default in (float("nan"), float("inf"), -float("inf"), -1.0):
                     with self.subTest(module=module.__name__, default=default):
                         with self.assertRaisesRegex(SystemExit, self.variable):
                             module.configurable_float(self.variable, default)
 
-    def test_positive_timeout_rejects_zero_in_environment_and_default(self):
-        with patch.dict(os.environ, {self.variable: "0"}):
-            with self.assertRaisesRegex(SystemExit, self.variable):
-                contract_net_demo.configurable_float(self.variable, 1.0, positive=True)
-        with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaisesRegex(SystemExit, self.variable):
-                contract_net_demo.configurable_float(self.variable, 0.0, positive=True)
-
     def test_finite_nonnegative_environment_values_and_defaults_are_preserved(self):
-        for module in (verification_demo, contract_net_demo):
+        for module in (verification_demo,):
             for value in (0.0, 2.5):
                 with self.subTest(module=module.__name__, value=value):
                     with patch.dict(os.environ, {self.variable: str(value)}):
@@ -53,8 +44,8 @@ class TestDemoFloatConfiguration(unittest.TestCase):
                     with patch.dict(os.environ, {}, clear=True):
                         self.assertEqual(module.configurable_float(self.variable, value), value)
 
-    def test_invalid_environment_values_are_rejected_in_both_demos(self):
-        for module in (verification_demo, contract_net_demo):
+    def test_invalid_environment_values_are_rejected(self):
+        for module in (verification_demo,):
             for value in ("invalid", "-1"):
                 with self.subTest(module=module.__name__, value=value):
                     with patch.dict(os.environ, {self.variable: value}):

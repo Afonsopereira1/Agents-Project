@@ -325,8 +325,11 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
             # A negociação continua a ter timeout real independente.
             if any(a.execution is not None and not a.execution.finished for a in mobiles):
                 now = scenario.advance(1.0)
+                # Pedidos e respostas de verificação levam a hora atual, não a do arranque.
                 for initiator in initiators:
-                    initiator.simulated_time = now
+                    initiator.simulated_time = initiator.created_at = now
+                for informant in peers.values():
+                    informant.created_at = now
                 for agent in mobiles:
                     agent.set_simulated_time(now)
                     if (not interrupted and agent.resource.resource_id == interrupt_resource

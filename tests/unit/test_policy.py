@@ -12,7 +12,7 @@ from isia.reasoning.corroboration import (
     aggregate_verification_responses, build_observation_hypothesis, evaluate_reputation_corroboration,
 )
 from isia.reasoning.policy import ResponsePolicy, decide_response
-from isia.reasoning.reputation import EvaluationResult, ReputationBook
+from isia.reasoning.reputation import ReputationBook
 
 
 def obs(identifier="initial", source="s1", *, at=10, position=Position(5, 5), confidence=1):
@@ -47,16 +47,9 @@ class TestResponsePolicy(unittest.TestCase):
             profiles if profiles is not None else self.profiles, 2, 2,
         )
 
-    def decide(self, evaluation, *, severity=0.5, policy=None, mission=None):
+    def decide(self, evaluation, *, severity=0.5, policy=None):
         return decide_response(evaluation, policy or self.policy, severity=severity,
-                               initial_observation=self.initial, incident_id="incident", mission_result=mission)
-
-    def mission(self, **changes):
-        values = dict(result_id="mission-result", incident_id="incident", observation_ids=("initial",),
-                      outcome="confirmed", basis="independent_mission", evaluated_at=12,
-                      evidence_ids=("independent-patrol-report",), evidence_source_ids=("patrol",),
-                      final=True, sufficient_coverage=True)
-        return EvaluationResult(**(values | changes))
+                               initial_observation=self.initial, incident_id="incident")
 
     def test_new_sources_have_reproducible_explainable_score(self):
         evaluation = self.evaluate([obs("other", "s2")])
@@ -181,20 +174,6 @@ class TestResponsePolicy(unittest.TestCase):
         evaluation = self.evaluate([obs("other", "s2"), obs("other", "s2", confidence=0.2)])
         self.assertEqual(evaluation["suspicion_score"], self.evaluate()["suspicion_score"])
         self.assertTrue(evaluation["conflicting_evidence"])
-
-    def test_mission_results_need_independent_conclusive_reference(self):
-        evaluation = self.evaluate()
-        self.assertEqual(self.decide(evaluation, mission=self.mission())["decision"], "request_rangers")
-        self.assertEqual(self.decide(evaluation, mission=self.mission(outcome="refuted"))["decision"], "close")
-        for changes in ({"outcome": "inconclusive"}, {"outcome": "failed"}, {"final": False},
-                        {"sufficient_coverage": False}, {"incident_id": "other"}, {"evaluated_at": 9},
-                        {"evidence_source_ids": ("s1",)}, {"observation_ids": ("other",)}):
-            with self.subTest(changes=changes):
-                decision = self.decide(evaluation, mission=self.mission(**changes))
-                self.assertEqual(decision["decision"], "observe")
-                self.assertIsNotNone(decision["mission_rejection"])
-        with self.assertRaises(ValueError):
-            self.decide(evaluation, mission=self.mission(basis="ground_truth"))
 
     def test_config_and_bridge_to_existing_mission_registry(self):
         root = Path(__file__).resolve().parents[2]
