@@ -185,6 +185,78 @@ class TestStressExtensions(unittest.IsolatedAsyncioTestCase):
         shared = await run_mvp(extra_informants={}, **common)
         self.assertEqual(shared["extra_initiators"]["sensor-3"]["incident_status"], "expired")
 
+    async def test_retransmit_recovers_lost_replies(self):
+        resent = lambda report: len(report["messages"]) - len(
+            {(m["to"], m["body"]["message_id"]) for m in report["messages"]})
+        base = await run_mvp()
+        self.assertEqual(resent(base), 0)
+        # As primeiras mensagens de cada tipo perdem-se sempre (as duas propostas das patrulhas);
+        # só o reenvio as recupera. Sem reenvio, perder o VERIFY_RESPONSE custa 10 s reais: não se repete aqui.
+        for kind, count, reason in (("PROPOSAL", 2, "no_eligible_proposals"), ("STATUS", 1, "confirmation_unknown"),
+                                    ("VERIFY_RESPONSE", 1, None)):
+            with self.subTest(kind=kind):
+                again = await self.drop_first(kind, count, retransmit=1)
+                if reason is not None:
+                    lost = await self.drop_first(kind, count, retransmit=0)
+                    self.assertEqual((lost["incident_status"], lost["reason"]), ("unresolved", reason))
+                self.assertEqual((again["incident_status"], again["reason"]), ("closed", "confirmed"))
+                self.assertGreaterEqual(resent(again), 1)
+                self.assertEqual(again["reservations"], [None, None, None])
+        with self.assertRaises(ValueError):
+            await run_mvp(retransmit=-1)
+
+    async def drop_first(self, kind, count, **options):
+        """Correr o MVP perdendo as primeiras ``count`` mensagens do tipo indicado."""
+        from isia.simulation import runner
+        original, dropped = runner.fault_settings, []
+
+        class OnceList(list):
+            def __contains__(self, value):
+                if value != kind or len(dropped) >= count:
+                    return False
+                dropped.append(value)
+                return True
+
+        def patched(faults):
+            settings = original(faults)
+            settings["drop"] = OnceList()
+            return settings
+        runner.fault_settings = patched
+        try:
+            return await run_mvp(faults={}, receive_timeout=0.2, max_receive_timeout=0.2, **options)
+        finally:
+            runner.fault_settings = original
+
+    async def test_alert_makes_one_of_two_overlapping_initiators_yield(self):
+        root = Path(__file__).resolve().parents[2]
+        settings = json.loads((root / "config/scenarios/A.json").read_text())["response_settings"]
+        settings["policy"].update(patrol_threshold=0.01, severe_patrol_threshold=0.01)
+        settings["sources"]["sensor-3"] = {"modality": "acoustic", "correlation_group": "local_3"}
+        hear = {"kind": "acoustic", "detection_range": 1.5}
+        threat = {"kind": "threat", "starts_at": 0.0, "duration": 1000.0}
+
+        async def run(events, **options):
+            return await run_mvp(
+                response_settings=settings, corroborate=False, extra_initiators={"sensor-3": Position(4, 2)},
+                scenario={"run_id": "alert", "seed": 1, "resources": {},
+                          "sources": {"sensor-1": hear, "sensor-2": {"kind": "visual", "detection_range": 0.0},
+                                      "sensor-3": hear},
+                          "events": [{**threat, **event} for event in events]}, **options)
+        shared = [{"event_id": "a", "position": {"x": 3, "y": 2}}]
+        reasons = lambda report: sorted((report["reason"], report["extra_initiators"]["sensor-3"]["reason"]))
+        # Sem aviso, os dois iniciadores tratam a mesma ameaça: duas idas de patrulha para um caçador.
+        twice = await run(shared)
+        self.assertEqual(reasons(twice), ["confirmed", "confirmed"])
+        once = await run(shared, alert_distance=1.0)
+        self.assertEqual(reasons(once), ["confirmed", "duplicate_alert"])
+        self.assertEqual(sum(m["body"]["message_type"] == "ALERT" for m in once["messages"]), 2)
+        self.assertLess(sum(m["body"]["message_type"] == "CFP" for m in once["messages"]),
+                        sum(m["body"]["message_type"] == "CFP" for m in twice["messages"]))
+        # Duas ameaças a três células uma da outra não se fundem: cada iniciador trata a sua.
+        apart = await run([{"event_id": "a", "position": {"x": 1, "y": 2}},
+                           {"event_id": "b", "position": {"x": 5, "y": 2}}], alert_distance=1.0)
+        self.assertNotIn("duplicate_alert", reasons(apart))
+
     async def test_map_and_sensor_positions_come_from_arguments(self):
         report = await run_mvp(map_size=(10, 6), sensor_positions={"sensor-2": Position(3, 2)})
         self.assertEqual(report["world"], {"width": 10, "height": 6, "sensors": {

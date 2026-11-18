@@ -80,6 +80,8 @@ def run_metrics(report):
         **({"incidents": len(incidents), "incidents_closed": incidents.count("closed"),
             "incidents_expired": incidents.count("expired"),
             "incidents_unresolved": incidents.count("unresolved"),
+            # Subconjunto das fechadas: o iniciador desistiu porque um vizinho ficou com a ameaça.
+            "incidents_duplicate": sum(view["reason"] == "duplicate_alert" for view in (report, *extras.values())),
             "last_close_time": max(closed, default=None)} if extras else {}),
     }
 
@@ -100,5 +102,6 @@ def summarize(rows):
             "unresolved_runs": sum(row["unresolved"] for row in rows),
             **{name: describe(row[name] for row in rows) for name in NUMERIC},
             **({name: sum(row[name] for row in rows)
-                for name in ("incidents", "incidents_closed", "incidents_expired", "incidents_unresolved")}
+                for name in ("incidents", "incidents_closed", "incidents_expired", "incidents_unresolved",
+                             "incidents_duplicate")}
                if rows and "incidents" in rows[0] else {})}

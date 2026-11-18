@@ -142,7 +142,8 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                   queue_rounds=60, silent_invalid=True, queue_priority=False,
                   corroboration_settings=None, receive_timeout=None, minimum_autonomy_percent=10.0,
                   extra_rangers=None, extra_informants=None, map_size=(8, 8), sensor_positions=None,
-                  expire_unseen=False, queue_until_free=False, chain_missions=False):
+                  expire_unseen=False, queue_until_free=False, chain_missions=False, retransmit=0,
+                  alert_distance=None):
     """O runner só fornece ambiente, relógio e transporte; agentes decidem.
 
     inspection_outcomes e interrupt_resource permitem testes determinísticos.
@@ -190,6 +191,11 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     iniciadores adicionais não corroboram, como antes.
     expire_unseen, queue_until_free (ver configure_mvp) e chain_missions (o recurso aceita a
     missão seguinte durante o regresso à base) são mitigações da espera na fila, desligadas.
+    retransmit=N (desligado: 0) faz o iniciador reenviar até N vezes o mesmo VERIFY_REQUEST, CFP
+    ou ACCEPT quando a resposta não chega, e os recursos repetirem a resposta já dada.
+    alert_distance=D (desligado: None) liga o aviso entre iniciadores com cobertura sobreposta:
+    cada um envia um ALERT aos vizinhos e, se dois leram a mesma ameaça (até D células), só o
+    que leu primeiro a trata; o outro fecha como duplicate_alert. O runner só diz quem é vizinho.
     """
     corroboration, receive_timeout, minimum_autonomy_percent = validate_experimental_settings(
         xmpp=xmpp, corroboration_settings=corroboration_settings, receive_timeout=receive_timeout,
@@ -279,16 +285,23 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         inspect = scenario.inspect if outcome is None else lambda position, now, task, value=outcome: value
         agent.configure_execution(world, inspect)
         agent.silent_invalid, agent.ordered_queue = silent_invalid, queue_priority
-        agent.chain_missions = chain_missions
+        agent.chain_missions, agent.resend_replies = chain_missions, bool(retransmit)
         mobiles.append(agent)
     jids = lambda capability, present: {str(a.jid): a.resource.resource_id for a in mobiles
                                         if (capability in a.capabilities) is present}
-    for initiator in initiators:
+    initiator_ids = ("sensor-1", *extras)
+    for source_id, initiator in zip(initiator_ids, initiators):
+        # Vizinhos: iniciadores cujo alcance se pode sobrepor ao deste (posições e alcances são do ambiente).
+        neighbours = () if alert_distance is None else tuple(
+            str(other.jid) for other_id, other in zip(initiator_ids, initiators) if other is not initiator
+            and distance(world.sensors[source_id], world.sensors[other_id])
+            <= sources[source_id].detection_range + sources[other_id].detection_range + alert_distance)
         initiator.configure_mvp(jids("incident_response", False), jids("incident_response", True),
                                 receive_timeout=receive_timeout,
                                 selection_weights=selection_weights, cfp_limit=cfp_limit,
                                 max_receive_timeout=max_receive_timeout, queue_rounds=queue_rounds,
                                 expire_unseen=expire_unseen, queue_until_free=queue_until_free,
+                                retransmit=retransmit, neighbours=neighbours, alert_distance=alert_distance,
                                 base_positions={str(a.jid): a.resource.position for a in mobiles})
     initial_resources = [model_to_dict(agent.resource) for agent in mobiles]
     if max_seconds is None:
@@ -296,7 +309,7 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
         # Há, no máximo, verificação móvel e intervenção do guarda, mais margem
         # para o regresso e o encerramento depois dos timeouts operacionais.
         max_seconds = (sensor_module.RESPONSE_TIMEOUT_SECONDS
-                       + 2 * sensor.max_attempts
+                       + 2 * sensor.max_attempts * (1 + retransmit)
                        * ((1 + queue_rounds) * 2 * sensor.max_receive_timeout
                           + (10 + queue_rounds) * sensor.receive_timeout) + 1.0)
     agents = [*mobiles, *peers.values(), *initiators]

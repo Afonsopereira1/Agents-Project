@@ -61,6 +61,7 @@ class MobileResourceAgent(Agent):
     silent_invalid = False  # True: um ACCEPT que não bate com a proposta fica sem resposta
     ordered_queue = False  # True: com vários pedidos em espera, só o primeiro da fila recebe proposta
     chain_missions = False  # True: no regresso à base, com o resultado entregue, aceita a missão seguinte
+    resend_replies = False  # True: a um CFP ou ACCEPT repetido responde outra vez com a mesma resposta
 
     def __init__(
         self,
@@ -100,6 +101,9 @@ class MobileResourceAgent(Agent):
         self._result_sent = False
         self._result_message = None
         self._completed_accepts = set()
+        # Reenvio: respostas já dadas, para repetir sem reavaliar. CFP recusado e ACCEPT confirmado.
+        self._refusals = {}
+        self._accept_replies = {}
 
     def configure_execution(self, world, inspect, *, speed=1.0, energy_per_cell=1.0,
                             service_seconds=1.0):
@@ -209,15 +213,18 @@ class MobileResourceAgent(Agent):
                         incident_id=accept.incident_id, mission_id=accept.mission_id,
                         source_id=agent.resource.resource_id, conversation_id=accept.conversation_id)
                 result = agent._result_message
+                outgoing = build_spade_message(
+                    initiator, result, performative=PERFORMATIVE_INFORM,
+                    conversation_id=result.conversation_id, in_reply_to=accept.message_id,
+                    protocol=CONTRACT_NET_PROTOCOL)
                 try:
-                    await self.send(build_spade_message(
-                        initiator, result, performative=PERFORMATIVE_INFORM,
-                        conversation_id=result.conversation_id, in_reply_to=accept.message_id,
-                        protocol=CONTRACT_NET_PROTOCOL))
+                    await self.send(outgoing)
                 except Exception as error:
                     logger.warning("Resultado não enviado; o regresso continua: %s", error)
                     return
                 agent._result_sent = True
+                if accept.message_id in agent._accept_replies:
+                    agent._accept_replies[accept.message_id].append(outgoing)
 
     def set_simulated_time(self, simulated_time: float) -> None:
         value = _validate_simulated_time(simulated_time, "simulated_time")
@@ -262,6 +269,9 @@ class MobileResourceAgent(Agent):
                     cfp.message_id in agent._closed_cfp_ids
                     or cfp.created_at < agent._latest_cfp_times.get(negotiation, -1)
                 ):
+                    refusal = agent._refusals.get((initiator, cfp.message_id))
+                    if refusal is not None:
+                        await self.send(refusal)  # a recusa perdeu-se: repetir a mesma, sem reavaliar
                     return
                 existing = next((
                     context for context in agent._proposal_context.values()
@@ -333,6 +343,8 @@ class MobileResourceAgent(Agent):
                 else:
                     proposal_context = None
                     agent._closed_cfp_ids.add(cfp.message_id)
+                    if agent.resend_replies:
+                        agent._refusals[(initiator, cfp.message_id)] = reply
                 try:
                     await self.send(reply)
                 except Exception as error:
@@ -387,7 +399,11 @@ class MobileResourceAgent(Agent):
                             agent._waiting.pop((_bare_jid(initiator), cfp.mission_id), None)
                     return
                 if accept.message_id in agent._completed_accepts:
-                    return  # Uma missão terminada nunca volta a reservar por replay.
+                    # Uma missão terminada nunca volta a reservar por replay; com reenvio, repete
+                    # a confirmação e o resultado já enviados ao iniciador original.
+                    for stored in tuple(agent._accept_replies.get(accept.message_id, ())):
+                        await self.send(stored)
+                    return
                 if context is None:
                     result = ReservationResult(
                         ReservationStatus.INVALID_REQUEST,
@@ -450,6 +466,8 @@ class MobileResourceAgent(Agent):
                     in_reply_to=accept.message_id,
                     protocol=CONTRACT_NET_PROTOCOL,
                 )
+                if agent.resend_replies and result.confirmed and context is not None:
+                    agent._accept_replies[accept.message_id] = [reply]
                 try:
                     await self.send(reply)
                 except Exception as error:

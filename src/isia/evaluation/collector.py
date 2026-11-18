@@ -36,7 +36,7 @@ VARIANTS = {
 WORLD_KEYS = {"sensors": "sensor_positions", "initiators": "extra_initiators", "informants": "extra_informants",
               "patrols": "extra_patrols", "rangers": "extra_rangers"}
 OPTION_KEYS = {"queue_rounds", "queue_priority", "queue_until_free", "max_receive_timeout", "silent_invalid",
-               "cfp_limit", "expire_unseen", "chain_missions"}
+               "cfp_limit", "expire_unseen", "chain_missions", "retransmit", "alert_distance"}
 
 
 def world_options(config):
@@ -130,7 +130,8 @@ async def run_scenario(config, variant, *, repetitions=None, output=None, runner
     # calculada pelo runner, incluindo a espera de dez prazos pelo resultado.
     world = world_options(config)
     # Com fila, a execução dura mais do que os 30 s da Etapa 9: usar também o limite do runner.
-    max_seconds = None if overrides.get("receive_timeout", 0.5) > 0.5 or world.get("queue_rounds") else 30.0
+    max_seconds = (None if overrides.get("receive_timeout", 0.5) > 0.5 or world.get("queue_rounds")
+                   or world.get("retransmit") else 30.0)
     settings = deepcopy(config["response_settings"])
     settings["policy"].update(options.get("policy", {}))
     book = ReputationBook(**settings["reputation"])

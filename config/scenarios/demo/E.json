@@ -1,0 +1,601 @@
+{
+  "scenario_id": "E",
+  "description": "Reserva alargada: 16 ameaças ao mesmo tempo num mapa 16x12, 20 fontes (16 sensores acústicos iniciadores, 2 câmaras e 2 informadores humanos), 4 patrulhas e 2 guardas. Em dois quadrantes quem corrobora é uma câmara; nos outros dois, um informador humano, que falha 25 % das vezes, erra a posição em 1 célula e declara confiança 0,6. Fila por gravidade, mitigações da espera, reenvio e aviso entre iniciadores ligados.",
+  "repetitions": 10,
+  "base_seed": 1000,
+  "episodes": [
+    {
+      "label": "wide",
+      "events": [
+        {
+          "event_id": "threat-01",
+          "kind": "threat",
+          "position": {
+            "x": 1,
+            "y": 1
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-02",
+          "kind": "threat",
+          "position": {
+            "x": 6,
+            "y": 1
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-03",
+          "kind": "threat",
+          "position": {
+            "x": 1,
+            "y": 4
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-04",
+          "kind": "threat",
+          "position": {
+            "x": 6,
+            "y": 4
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-05",
+          "kind": "threat",
+          "position": {
+            "x": 9,
+            "y": 1
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-06",
+          "kind": "threat",
+          "position": {
+            "x": 14,
+            "y": 1
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-07",
+          "kind": "threat",
+          "position": {
+            "x": 9,
+            "y": 4
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-08",
+          "kind": "threat",
+          "position": {
+            "x": 14,
+            "y": 4
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-09",
+          "kind": "threat",
+          "position": {
+            "x": 1,
+            "y": 7
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-10",
+          "kind": "threat",
+          "position": {
+            "x": 6,
+            "y": 7
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-11",
+          "kind": "threat",
+          "position": {
+            "x": 1,
+            "y": 10
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-12",
+          "kind": "threat",
+          "position": {
+            "x": 6,
+            "y": 10
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-13",
+          "kind": "threat",
+          "position": {
+            "x": 9,
+            "y": 7
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-14",
+          "kind": "threat",
+          "position": {
+            "x": 14,
+            "y": 7
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-15",
+          "kind": "threat",
+          "position": {
+            "x": 9,
+            "y": 10
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        },
+        {
+          "event_id": "threat-16",
+          "kind": "threat",
+          "position": {
+            "x": 14,
+            "y": 10
+          },
+          "starts_at": 0.0,
+          "duration": 1000.0
+        }
+      ]
+    }
+  ],
+  "sources": {
+    "sensor-1": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-3": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-4": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-5": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-6": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-7": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-8": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-9": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-10": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-11": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-12": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-13": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-14": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-15": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-16": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-17": {
+      "kind": "acoustic",
+      "detection_range": 1.0,
+      "sensitivity": 0.95,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.05,
+      "confidence": 0.8
+    },
+    "sensor-2": {
+      "kind": "visual",
+      "detection_range": 5.5,
+      "sensitivity": 0.9,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.1,
+      "confidence": 0.8
+    },
+    "sensor-18": {
+      "kind": "visual",
+      "detection_range": 5.5,
+      "sensitivity": 0.9,
+      "false_positive_rate": 0.05,
+      "false_negative_rate": 0.1,
+      "confidence": 0.8
+    },
+    "sensor-19": {
+      "kind": "human",
+      "detection_range": 5.5,
+      "sensitivity": 0.9,
+      "false_positive_rate": 0.2,
+      "false_negative_rate": 0.25,
+      "position_error": 1,
+      "confidence": 0.6
+    },
+    "sensor-20": {
+      "kind": "human",
+      "detection_range": 5.5,
+      "sensitivity": 0.9,
+      "false_positive_rate": 0.2,
+      "false_negative_rate": 0.25,
+      "position_error": 1,
+      "confidence": 0.6
+    }
+  },
+  "resources": {
+    "drone": {
+      "load": 0.5,
+      "position": {
+        "x": 0,
+        "y": 6
+      }
+    },
+    "vehicle": {
+      "position": {
+        "x": 15,
+        "y": 6
+      }
+    },
+    "ranger": {
+      "position": {
+        "x": 5,
+        "y": 6
+      }
+    }
+  },
+  "faults": null,
+  "response_settings": {
+    "reputation": {
+      "alpha": 2.0,
+      "beta": 2.0
+    },
+    "policy": {
+      "patrol_threshold": 0.25,
+      "ranger_threshold": 0.65,
+      "severe_threshold": 0.8,
+      "severe_patrol_threshold": 0.08,
+      "ranger_min_groups": 2,
+      "ranger_min_modalities": 2
+    },
+    "severity": 0.5,
+    "adjudication": {
+      "max_distance": 1,
+      "max_delay_seconds": 30.0
+    },
+    "sources": {
+      "sensor-1": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-1"
+      },
+      "sensor-3": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-3"
+      },
+      "sensor-4": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-4"
+      },
+      "sensor-5": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-5"
+      },
+      "sensor-6": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-6"
+      },
+      "sensor-7": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-7"
+      },
+      "sensor-8": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-8"
+      },
+      "sensor-9": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-9"
+      },
+      "sensor-10": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-10"
+      },
+      "sensor-11": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-11"
+      },
+      "sensor-12": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-12"
+      },
+      "sensor-13": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-13"
+      },
+      "sensor-14": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-14"
+      },
+      "sensor-15": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-15"
+      },
+      "sensor-16": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-16"
+      },
+      "sensor-17": {
+        "modality": "acoustic",
+        "correlation_group": "local_sensor-17"
+      },
+      "sensor-2": {
+        "modality": "visual",
+        "correlation_group": "camera_sensor-2"
+      },
+      "sensor-18": {
+        "modality": "visual",
+        "correlation_group": "camera_sensor-18"
+      },
+      "sensor-19": {
+        "modality": "human",
+        "correlation_group": "informant_sensor-19"
+      },
+      "sensor-20": {
+        "modality": "human",
+        "correlation_group": "informant_sensor-20"
+      }
+    },
+    "compatibility_rules": {
+      "gunshot_like_sound": [
+        "suspicious_movement",
+        "suspicious_activity_report"
+      ]
+    },
+    "severity_by_source": {
+      "sensor-1": 0.9,
+      "sensor-3": 0.5,
+      "sensor-4": 0.5,
+      "sensor-5": 0.2,
+      "sensor-6": 0.9,
+      "sensor-7": 0.5,
+      "sensor-8": 0.5,
+      "sensor-9": 0.2,
+      "sensor-10": 0.9,
+      "sensor-11": 0.5,
+      "sensor-12": 0.5,
+      "sensor-13": 0.2,
+      "sensor-14": 0.9,
+      "sensor-15": 0.5,
+      "sensor-16": 0.5,
+      "sensor-17": 0.2
+    }
+  },
+  "world": {
+    "width": 16,
+    "height": 12,
+    "sensors": {
+      "sensor-1": {
+        "x": 1,
+        "y": 1
+      },
+      "sensor-2": {
+        "x": 4,
+        "y": 3
+      }
+    },
+    "initiators": {
+      "sensor-3": {
+        "x": 6,
+        "y": 1
+      },
+      "sensor-4": {
+        "x": 1,
+        "y": 4
+      },
+      "sensor-5": {
+        "x": 6,
+        "y": 4
+      },
+      "sensor-6": {
+        "x": 9,
+        "y": 1
+      },
+      "sensor-7": {
+        "x": 14,
+        "y": 1
+      },
+      "sensor-8": {
+        "x": 9,
+        "y": 4
+      },
+      "sensor-9": {
+        "x": 14,
+        "y": 4
+      },
+      "sensor-10": {
+        "x": 1,
+        "y": 7
+      },
+      "sensor-11": {
+        "x": 6,
+        "y": 7
+      },
+      "sensor-12": {
+        "x": 1,
+        "y": 10
+      },
+      "sensor-13": {
+        "x": 6,
+        "y": 10
+      },
+      "sensor-14": {
+        "x": 9,
+        "y": 7
+      },
+      "sensor-15": {
+        "x": 14,
+        "y": 7
+      },
+      "sensor-16": {
+        "x": 9,
+        "y": 10
+      },
+      "sensor-17": {
+        "x": 14,
+        "y": 10
+      }
+    },
+    "informants": {
+      "sensor-18": {
+        "x": 12,
+        "y": 3
+      },
+      "sensor-19": {
+        "x": 4,
+        "y": 9
+      },
+      "sensor-20": {
+        "x": 12,
+        "y": 9
+      }
+    },
+    "patrols": {
+      "drone-2": {
+        "x": 8,
+        "y": 0
+      },
+      "drone-3": {
+        "x": 8,
+        "y": 11
+      }
+    },
+    "rangers": {
+      "ranger-2": {
+        "x": 10,
+        "y": 6
+      }
+    }
+  },
+  "options": {
+    "max_receive_timeout": 2.0,
+    "queue_rounds": 60,
+    "queue_priority": true,
+    "silent_invalid": true,
+    "expire_unseen": true,
+    "queue_until_free": true,
+    "chain_missions": true,
+    "retransmit": 1,
+    "alert_distance": 1.0
+  }
+}

@@ -31,3 +31,4 @@ results/experiments/runs/
 
 # Relatórios completos por execução do cenário D; runs.csv, summary.csv e manifest.json são versionados
 results/scenario-d/runs/
+results/scenario-e/runs/

@@ -184,12 +184,26 @@ class SensorAgent(Agent):
             logger.info("VERIFY_REQUEST enviada para %s", agent.informant_jid)
 
             response_deadline = monotonic() + RESPONSE_TIMEOUT_SECONDS
+            # Reenvio: sem resposta ao fim do prazo curto, o mesmo pedido (mesmo message_id) volta a sair.
+            # Só o iniciador configurado (configure_mvp) traz estes dois valores; sem eles não há reenvio.
+            resends = getattr(agent, "retransmit", 0)
+            resend_after = getattr(agent, "max_receive_timeout", None)
+            if type(resends) is not int or not is_finite_number(resend_after):
+                resends, resend_after = 0, 0.0
+            resend_at = monotonic() + resend_after
             rejected_responses: list[dict[str, object]] = []
             while True:
                 remaining = response_deadline - monotonic()
                 if remaining <= 0:
                     break
+                if resends:
+                    remaining = min(remaining, max(resend_at - monotonic(), 0.001))
                 incoming = await self.receive(timeout=remaining)
+                if incoming is None and resends and monotonic() < response_deadline:
+                    resends -= 1
+                    await self.send(outgoing)
+                    resend_at = monotonic() + resend_after
+                    continue
                 if incoming is None or monotonic() >= response_deadline:
                     break
                 try:
