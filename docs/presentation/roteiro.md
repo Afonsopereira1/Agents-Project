@@ -4,7 +4,7 @@
 
 **Duração alvo:** cerca de 12 minutos, 13 diapositivos, cerca de 55 segundos cada. A demonstração gravada ocupa o diapositivo 10. Os diapositivos 14 e 15 são de reserva, para perguntas.
 
-**Diapositivos (18-11-2026):** <https://claude.ai/artifact/C5kRVniNyws5ZcU1z3SaXs>, feitos a partir deste roteiro, com notas do orador. A ligação é privada até ser partilhada no menu Share; para a entrega, exportar para PDF ou PowerPoint (Share › Export) e guardar em `docs/presentation/`. Grupo, por ordem alfabética: Afonso Pereira, Guilherme Gomes e Guilherme Kotchergenko. Revistos a 18-11-2026: capa com os nomes, restrição → resposta no diapositivo 2, código do `setup()` no 4, diagrama de sequência no 5 e definição das métricas no 6; não foram pré-visualizados no ecrã.
+**Diapositivos (18-11-2026):** <https://claude.ai/artifact/C5kRVniNyws5ZcU1z3SaXs>, feitos a partir deste roteiro, com notas do orador. A ligação é privada até ser partilhada no menu Share; para a entrega, exportar para PDF ou PowerPoint (Share › Export) e guardar em `docs/presentation/`. Grupo, por ordem alfabética: Afonso Pereira, Guilherme Gomes e Guilherme Kotchergenko. Revistos a 18-11-2026: capa com os nomes, restrição → resposta no diapositivo 2, código do `setup()` no 4, diagrama de sequência no 5 e definição das métricas no 6; na mesma data, as tabelas e os cartões passaram a gráficos: funil de A e C no 7, barras antes/depois no 8 e no 11, matriz de confusão no 6, linha do tempo no 10 e ícones no 2, 12 e 13. Renderizados no Chrome para conferir cortes; os ícones só aparecem no próprio visualizador de diapositivos.
 
 | # | Diapositivo | Conteúdo | Fonte |
 |---|---|---|---|
