@@ -14,12 +14,12 @@ Simulamos uma reserva onde sensores e informadores detetam atividade suspeita e 
 A partir da raiz. Nenhum destes passos precisa de servidor XMPP.
 
 ```bash
-# 1. Ambiente: Python 3.12 (o SPADE 4.1.4 exige Python entre 3.10 e 3.14.0; com 3.14.4 a instalação falha)
+# 1. Ambiente: Python 3.12, versão recomendada e validada no projeto
 python3.12 -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
 export PYTHONPATH=src
 
-# 2. Testes: 560, OK, cerca de 45 s
+# 2. Testes: 581, OK, cerca de 47 s (19-11-2026; ambiente descrito abaixo)
 python -m unittest discover -s tests
 
 # 3. MVP: uma ocorrência completa, cerca de 1 s; o relatório JSON sai no stdout
@@ -30,6 +30,20 @@ python scripts/replay.py /tmp/isia-mvp.json --delay 0.5
 ```
 
 **Resultado esperado do MVP:** `incident_status: "closed"`, 15 mensagens. O segundo sensor corrobora a observação do primeiro, o drone verifica aos 4 s simulados e o guarda intervém aos 10 s. No fim, todas as reservas estão a `null` e os recursos `available`: drone com 94 % de energia, veículo com 100 % (propôs, não foi escolhido) e guarda com 90 %.
+
+**Compatibilidade Python:** o código exige pelo menos Python 3.11 devido a
+`asyncio.timeout()`. A versão recomendada e efetivamente validada no projeto é
+Python 3.12. O SPADE 4.1.4 declara `Requires-Python: >=3.10,<=3.14`, que aceita
+3.14.0, mas exclui 3.14.4. Essa declaração não equivale à compatibilidade do nosso
+código: Python 3.10 não é suficiente, e não validámos o projeto em 3.11 ou 3.14.
+
+**Validação dos testes (19-11-2026):** 581 testes aprovados em 46,814 s, sem
+falhas, erros ou testes ignorados, incluindo os oito testes das métricas com vários
+iniciadores e os treze novos testes de validação de protocolos. A execução usou
+Python 3.12.3, SPADE 4.1.4, pyjabber 0.4.5
+e SQLAlchemy 2.1.0 num ambiente existente. O projeto fixa SQLAlchemy 2.1.8 em
+`requirements.txt`; esta execução não valida essa versão. Não foram instaladas
+nem atualizadas dependências.
 
 **Demonstração sem instalar nada:**
 
@@ -46,7 +60,7 @@ Todos correm da raiz, com o ambiente ativo e `PYTHONPATH=src`.
 
 | O que reproduz | Comando | Tempo | Onde grava |
 |---|---|---|---|
-| Testes | `python -m unittest discover -s tests` | 45 s | nada versionado |
+| Testes | `python -m unittest discover -s tests` | 47 s | nada versionado |
 | MVP | `python -m isia.simulation.runner` | 1 s | stdout |
 | MVP com a política de reputação | `python -m isia.simulation.runner --policy config/agents.json` | 1 s | stdout |
 | MVP com falhas injetadas | `python -m isia.simulation.runner --faults config/faults.json` | 2 s | stdout |
@@ -63,6 +77,16 @@ Todos correm da raiz, com o ambiente ativo e `PYTHONPATH=src`.
 | Cenário E, «reserva alargada» (16 ameaças, 20 fontes) | `python -m isia.evaluation.collector config/scenarios/demo/E.json --variants full --output results/scenario-e` | 16 s | `results/scenario-e/` |
 | Cenário E: câmaras contra informadores humanos | `python scripts/scenario_e.py` (depois da linha anterior) | < 1 s\* | `results/scenario-e/informants.csv` |
 | Sensibilidade dos parâmetros (Bloco G) | `python scripts/sensitivity.py --list`; ver [sensitivity.md](docs/sensitivity.md) | não medido\* | pasta nova em `results/sensitivity/` |
+
+**Resultado esperado do MVP com política:** o comando
+`python -m isia.simulation.runner --policy config/agents.json` decide `observe`,
+com score de suspeita aproximadamente 0,15, e termina com
+`incident_status: "expired"` e `reason: "insufficient_corroboration"`. Envia duas
+mensagens e não cria missões. As reservas ficam a `null` e todos os recursos
+ficam disponíveis, com 100 % de autonomia, sem consumo. Este resultado é esperado,
+não é um bug: as duas fontes acústicas pertencem ao mesmo grupo de correlação e
+o score fica abaixo do limiar de patrulha de 0,25. Ver
+[reputação e política](docs/reputation-policy.md).
 
 \* Não repetido a 18-11-2026. Os tempos vêm da coluna `tempo_real_s` dos CSV publicados e do [plano](docs/development-plan.md); dependem da máquina. De `scenario_e.py` e da recolha da sensibilidade só se confirmou que os scripts e as opções existem (`--list` e `--dry-run` correm).
 
@@ -86,7 +110,7 @@ src/isia/evaluation/      métricas, coletor de cenários, calibração
 src/isia/domain/          modelos, estados do incidente, validação
 config/                   política (agents.json), falhas (faults.json), cenários A, B, C e demo/D, E
 scripts/                  repetição, gráficos, P3, stress, cenário E e sensibilidade
-tests/                    560 testes: unit/, integration/, scenarios/ e raiz
+tests/                    581 testes: unit/, integration/, scenarios/ e raiz
 results/                  resultados publicados: CSV, manifestos, gráficos e gravações
 docs/                     documentação (tabela abaixo)
 hello_agent.py, main.py, verification_demo.py    demonstrações com servidor XMPP

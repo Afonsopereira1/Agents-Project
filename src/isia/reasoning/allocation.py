@@ -224,6 +224,7 @@ def reservation_status_matches_accept(
         and status.source_id == resource_id
         and status.payload.get("accept_message_id") == accept.message_id
         and status.payload.get("resource_id") == resource_id
+        and status.created_at >= accept.created_at
         and semantically_valid
     )
 

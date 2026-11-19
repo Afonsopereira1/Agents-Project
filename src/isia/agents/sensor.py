@@ -44,15 +44,19 @@ def response_matches_request(
     response: Message,
     request: Message,
     expected_sender: str,
+    *,
+    current_time: float,
 ) -> bool:
-    """Valida a correlação e a origem de uma resposta de verificação."""
+    """Valida intenção, correlação e emissão até ao instante simulado do recetor."""
     sender = bare_jid(getattr(incoming, "sender", ""))
     expected = bare_jid(expected_sender)
     return (
         response.message_type is MessageType.VERIFY_RESPONSE
+        and incoming.get_metadata("performative") == PERFORMATIVE_INFORM
         and response.conversation_id == request.conversation_id
         and response.incident_id == request.incident_id
-        and response.created_at >= request.created_at
+        and is_finite_number(current_time)
+        and request.created_at <= response.created_at <= current_time
         and incoming.get_metadata("conversation-id") == request.conversation_id
         and incoming.get_metadata("in-reply-to") == request.message_id
         and response.payload.get("request_message_id") == request.message_id
@@ -226,7 +230,10 @@ class SensorAgent(Agent):
                     })
                     continue
                 if not response_matches_request(
-                    incoming, response, request, agent.informant_jid
+                    incoming, response, request, agent.informant_jid,
+                    # O runner pode ter avançado este relógio durante o await receive.
+                    # A demonstração antiga sem feed só conhece o instante do pedido.
+                    current_time=(agent.created_at if agent.created_at is not None else request.created_at),
                 ):
                     logger.warning("VERIFY_RESPONSE rejeitada: correlação ou remetente inválido")
                     rejected_responses.append({

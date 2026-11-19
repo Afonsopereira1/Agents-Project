@@ -5,7 +5,7 @@
 > **Em resumo**
 >
 > - As falhas são injetadas **só no transporte local** de `run_mvp`: perda, atraso, duplicação, agente indisponível, recurso ocupado e mensagens inválidas. Os agentes não mudam.
-> - Uma falha nunca deixa a ocorrência pendurada: acaba num estado explícito (`unresolved` ou `expired`) com um motivo.
+> - As falhas de mensagens modeladas têm prazos e estados explícitos. Isto não garante recuperação após crash de processos ou exceções arbitrárias de transporte; estas podem abortar a execução.
 > - Por omissão não há reenvio. Com `retransmit=1` e 10 % de perda, fecham 17 de 20 ocorrências em vez de 7.
 > - Não há recuperação se o iniciador desaparecer, e a queda do servidor XMPP não é simulada.
 
@@ -76,7 +76,9 @@ Por omissão os agentes não reenviam: uma perda leva ao prazo esgotado e a um e
 Com `retransmit=N` em `run_mvp`:
 
 - O iniciador volta a enviar o mesmo `VERIFY_REQUEST`, `CFP` ou `ACCEPT`, com o **mesmo `message_id`**, até N vezes por pedido.
-- O destinatário reconhece a repetição e repete a resposta que já tinha dado, sem reavaliar nem reservar outra vez.
+- Os recursos reutilizam propostas ainda válidas e respostas de recusa guardadas; um `ACCEPT` repetido não volta a executar a missão. Com reenvio ativo, repetem a confirmação e o resultado já disponíveis.
+- O informador não guarda respostas: cada `VERIFY_REQUEST` repetido volta a consultar o feed e usa o instante simulado atual. Mantém o ID `response-<request_message_id>`, mas o conteúdo pode mudar. É uma nova leitura para o mesmo pedido, não replay de uma resposta imutável.
+- O iniciador usa a primeira resposta válida recebida e termina essa verificação; respostas posteriores não criam outra decisão nem outra missão. A ordem de entrega pode, por isso, influenciar a evidência usada. O ID da resposta não deve ser interpretado como identificação de um snapshot imutável; não há garantia geral de replay idêntico para consumidores futuros.
 - Enquanto espera o resultado da missão, o iniciador reenvia o `ACCEPT` como pergunta: o recurso repete o `STATUS` e, se já o tiver, o `MISSION_RESULT`.
 
 | Perda | Sem reenvio | 1 reenvio | 2 reenvios |
@@ -113,7 +115,7 @@ Não há despachante nem outro sensor que tome conta da ocorrência.
 - Se o iniciador desaparecer **depois** de um `ACCEPT` confirmado, o recurso executa, regressa e liberta a reserva sem depender dele. A ocorrência fica `unresolved` no relatório.
 - Se desaparecer **antes**, nada chega a ser reservado.
 
-Só se simula a perda de mensagens de e para o iniciador, não a queda do processo. Detetar a falha e passar a ocorrência a outro sensor ficou por fazer ([decisões pendentes](architecture.md#decisões-pendentes)).
+Só se simula a perda de mensagens de e para o iniciador, mantendo o seu comportamento em execução até ao timeout, não a queda do processo. É nesse modelo que se obtém `unresolved`; um crash real pode impedir a produção do relatório. Detetar a falha e passar a ocorrência a outro sensor ficou por fazer ([decisões pendentes](architecture.md#decisões-pendentes)).
 
 ## Escassez
 

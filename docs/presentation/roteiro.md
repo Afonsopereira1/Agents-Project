@@ -52,14 +52,18 @@ As falas são guias, não texto para ler. O texto completo está nas notas do or
 | 11 | Depende dos valores escolhidos? | «Quase não: 55 de 75 combinações não mudaram nenhuma mobilização.» |
 | 12 | Onde partia e o que mudámos | «Contar só os três cartões com contorno: fila, gravidade e reenvio.» |
 | 13 | O custo deixa de crescer | «Das 57 mensagens, 50 eram para negociar com 16 patrulhas; pedindo só a 2, ficam 8.» |
-| 14 | Antes, depois e sugestão testada | «Antes a parte cheia não crescia; agora acompanha: 13 de 16 em E. E com 3 guardas, nenhuma fica por resolver.» |
+| 14 | Antes, depois e sugestão testada | «Antes a parte cheia não crescia; agora acompanha: 13 de 16 em E. E com 3 guardas, nenhuma das 139 mobilizadas ficou por resolver nesse ensaio.» |
 | 15 | As três restrições, com a sugestão testada para cada uma | «Trocámos alguma deteção e rapidez por fiabilidade e por não ter um centro, e medimos quanto custou.» |
 
-### Três avisos para quem fala
+### Avisos para quem fala
 
 1. **Diapositivo 10:** dizer em voz alta que a variante sem corroboração também desce o limiar para 0,01. A diferença junta as duas mudanças.
 2. **Diapositivos 9 e 14:** os números de D e E são de uma recolha. Ao repetir, E fechou entre 132 e 139 de 160; as 40 confirmadas de D repetiram-se sempre. A ordem na fila depende do relógio real.
 3. **Diapositivos 4 e 10 mostram vencedores diferentes.** Na demonstração ninguém leva carga e ganha o drone, que está mais perto. No cenário A o drone leva carga 0,5 e ganha o veículo. Não é contradição: é a função de custo.
+4. **P3:** os limites de `flood` e a redução de respostas 5 → 1 são históricos, anteriores à validação temporal atual. A reserva local atómica garante exclusividade; `STATUS` comunica-a.
+5. **Sugestões:** 139 foi o melhor total observado, não um máximo geral. Quatro guardas mantiveram esse total, reduziram o último fecho médio (102,6 → 94,1 s) e aumentaram o tráfego (1148,9 → 1163,5 mensagens). A coluna temporal de `sugestoes.csv` tem unidades estatísticas diferentes entre grupos; ver [folha P3](p3-escalabilidade.md#sugestões-testadas).
+6. **Proveniência de D:** o manifesto tem `dirty: true`; o commit registado não recupera integralmente o estado da recolha. Esta limitação não prova invalidade dos resultados.
+7. **Sensibilidade:** o limiar do guarda 0,5 mantém a classificação em A e reduz tempo e energia, mas deixa só 4 verificações confirmadas e atualizações de reputação; em C reduz o recall. Não generalizar o benefício de A a falsos alarmes.
 
 ## Demonstração (diapositivo 4)
 

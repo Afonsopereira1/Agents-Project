@@ -4,14 +4,14 @@ Folha de estudo para a segunda pergunta do professor. São os diapositivos 3 (ar
 
 ## Em resumo
 
-- **FIPA Request** para pedir corroboração; **FIPA Contract Net** para escolher o recurso, duas vezes numa ameaça confirmada (patrulha, depois guarda).
+- Protocolos **inspirados em FIPA Request e Contract Net**, com conteúdo JSON e extensões próprias, para corroborar e escolher recursos.
 - **Extensão nossa:** depois do `accept-proposal`, o recurso confirma a reserva com `STATUS`.
 - **Arquitetura:** quem deteta coordena a sua ocorrência. Não há despachante.
 - **Preço assumido:** escolha gulosa por ocorrência, sem ótimo global.
 
 ## Resposta de 30 segundos
 
-«Usamos dois protocolos FIPA: Request para pedir corroboração e Contract Net para escolher o recurso. Não há despachante: quem deteta coordena, e cada recurso decide se propõe. Uma missão custa no máximo 3N + 2 mensagens. Acrescentámos uma confirmação de reserva, o `STATUS`, para evitar duas missões no mesmo recurso. O preço é a escolha gulosa: não garantimos a melhor atribuição global.»
+«Usamos protocolos inspirados em FIPA Request e Contract Net. Quem deteta coordena a ocorrência e cada recurso decide se propõe. Uma ronda normal com N candidatos custa até 3N + 2 mensagens, incluindo confirmação e resultado, sem novas tentativas ou reenvios. O `STATUS` comunica a reserva; a exclusividade é garantida pela reserva atómica local do recurso. As decisões são descentralizadas, mas a infraestrutura de simulação é partilhada. A escolha é gulosa, sem ótimo global.»
 
 ## As mensagens
 
@@ -20,7 +20,7 @@ Folha de estudo para a segunda pergunta do professor. São os diapositivos 3 (ar
 | Verificação (FIPA Request) | `request` → `inform` |
 | Atribuição (FIPA Contract Net) | `cfp` → `propose` ou `refuse` → `accept-proposal` ao vencedor e `reject-proposal` aos outros → `inform` (`STATUS`) → `inform` (`MISSION_RESULT`) |
 
-Numa ocorrência completa são **15 mensagens**: 2 de verificação, 8 para a patrulha (2 candidatos) e 5 para o guarda (1 candidato).
+No MVP normal, sem falhas ou reenvios, são **15 mensagens**: 2 de verificação, 8 para a patrulha (2 candidatos) e 5 para o guarda (1 candidato).
 
 Dois pormenores que caem em perguntas:
 
@@ -32,7 +32,7 @@ Dois pormenores que caem em perguntas:
 | Escolha | Ganho | Preço medido |
 |---|---|---|
 | Contract Net | Uma ronda; o recurso decide | Um candidato calado faz a ronda esperar o prazo: 1,5 s → 5,5 s reais em 10 execuções |
-| `STATUS` | 0 reservas duplas em todos os testes, com até 16 ameaças juntas | Mais 1 mensagem por missão |
+| Reserva atómica local + `STATUS` | Exclusividade no recurso e confirmação ao iniciador; nenhuma reserva dupla nos casos testados | Mais 1 mensagem por missão |
 | Corroboração | Cenário B: FPR 0,75 → 0,25 | Cenário B: recall 0,80 → 0,65 |
 | Quem deteta coordena | Sem centro; 6 e 16 ocorrências em paralelo em D e E | Sem ótimo global |
 
@@ -48,6 +48,7 @@ Dois pormenores que caem em perguntas:
 
 ## Limites a admitir
 
-- É FIPA nas performativas e nos protocolos; o conteúdo é JSON nosso, não FIPA-SL.
+- São protocolos inspirados em FIPA, com JSON e extensões próprias, sem alegação de conformidade integral.
+- `ALERT` agrupa observações compatíveis; ameaças distintas próximas podem ser confundidas com duplicados.
 - O mecanismo não é *strategy-proof*.
 - As falhas foram injetadas só no transporte local, não num servidor XMPP.

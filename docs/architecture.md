@@ -6,16 +6,16 @@
 >
 > - Há três papéis de agente, cada um com a sua classe SPADE: o sensor que inicia a ocorrência (`IncidentSensorAgent`), a fonte que corrobora (`InformantAgent`) e o recurso móvel (`MobileResourceAgent`, usado por drone, veículo e guarda).
 > - Não existe despachante. O sensor que deteta coordena **a sua** ocorrência: pede corroboração, lança um Contract Net e fecha a ocorrência.
-> - Os comportamentos SPADE tratam de mensagens e de tempo. As decisões são funções puras em `src/isia/reasoning/`, testadas sem servidor XMPP.
+> - Os comportamentos SPADE coordenam comunicação, estado e execução. Delegam regras de avaliação em funções puras de `src/isia/reasoning/`, mas nem todas as decisões são puras.
 > - Nos cenários A, B e C só o `sensor-1` inicia. Nos cenários D e E iniciam 6 e 16 sensores, cada um com a sua ocorrência.
 > - Limites assumidos: cada iniciador trata uma ocorrência por execução, não há substituição de um iniciador que falhe e o servidor XMPP é um ponto único de falha.
 
-Verificado contra o código em 18-11-2026 (branch `fix/auditoria-correcoes`, 560 testes OK em cerca de 45 s).
+Referência histórica: verificado em 18-11-2026 (branch `fix/auditoria-correcoes`, 560 testes OK em cerca de 45 s). A revisão posterior de validação e a contagem atual dos testes estão no [README](../README.md).
 
 ## 1. Princípios de conceção
 
 1. **Autonomia.** Um recurso decide se propõe e se aceita uma missão. Nenhuma mensagem o obriga.
-2. **Decisão descentralizada.** Não há gestor global. Cada ocorrência tem um iniciador local, que é o sensor que a detetou.
+2. **Decisão descentralizada.** Não há despachante global de missões. Cada ocorrência tem um iniciador local. A execução partilha processo, ambiente e relógio; o runner configura participantes e fontes de corroboração.
 3. **Observabilidade parcial.** Cada agente só conhece as suas observações, as mensagens que recebeu e o seu estado. A verdade de referência fica no simulador.
 4. **Heterogeneidade.** Sensores, fontes que corroboram, patrulhas e guardas têm funções diferentes.
 5. **Reprodutibilidade.** Ambiente configurável, relógio simulado, sementes e registo de todas as mensagens.
@@ -65,7 +65,7 @@ As setas a cheio entre agentes são mensagens. A seta a tracejado entre iniciado
 
 ## 3. Como os agentes são construídos
 
-Cada agente é uma subclasse de `spade.agent.Agent`. No `setup()` regista **comportamentos**, cada um com um **template** que filtra as mensagens pelos metadados (performativa, ontologia, protocolo). Os comportamentos tratam da comunicação e do tempo. As **decisões** estão em funções puras.
+Cada agente é uma subclasse de `spade.agent.Agent`. No `setup()` regista **comportamentos** com **templates** de metadados; o iniciador filtra apenas pela ontologia e valida os protocolos ao receber. Os comportamentos coordenam comunicação, estado e execução. As funções de raciocínio avaliam evidência e propostas; reservas, reputação, fila e ciclo de vida também mantêm estado.
 
 ### 3.1 As três camadas
 
@@ -75,7 +75,7 @@ flowchart TB
         AG[Agent.setup] --> BH[Behaviours + Templates]
         BH -->|send / receive| XMPP[(XMPP ou filas locais)]
     end
-    subgraph RAC["2 - Camada de raciocínio: funções puras"]
+    subgraph RAC["2 - Raciocínio: avaliação e estado local"]
         R1[corroboration.py<br/>score da evidência]
         R2[policy.py<br/>observar / verificar / guardas]
         R3[allocation.py<br/>evaluate_cfp, select_best_proposal, reserva]
@@ -141,7 +141,7 @@ classDiagram
 
 Dois pormenores que costumam ser perguntados:
 
-- O `IncidentSensorAgent` regista **um só** comportamento, que recebe tudo o que tenha a ontologia `isia`: respostas de verificação, propostas, recusas, `STATUS`, resultados e avisos de vizinhos. Cada receção valida remetente, conversa e performativa.
+- O `IncidentSensorAgent` regista **um só** comportamento, que recebe tudo o que tenha a ontologia `isia`. A verificação e o Contract Net validam intenção e correlação nos respetivos caminhos. O `ALERT` valida a origem entre vizinhos e compatibilidade de observações, mas não tem o mesmo conjunto de verificações de conversa, performativa e cronologia.
 - O `ExecutionBehaviour` só é registado quando o recurso recebe `configure_execution()`. O `run_mvp` chama-o sempre. Sem ele, o recurso negoceia e reserva, mas não se desloca.
 
 #### Instâncias usadas nas execuções medidas
@@ -169,9 +169,9 @@ Os agentes adicionais chamam-se `<fonte>-mvp` (por exemplo `sensor-3-mvp`) e `<r
 
 ### 3.3 Porquê assim: sete decisões, com alternativas
 
-**Decisão 1 — Separar a comunicação (SPADE) das decisões (funções puras).**
+**Decisão 1 — Separar a orquestração SPADE das regras de avaliação testáveis.**
 
-- **Porquê:** a mesma lógica corre igual com XMPP real ou com filas locais. Cada regra testa-se isoladamente: 560 testes, cerca de 45 s, sem servidor XMPP. As falhas (perda, atraso, duplicação) injetam-se só no transporte local, sem tocar nos agentes.
+- **Porquê:** reutiliza-se o código dos Behaviours e das regras com XMPP ou filas locais, sem garantir equivalência de escalonamento e entrega. Há testes isolados e de agentes locais, sem servidor XMPP. As falhas (perda, atraso, duplicação) injetam-se só no transporte local, sem tocar nos agentes.
 - **Alternativa:** pôr a lógica dentro do `run()` dos comportamentos, como nos exemplos do SPADE.
 - **Pró:** testável e explicável. Cada decisão regista fatores e razões no histórico.
 - **Contra:** mais ficheiros e validações repetidas na fronteira entre camadas.

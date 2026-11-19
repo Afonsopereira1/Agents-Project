@@ -61,7 +61,7 @@
 
 **Frase para dizer:** «A fila troca "não atendida" por "atendida mais tarde". As mitigações aproximam-na de "atendida a tempo".»
 
-**Como se resolve a disputa quando o guarda fica livre.** Os iniciadores em espera voltam a enviar o CFP. Sem ordem por gravidade, o guarda faz proposta a todos e reserva para o primeiro `ACCEPT` que lê; os outros recebem `STATUS` com `reservation_failed` e voltam à fila. Com ordem por gravidade, o guarda só faz proposta ao primeiro da sua lista. Nos dois casos, é o `STATUS` que impede a reserva dupla.
+**Como se resolve a disputa quando o guarda fica livre.** Os iniciadores em espera voltam a enviar o CFP. Sem ordem por gravidade, o guarda faz proposta a todos e reserva para o primeiro `ACCEPT` que lê; os outros recebem `STATUS` com `reservation_failed` e voltam à fila. Com ordem por gravidade, o guarda só faz proposta ao primeiro da sua lista. Nos dois casos, a reserva local atómica (`LocalResourceReservation`) impede a reserva dupla; o `STATUS` comunica o resultado ao iniciador.
 
 ## Perguntas prováveis
 
@@ -70,8 +70,8 @@
 | Porque não aumentaram simplesmente o prazo? | Um prazo fixo maior atrasa todas as rondas em que um candidato se cala. O dinâmico só espera mais quando não tem nenhuma proposta; quando tudo corre bem, o tempo é igual. |
 | 2 s não é lento? | Só quando ninguém responde, e uma ocorrência demora pelo menos 12 s simulados a fechar. |
 | Porque é que o teto é 2 s? | É uma troca medida: o teto é o maior atraso tolerado e também o tempo perdido quando ninguém responde ([tabela](../scalability.md#que-teto-escolher)). 2 s é o prazo que já usamos na rede XMPP. |
-| Como garantem que dois iniciadores não reservam o mesmo guarda? | Pelo `STATUS`: o recurso só confirma uma reserva de cada vez. Zero reservas duplas em todos os testes. |
-| O sistema aguenta ataques? | Até 300 mensagens inválidas por cada mensagem real, nenhuma decisão muda e nenhum agente termina com exceção. Não há autenticação: um atacante com credenciais válidas não é detetado. |
+| Como garantem que dois iniciadores não reservam o mesmo guarda? | Pela reserva local atómica do recurso; o `STATUS` comunica a confirmação ou a falha. Zero reservas duplas nos ensaios publicados. |
+| O sistema aguenta ataques? | Na recolha histórica, até 300 cópias de cada tipo inválido por mensagem real mantiveram o resultado, sem exceções. Esse limite não foi revalidado após a correção da validação temporal. Não há autenticação: um atacante com credenciais válidas não é detetado. |
 | Quantos agentes aguenta? | Medimos até 16 patrulhas e, no cenário E, 16 iniciadores, 4 informadores e 6 recursos. O que cresce é o custo da fila: 78 mensagens por ocorrência em E, contra 15 com uma só. |
 | Onde está o gargalo? | Nos recursos. Com um guarda, é o guarda; com dois, passam a faltar patrulhas; no cenário E, é a autonomia dos guardas que acaba. |
 | Porque não está tudo ligado em A, B e C? | Cada execução tem uma só ocorrência e nenhuma mensagem inválida: a fila e o silêncio não atuariam. Mantê-los desligados deixa os resultados publicados reproduzíveis. |
@@ -85,6 +85,7 @@
 - **«Mesma decisão» com o CFP limitado.** O resultado é o mesmo (10 de 10 fechadas aos 12 s). Com 16 patrulhas, a patrulha escolhida não é a mesma: tem o mesmo custo.
 - **«O ponto (6,6) está fora do alcance dos dois sensores.»** Está fora do alcance do `sensor-1`; o `sensor-2` alcança-o, como ao ponto (7,0).
 - **«O prazo dinâmico aguenta até 2,0 s de atraso.»** O que medimos: 1,5 s passa e 2,5 s falha. 2,0 s é o teto configurado.
+- **«O código atual aguenta os mesmos limites de `flood`» ou «o silêncio reduz sempre 80 %».** São medições históricas: a validação atual rejeita mensagens futuras.
 - **«Com reenvio é mais rápido.»** Os tempos reais dos testes de perda são anteriores a uma alteração do código e não foram medidos de novo.
 - **«67 % em D e 83 % em E» sem dizer de quê.** São ameaças fechadas como confirmadas: 40 de 60 e 132 de 160. Por ocorrência com alerta são 45 de 52 e 132 de 152 fechadas.
 - **Significância estatística.** São 5 a 20 execuções por ponto, sem intervalos de confiança.

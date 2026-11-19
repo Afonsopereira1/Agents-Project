@@ -5,20 +5,20 @@ Folha de estudo para a primeira pergunta do professor. É o diapositivo 5 do [ro
 ## Em resumo
 
 - Cada agente é uma subclasse de `spade.agent.Agent` com **comportamentos** filtrados por **Templates**.
-- Os comportamentos só comunicam. As **decisões** são **funções puras**, testadas sem servidor (560 testes, 45 s).
-- Drone, veículo e guarda são **a mesma classe**; só muda a capacidade, a posição e a energia.
+- Os comportamentos coordenam comunicação, estado e execução. Delegam regras de avaliação em funções puras, mas nem todas as decisões são puras.
+- Drone, veículo e guarda são subclasses distintas que partilham a implementação de `MobileResourceAgent`; as capacidades e o estado são configurados.
 - A **autonomia** está no recurso: é ele que decide se propõe.
 
 ## Resposta de 30 segundos
 
-«Cada agente é uma subclasse de `Agent` do SPADE. No `setup()` regista comportamentos, cada um com um Template que filtra as mensagens pela performativa, pela ontologia e pelo protocolo. Os comportamentos só comunicam; as decisões estão em funções puras, por isso testamos tudo sem servidor. Drone, veículo e guarda são a mesma classe e só mudam a capacidade. A autonomia está no recurso: decide se propõe, conta a energia de ida e volta e pode negar a reserva mesmo depois de aceite.»
+«Cada agente é uma subclasse de `Agent` do SPADE. No `setup()` regista comportamentos com Templates; o iniciador filtra pela ontologia e valida cada protocolo ao receber. Os comportamentos coordenam comunicação, estado e execução, delegando regras de avaliação em funções puras. Drone, veículo e guarda partilham a implementação móvel. O recurso decide se propõe, conta a energia de ida e volta e pode negar a reserva depois da proposta. As decisões são descentralizadas; a simulação partilha processo, ambiente e relógio.»
 
 ## Três camadas
 
 | Camada | O que tem | Onde |
 |---|---|---|
-| 1. SPADE: comunicação e tempo | `setup()`, comportamentos e Templates | `src/isia/agents/` |
-| 2. Raciocínio: funções puras | corroboração, política, `evaluate_cfp`, escolha da proposta, reputação | `src/isia/reasoning/` |
+| 1. SPADE: comunicação, estado e execução | `setup()`, comportamentos e Templates | `src/isia/agents/` |
+| 2. Raciocínio: avaliação e estado local | Funções de corroboração, política, `evaluate_cfp` e seleção; reputação e reserva mantêm estado | `src/isia/reasoning/` |
 | 3. Domínio: dados imutáveis e validados | `Observation`, `Mission`, `Bid`, `Message` | `src/isia/domain/`, `src/isia/communication/` |
 
 ## Os agentes
