@@ -267,7 +267,7 @@ Em B há 20 ameaças (denominador do recall) e 40 negativos (denominador do FPR)
 
 - A decisão de mobilizar depende sobretudo dos limiares (patrulha, gravidade) e do que conta como corroboração (distância). São estes os parâmetros a discutir primeiro.
 - Em B não há ganho sem custo: o que reduz falsos alarmes reduz também o recall, e vice-versa. A exceção é melhorar as fontes (`ideal`).
-- Só energia e autonomia mínima 5 % melhoram custo ou disponibilidade sem mexer na classificação, com menos margem configurada no segundo caso.
+- Pesos só de energia e autonomia mínima 5 % melhoram custo ou disponibilidade sem mexer na classificação, com menos margem configurada no segundo caso. O limiar do guarda 0,5 também mantém a classificação em A (17 intervenções): reduz o tempo médio de resposta de 12 para 7,412 s e a energia de 8,5 para 5,25 p.p.; as verificações confirmadas e atualizações de reputação descem de 17 para 4. Em C reduz o recall de 0,80 para 0,75 e em B não muda os resultados. O benefício observado em A não valida a chamada direta contra falsos alarmes: os negativos são vazios.
 - A reputação pesa pouco: priors e prazo de adjudicação mudam no máximo duas ameaças em 20.
 - Não foi procurado nem encontrado um valor ótimo. Os valores oficiais mantêm-se.
 
@@ -315,6 +315,27 @@ O `suspicion_score` é uma heurística, não uma probabilidade. A tabela conta, 
 - **Menos energia pode ser menos serviço.** Ler sempre a energia ao lado do recall e das não resolvidas.
 - **Tempos médios dependem de quem respondeu.** A média só inclui execuções com resultado recebido; por isso as diferenças de tempo citadas usam os pares com valor nos dois braços.
 - **Mundo simplificado.** Uma janela, um iniciador, dois sensores, eventos parados, guarda idealizado, carga sem custo físico.
+
+## Evidências locais e proposta de entrega complementar — 19-11-2026
+
+Consulta apenas de leitura ao GitHub: na `main` e no commit de origem `c86e9ad4`, `results/sensitivity/` contém apenas `summary.csv` e `completion-manifest.json`. Os CSV detalhados, relatórios e auditorias abaixo existem localmente, mas não nessa árvore publicada. Isto não verifica outras branches, anexos ou entregas externas.
+
+**Proposta, sem criar nem publicar qualquer pacote:**
+
+| Seleção mínima para revisão dos resultados | O que permite conferir |
+|---|---|
+| `completion-manifest.json`; os quatro ficheiros de `g-final-consolidated-20261117/` (`manifest.json`, `runs.csv`, `summary.csv`, `blocked-configurations.csv`) | 3500 alternativas, 75 combinações válidas, referências separadas por lote, contagens agregadas e diversidade 1/1 bloqueada |
+| Os oito ficheiros de `g-final-analysis-20261117/`: `manifest.json`, `comparisons.csv`, `effects.csv`, `findings.json`, `application-audit.csv`, `calibration.csv`, `calibration-coverage.csv`, `calibration-samples.csv` | Comparações emparelhadas, intervalos descritivos, aplicação dos fatores e calibração |
+| `manifest.json`, `plan.json`, `self-check/comparison.json` e `self-check/actual.csv` de cada uma das 41 fontes indicadas em `g-final-consolidated-20261117/manifest.json` (quando presentes) | Configurações, sementes, hashes históricos e verificações de referência de cada lote |
+| Os quatro ficheiros de `g-final-validation-20261117/` e `g-final-recovery-audit-20261117/recovery.json` | Auditorias e registos históricos de validação; não são uma nova execução dos testes |
+
+Esta seleção tem **182 ficheiros, 5,82 MB sem compressão**; estimativa de compressão de conteúdo de **0,68 MB**, à qual acrescem nomes e metadados do arquivo. Permite rever as tabelas e os cálculos sobre métricas, mas não reconstituir integralmente observações e mensagens. A versão do código deve ser identificada pelos hashes históricos, pois a recolha antecede correções posteriores.
+
+Para auditar também os relatórios de origem, acrescentar os JSON dos 41 lotes canónicos e os 3640 caminhos de `calibration_inputs` do manifesto de análise, incluindo a referência de calibração do lote inicial. A união, sem repetir caminhos, tem **6070 ficheiros, 101,77 MB sem compressão**; estimativa de conteúdo comprimido de **14,24 MB**, acrescida de metadados. Os caminhos referidos existem localmente. Não é necessário incluir todos os ensaios preliminares, de fumo, recuperação intermédia e logs de recolha: a árvore local completa tem 118,09 MB. Existem também os arquivos locais anteriores `auditoria_final_bloco_g.tar.gz` e `bloco_g_revisao.tar.gz`, fora dessa árvore; foram preservados e não são a proposta de pacote desta revisão.
+
+**Duplicações:** os cinco CSV da raiz (`summary`, `runs`, `calibration`, `calibration-coverage`, `blocked-configurations`) são cópias byte a byte dos correspondentes no consolidado/análise; entregar apenas uma cópia de cada. O resumo e o manifesto de conclusão já publicados podem ser incluídos para tornar o complemento autónomo. Os manifestos e planos dos lotes mantêm a ligação à recolha; os agregados não substituem os relatórios para uma auditoria ao detalhe.
+
+**Revisão antes de partilhar:** há caminhos absolutos em cinco ficheiros da seleção: o manifesto de conclusão, os manifestos do consolidado e da análise, `recovery.json` e `unittest-full.json`. Expõem o nome de utilizador, a estrutura de pastas e o caminho do interpretador; há também metadados da máquina nos manifestos. Os caminhos absolutos precisam de um mapeamento para caminhos relativos para uso noutra máquina. Decidir com a equipa o formato e canal de entrega e o eventual tratamento desses dados, preservando os originais e a correspondência dos hashes. Nenhum pacote foi criado e nenhum ficheiro experimental foi movido, copiado, apagado ou adicionado ao índice nesta revisão.
 
 ## Como reproduzir
 

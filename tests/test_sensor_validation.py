@@ -15,6 +15,7 @@ class IncomingMessage:
         self.metadata = {
             "conversation-id": conversation_id,
             "in-reply-to": in_reply_to,
+            "performative": "inform",
         }
 
     def get_metadata(self, name):
@@ -51,7 +52,7 @@ class TestSensorResponseValidation(unittest.TestCase):
         incoming, response = self.make_response()
         self.assertTrue(
             response_matches_request(
-                incoming, response, self.request, "informant@localhost"
+                incoming, response, self.request, "informant@localhost", current_time=0.0
             )
         )
 
@@ -59,7 +60,7 @@ class TestSensorResponseValidation(unittest.TestCase):
         incoming, response = self.make_response(conversation_id="other-conversation")
         self.assertFalse(
             response_matches_request(
-                incoming, response, self.request, "informant@localhost"
+                incoming, response, self.request, "informant@localhost", current_time=0.0
             )
         )
 
@@ -67,7 +68,7 @@ class TestSensorResponseValidation(unittest.TestCase):
         incoming, response = self.make_response(in_reply_to="other-request")
         self.assertFalse(
             response_matches_request(
-                incoming, response, self.request, "informant@localhost"
+                incoming, response, self.request, "informant@localhost", current_time=0.0
             )
         )
 
@@ -75,7 +76,7 @@ class TestSensorResponseValidation(unittest.TestCase):
         incoming, response = self.make_response(request_message_id="other-request")
         self.assertFalse(
             response_matches_request(
-                incoming, response, self.request, "informant@localhost"
+                incoming, response, self.request, "informant@localhost", current_time=0.0
             )
         )
 
@@ -83,6 +84,6 @@ class TestSensorResponseValidation(unittest.TestCase):
         incoming, response = self.make_response(sender="other@localhost")
         self.assertFalse(
             response_matches_request(
-                incoming, response, self.request, "informant@localhost"
+                incoming, response, self.request, "informant@localhost", current_time=0.0
             )
         )

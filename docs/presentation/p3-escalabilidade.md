@@ -30,7 +30,7 @@ Mensagens por ocorrência quando há fila ([fila.csv](../../results/stress/fila.
 |---|---|---|
 | Candidato calado | 1,5 s → 5,5 s reais em 10 execuções, com o mesmo resultado | [scale.csv](../../results/scalability/scale.csv) |
 | Memória | 1,3 kB por execução no histórico da reputação (1,3 MB em 1000) | [longa.csv](../../results/stress/longa.csv) |
-| Mensagens inválidas | Até 300 por mensagem real, nenhuma decisão muda e nenhum agente termina com exceção | [invalidas.csv](../../results/stress/invalidas.csv) |
+| Mensagens inválidas | Recolha histórica: até 300 cópias de cada tipo por mensagem real, resultado preservado e sem exceções; limite não revalidado após a correção temporal | [invalidas.csv](../../results/stress/invalidas.csv) |
 
 ## Situacional: o resultado quando o mundo muda
 
@@ -65,7 +65,7 @@ Cenário A, só o `sensor-1` inicia ([dist.csv](../../results/scalability/dist.c
 | Prazo de validade | Patrulhas em vão: 40 → 12 (ameaças de 30 s) | validade | desligado | D, E |
 | Recurso diz quando fica livre | 367 → 336 mensagens | ocupado | desligado | D, E |
 | Encadear missões | Último fecho: 81 s → 54 s | encadear | desligado | D, E |
-| Silêncio perante `ACCEPT` incoerente | Respostas a lixo: 5 → 1 por unidade (−80 %) | silencio | **ligado** | D, E |
+| Silêncio perante `ACCEPT` incoerente | Recolha histórica: respostas a lixo 5 → 1 por unidade (−80 %); não revalidado após a correção temporal | silencio | **ligado** | D, E |
 | Reenvio | 10 % de perda: 7 → 17 de 20 fechadas | reenvio | desligado | E (sem perdas) |
 | Aviso entre iniciadores | 4 iniciadores, 1 ameaça: 40 → 10 idas de patrulha | alerta | desligado | E (sem duplicados) |
 | Um informador por iniciador | 10 → 40 de 40 mobilizadas | informadores | desligado | D, E |
@@ -89,19 +89,23 @@ A, B e C correm com tudo desligado (`PUBLISHED_CONDITIONS`). Zero reservas dupla
 | Fecho médio: grave · média · leve | 10 s · 21 s · 31 s | 30 s · 73 s · 110 s |
 | Mensagens por execução | 186 | 1188 |
 
+Em D, o manifesto original regista `dirty: true`: o commit indicado não recupera integralmente o código da recolha. Isto limita a proveniência, sem demonstrar invalidade dos resultados. `closed` inclui também `not_confirmed` e `duplicate_alert`; só `closed/confirmed` indica intervenção confirmada do guarda.
+
 Por ameaça, fecham como confirmadas 67 % em D (40 de 60) e 83 % em E (132 de 160). Os cenários com fila não se repetem byte a byte: numa repetição, E fechou 136 e deixou 3 por resolver.
 
 ## Sugestões testadas
 
-O ponto a partir do qual mais já não ajuda ([sugestoes.csv](../../results/stress/sugestoes.csv); detalhe em [scalability.md](../scalability.md)):
+Melhores configurações observadas nestes ensaios, sem demonstrar um ótimo geral ([sugestoes.csv](../../results/stress/sugestoes.csv); detalhe em [scalability.md](../scalability.md)):
 
 | Situação | Sugestão | Evidência |
 |---|---|---|
-| 16 ameaças ao mesmo tempo | 3 guardas | 139 chegam ao guarda e 0 por resolver; com 2 eram 136 e 3 |
-| Mensagens perdidas | 1 reenvio até 10 % de perda; 3 a 20 % | fecham as 17 possíveis em 20 |
+| 16 ameaças ao mesmo tempo | 3 guardas | 139 chegam ao guarda e 0 por resolver; com 2 eram 136 e 3. Com 4 mantém-se 139, último fecho médio 102,6 → 94,1 s, mensagens 1148,9 → 1163,5 |
+| Mensagens perdidas | 1 reenvio até 10 % de perda; 3 a 20 % | fecham 17 de 20, o total de referência sem perda |
 | Ameaça de 15 s | guarda a 7 células ou menos | 5 de 5 a tempo a 7 células; 0 de 5 a 8 |
 | Ameaça fora do alcance de quem inicia | um sensor iniciador que a alcance | de 0 alertas para 9 de 10 que chegam ao guarda |
 | Um informador para 4 ameaças | 1 informador por iniciador | 40 de 40 mobilizadas, em vez de 10 |
+
+Em `sugestoes.csv`, `t_fecho_sim_mean` é a média do último fecho por execução em `guardas`, mas a média dos fechos individuais `closed/confirmed` em `distancia` e `cobertura`; não comparar diretamente. Só no cenário E desta recolha foi observada a equivalência entre `incidents_closed` e intervenções confirmadas. A exclusividade dos recursos vem da reserva local atómica; `STATUS` comunica o resultado.
 
 ## Reproduzir
 

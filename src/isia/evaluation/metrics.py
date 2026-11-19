@@ -7,6 +7,9 @@ Denominador zero devolve ``None`` (``N/A``), nunca 0 ou 1.
 Energia desconhecida em qualquer recurso torna o consumo total indisponível.
 As contagens de missões incluem apenas estados conhecidos pelo coordenador;
 conclusões locais cujo resultado não chegou não são contadas como conhecidas.
+Com vários iniciadores, verdade global e decisão de sensor-1 não têm o mesmo
+âmbito: summarize devolve None nas oito métricas de classificação. Os campos
+individuais de run_metrics mantêm-se para diagnóstico; não medem todas as ameaças.
 """
 
 from statistics import mean, median, stdev
@@ -96,12 +99,22 @@ def describe(values):
 
 def summarize(rows):
     """Agrega linhas de run_metrics de um mesmo cenário/variante."""
-    counts = confusion((row["threat"], row["dispatched"]) for row in rows)
-    return {"runs": len(rows), **counts, **rates(counts),
+    multiple = ["incidents" in row for row in rows]
+    if any(multiple) and not all(multiple):
+        raise ValueError("Não é possível agregar unidades de avaliação diferentes.")
+    if any(multiple):
+        classification = dict.fromkeys(("TP", "FP", "TN", "FN", "precision", "recall", "fpr", "accuracy"))
+    else:
+        counts = confusion((row["threat"], row["dispatched"]) for row in rows)
+        classification = {**counts, **rates(counts)}
+    # D histórico não registava duplicados. Não inventar zero nem somar dados parciais.
+    incident_fields = ("incidents", "incidents_closed", "incidents_expired", "incidents_unresolved")
+    if rows and all("incidents_duplicate" in row for row in rows):
+        incident_fields += ("incidents_duplicate",)
+    return {"runs": len(rows), **classification,
             "confirmed_runs": sum(row["confirmed"] for row in rows),
             "unresolved_runs": sum(row["unresolved"] for row in rows),
             **{name: describe(row[name] for row in rows) for name in NUMERIC},
             **({name: sum(row[name] for row in rows)
-                for name in ("incidents", "incidents_closed", "incidents_expired", "incidents_unresolved",
-                             "incidents_duplicate")}
-               if rows and "incidents" in rows[0] else {})}
+                for name in incident_fields}
+               if any(multiple) else {})}

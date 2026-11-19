@@ -2,7 +2,7 @@
 
 [Plano](development-plan.md#etapa-9a--escalabilidade-computacional-e-situacional) · [Experiências](experiments.md) · [Arquitetura](architecture.md) · [Pendentes](delivery-todo.md#bloco-c--p3-escalabilidade)
 
-Resposta a P3: o que acontece ao custo quando o sistema cresce (computacional) e o que acontece ao resultado quando mudam as ameaças, os sensores, os recursos e as falhas (situacional). Todos os números vêm dos ficheiros versionados em [`results/`](../results/) e foram recalculados a partir deles a 18-11-2026.
+Resposta a P3: o que acontece ao custo quando o sistema cresce (computacional) e o que acontece ao resultado quando mudam as ameaças, os sensores, os recursos e as falhas (situacional). Os números agregados vêm dos ficheiros versionados em [`results/`](../results/); alguns detalhes por ocorrência dependem dos relatórios locais não versionados, como indicado nos cenários D e E. As tabelas foram conferidas a 18-11-2026; as ressalvas documentais desta revisão não alteram a recolha histórica.
 
 ## Em resumo
 
@@ -26,7 +26,7 @@ Resposta a P3: o que acontece ao custo quando o sistema cresce (computacional) e
 | Um só guarda | 3,3 pedidos ao guarda por ocorrência | [Mais guardas](#mais-guardas) | 3,3 → 1,0 pedidos; último fecho 81 s → 68 s | O gargalo passa para as 2 patrulhas |
 | Quem espera pergunta de 5 em 5 s | 367 mensagens por execução | [O recurso diz quando fica livre](#o-recurso-ocupado-diz-quando-fica-livre) | 367 → 336 mensagens | Ganho pequeno: as missões são curtas |
 | O recurso só fica livre na base | Último fecho aos 81 s | [Encadear missões](#encadear-missões) | 81 s → 54 s | Não há recarga; não interrompe missões |
-| Os recursos respondem a mensagens inválidas | 5 respostas por unidade de `flood` | [Silêncio](#silêncio-perante-accept-incoerente-antes-e-depois) | 5 → 1 respostas (−80 %) | O informador ainda responde |
+| Os recursos respondem a mensagens inválidas (recolha histórica) | 5 respostas por unidade de `flood` | [Silêncio](#silêncio-perante-accept-incoerente-antes-e-depois) | 5 → 1 respostas (−80 %) | Não revalidado após a correção temporal |
 | Uma mensagem perdida trava a ocorrência | 10 % de perda: fecham 7 de 20 | [Reenvio](#reenvio-de-mensagens-antes-e-depois) | 7 → 17 de 20 (como sem perda) | Com 30 % de perda e 2 reenvios: 9 de 20 |
 | Iniciadores vizinhos duplicam a ocorrência | 4 iniciadores, 1 ameaça: 40 idas de patrulha | [Aviso entre iniciadores](#aviso-entre-iniciadores-antes-e-depois) | 40 → 10 idas; 119 → 33 mensagens | Um `ALERT` perdido volta a duplicar |
 | Um só informador para todos | 4 iniciadores, 1 informador: 10 de 40 mobilizadas | [Um informador por iniciador](#um-informador-por-iniciador) | 10 → 40 de 40 | Cada iniciador pergunta só a um, fixo |
@@ -77,7 +77,7 @@ Os scripts gravam por cima dos CSV em `results/`. Os três scripts de stress dem
 - **Sementes:** 1000 + número da execução. 10 execuções por ponto; 20 nos casos com perda; 5 no `teto.csv`.
 - **Transporte:** local. As falhas são injetadas no transporte local e não validam a rede XMPP.
 - **Tempo real:** depende da máquina. Comparar casos da mesma execução, nunca valores entre máquinas.
-- **«Fechada»:** a patrulha confirmou e o guarda interveio (`closed`). **«Confirmada»:** só a verificação pela patrulha. **«Atendida»** (`dist.csv`): ameaça real confirmada por uma patrulha na sua posição, contada por caçador pela função `attended()` de [`scripts/dist.py`](../scripts/dist.py).
+- **«Fechada»:** estado terminal `closed`; o motivo pode ser `confirmed`, `not_confirmed` ou `duplicate_alert`. Só `closed/confirmed` indica intervenção confirmada do guarda; pode resultar de chamada direta, sem verificação móvel. Nos ensaios simples aqui tabelados, os fechos eram confirmados, salvo indicação em contrário. **«Confirmada»:** nas colunas de verificação, só a verificação pela patrulha; não equivale ao motivo de fecho `confirmed`. **«Atendida»** (`dist.csv`): ameaça real confirmada por uma patrulha na sua posição, contada por caçador pela função `attended()` de [`scripts/dist.py`](../scripts/dist.py).
 
 # Parte 1 — Computacional
 
@@ -152,7 +152,9 @@ Irrelevante à escala do projeto. O histórico não é truncado nem gravado em d
 
 ## Carga de mensagens inválidas
 
-[invalidas.csv](../results/stress/invalidas.csv): por cada mensagem real, o transporte entrega ao mesmo destinatário N cópias inválidas de cada tipo (JSON partido, IDs trocados, data no futuro). Montagem do F2, 10 execuções por ponto.
+**Recolha histórica, anterior às correções de validação temporal.** O gerador `flood` em `runner.py` ainda injeta cópias com `created_at + 1e6`. O código atual rejeita mensagens futuras no recetor, incluindo respostas; o informador também rejeita pedidos posteriores ao seu instante local. Assim, as contagens de respostas e os limiares de carga abaixo, em `prazo.csv`, `teto.csv` e `silencio.csv`, não caracterizam automaticamente o código atual. Os testes de integração existentes cobrem uma carga pequena (`flood=5`) e o silêncio perante `ACCEPT` incoerente (`flood=2`); não revalidam os limites publicados. Não foram repetidas simulações nesta revisão.
+
+[invalidas.csv](../results/stress/invalidas.csv): por cada mensagem real, o transporte entrega ao mesmo destinatário N cópias inválidas de cada tipo (JSON partido, IDs trocados, data no futuro); a variante de IDs trocados é omitida nos CFP, pois seria um novo pedido válido. Montagem do F2, 10 execuções por ponto.
 
 | Inválidas por mensagem real (de cada tipo) | Inválidas por execução | Resultado igual ao de referência | Exceções | Tempo real (10 execuções) |
 |---|---|---|---|---|
@@ -162,9 +164,9 @@ Irrelevante à escala do projeto. O histórico não é truncado nem gravado em d
 | 300 | 12 600 | 10 de 10 | 0 | 11,2 s |
 | 1000 | 17 200 | 0 de 10 | 0 | 13,8 s |
 
-- Nenhum agente termina com exceção e nenhuma mensagem inválida muda uma decisão.
+- Na recolha histórica, não houve exceções nem decisões alteradas por aceitação de conteúdo inválido; a carga provocou falhas por prazo no ponto de 1000.
 - Com 1000, a negociação legítima falha por tempo: processar o lixo demora mais do que o prazo de 0,5 s. **O limite depende da máquina:** na medição do [prazo dinâmico](#prazo-dinâmico-antes-e-depois), o prazo fixo aguentou 1000 e falhou com 2000.
-- Os agentes respondem a parte do lixo: 5 respostas por unidade de `flood`. Ver [silêncio](#silêncio-perante-accept-incoerente-antes-e-depois).
+- Na recolha histórica, os agentes respondiam a parte do lixo: 5 respostas por unidade de `flood`. Ver [silêncio](#silêncio-perante-accept-incoerente-antes-e-depois).
 
 # Parte 2 — Situacional
 
@@ -301,7 +303,7 @@ Cada secção tem o mesmo molde: o que acontecia, o que mudámos, o efeito medid
 | 4 | 20 de 40 | 10 de 40 | 30 | 50 | 0 | 63 |
 | 8 | 20 de 80 | 10 de 80 | 70 | 130 | 0 | 123 |
 
-- **O `STATUS` resolve a corrida.** Dois iniciadores aceitam a mesma patrulha; um recebe `reservation_failed`, renegoceia e fica com a outra. Nunca houve reserva dupla.
+- **A reserva local atómica resolve a corrida.** Dois iniciadores aceitam a mesma patrulha; o recurso reserva para um e comunica ao outro `STATUS(reservation_failed)`, permitindo renegociar com a outra patrulha. O `STATUS` comunica o resultado; a exclusividade é assegurada por `LocalResourceReservation`. Não houve reserva dupla nos ensaios publicados.
 - **Sem fila, satura em 2 verificações e 1 intervenção por execução:** quem perde a corrida fica `unresolved`.
 
 **Limite.**
@@ -519,7 +521,7 @@ O custo em mensagens não muda: um pedido e uma resposta por ocorrência.
 
 **O que mudámos.** `silent_invalid=True`: um `ACCEPT` com IDs trocados ou com data no futuro nunca é enviado por um iniciador legítimo, por isso o recurso regista um aviso e não responde ([mobile.py](../src/isia/agents/mobile.py), `AcceptBehaviour`). Valor acrescentado: quem envia lixo deixa de receber tráfego de volta.
 
-**Efeito medido** ([silencio.csv](../results/stress/silencio.csv), 10 execuções por linha; a ocorrência fecha em 10 de 10 nos dois casos):
+**Efeito medido histórico** (anterior à validação temporal atual; ver [carga de mensagens inválidas](#carga-de-mensagens-inválidas)) ([silencio.csv](../results/stress/silencio.csv), 10 execuções por linha; a ocorrência fecha em 10 de 10 nos dois casos):
 
 | Inválidas por mensagem real | Inválidas por execução | Respostas a lixo, antes | Respostas a lixo, depois | Mensagens por execução, antes → depois |
 |---|---|---|---|---|
@@ -529,7 +531,7 @@ O custo em mensagens não muda: um pedido e uma resposta por ocorrência.
 
 **Limite.**
 
-- Sobra uma resposta em cada cinco: o `InformantAgent` responde a um `VERIFY_REQUEST` com IDs trocados, porque é um pedido bem formado. Só autenticar o remetente o impediria.
+- Na recolha histórica sobrava uma resposta em cada cinco, atribuída ao `InformantAgent` perante `VERIFY_REQUEST` com IDs trocados. Esta proporção não foi revalidada após as correções temporais; a validação dos IDs não autentica o remetente.
 - Um iniciador com um erro deixa de receber «reserva falhada» e passa a ver silêncio, que só se nota no fim do prazo (`confirmation_unknown`).
 - Um `ACCEPT` de uma proposta desconhecida ou expirada continua a ter resposta (`proposal_not_correlated`), de propósito.
 
@@ -655,6 +657,29 @@ O erro de posição de 1 célula e a confiança 0,5 não impediram nenhuma mobil
 
 # Parte 4 — Tudo junto
 
+## Correção da agregação dos cenários D e E — 19-11-2026
+
+Os `summary.csv` de D e E foram corrigidos posteriormente a partir dos `runs.csv`
+publicados, sem repetir simulações. As colunas `TP`, `FP`, `TN`, `FN`, `precision`,
+`recall`, `fpr` e `accuracy` passam a `N/A`: a verdade de referência é global, mas
+a previsão usada era apenas a decisão de `sensor-1`. Este `N/A` significa unidade
+de avaliação incompatível, não denominador zero. As restantes células dos resumos,
+os `runs.csv`, sementes e manifestos históricos foram preservados; os manifestos
+continuam a identificar a recolha original, não esta correção de agregação.
+
+As colunas `decision`, `dispatched`, `confirmed`, `status`, `reason`, `unresolved`,
+`verification_time`, `response_time`, `missions_done` e `missions_failed` de cada
+linha continuam a representar apenas `sensor-1`; o mesmo se aplica aos resumos
+`confirmed_runs`, `unresolved_runs` e às estatísticas dessas métricas. Energia,
+mensagens, falhas, `alert` e `first_patrol` têm âmbito global; `incidents_*` contam
+todos os iniciadores e `last_close_time` considera os seus fechos. Uma ocorrência
+`closed` pode ter motivo `not_confirmed` ou `duplicate_alert`: fechos não são
+ameaças confirmadas nem constituem recall por ameaça.
+
+O esquema histórico de D não tem `incidents_duplicate`. O agregador conserva essa
+ausência, sem inventar zeros; só soma duplicados quando todas as linhas os registam.
+Os resultados de A/B/C e os das Etapas F e G não foram alterados.
+
 ## Cenário D — dia movimentado
 
 **O que é.** [config/scenarios/demo/D.json](../config/scenarios/demo/D.json): seis ameaças ao mesmo tempo num mapa 12×8, cada uma com um sensor iniciador acústico e uma câmara ao lado (ruído do cenário A, alcance 1,5), quatro patrulhas e dois guardas. Gravidades: 2 graves, 2 médias e 2 leves; uma das leves dura só 15 s. Política completa. Ligados: prazo dinâmico, fila por gravidade, silêncio, prazo de validade, `busy_until` e missões encadeadas.
@@ -702,7 +727,7 @@ Por execução: último fecho aos 30 s, em média, 186 mensagens e 72 pontos per
 **Limite.**
 
 - **Não se repete byte a byte:** com fila, a ordem dos pedidos depende do relógio real. Numa repetição feita na revisão deste documento (commit `d99ede4`, saída não versionada) repetiram-se os 52 alertas, as 40 confirmadas (17, 15 e 8), as 4 sem corroboração e as 0 por resolver; mudaram o destino da ameaça curta (7 não confirmadas e 1 expirada), os tempos (médias aos 19 s, leves aos 27 s) e as mensagens (166).
-- Os ficheiros publicados foram recolhidos com código ainda sem commit (`manifest.json` com `dirty: true`, sobre o commit `d81330f`).
+- Os ficheiros publicados foram recolhidos com código ainda sem commit (`manifest.json` com `dirty: true`, sobre o commit `d81330f`). O estado exato da recolha não é integralmente recuperável apenas a partir desse commit: faltam as alterações locais então presentes. O manifesto original é preservado; esta limitação de proveniência não constitui prova de invalidade dos resultados.
 - As contagens por desfecho e por gravidade vêm dos relatórios completos de cada execução (`results/scenario-d/runs/`), que não são versionados. O `summary.csv` só tem os totais: 52 ocorrências, 45 fechadas, 7 expiradas e 0 por resolver.
 - Em `runs.csv`, as colunas habituais são as do `sensor-1`; `incidents`, `incidents_closed`, `incidents_expired`, `incidents_unresolved` e `last_close_time` contam todos os iniciadores.
 - Drone, veículo e guarda base existem sempre; os recursos adicionais são drones ou guardas com 100 % de autonomia. Um cenário, 10 execuções, transporte local.
@@ -757,11 +782,15 @@ Para cada situação variámos um só valor e procurámos o ponto a partir do qu
 
 | Situação | O que variámos | Resultado | Sugestão |
 |---|---|---|---|
-| 16 ameaças ao mesmo tempo (cenário E) | 2, 3 e 4 guardas | 2: 136 chegam ao guarda, 3 por resolver · 3: 139, 0 por resolver · 4: 139, 0 por resolver | **3 guardas para 16 ameaças.** 139 é o máximo possível (8 sem alerta, 13 sem corroboração). O 4.º só adianta o último fecho: 103 → 94 s |
-| Mensagens perdidas (cenário A, 20 sementes) | 0 a 4 reenvios, com 10, 20 e 30 % de perda | 10 %: 7, 17, 17, 17, 17 fechadas · 20 %: 1, 10, 16, 17, 17 · 30 %: 0, 3, 9, 15, 16 | **1 reenvio até 10 % de perda; 3 a 20 %.** 17 é o máximo possível. A 30 % nem 4 reenvios chegam |
+| 16 ameaças ao mesmo tempo (cenário E) | 2, 3 e 4 guardas | 2: 136 chegam ao guarda, 3 por resolver · 3: 139, 0 por resolver · 4: 139, 0 por resolver | **3 guardas para 16 ameaças.** 139 foi o melhor total observado nas configurações testadas (8 sem alerta, 13 sem corroboração nesta recolha). Com 4 guardas mantém-se esse total e a média do último fecho desce de 102,6 para 94,1 s, com mais tráfego: 1148,9 → 1163,5 mensagens por execução |
+| Mensagens perdidas (cenário A, 20 sementes) | 0 a 4 reenvios, com 10, 20 e 30 % de perda | 10 %: 7, 17, 17, 17, 17 fechadas · 20 %: 1, 10, 16, 17, 17 · 30 %: 0, 3, 9, 15, 16 | **1 reenvio até 10 % de perda; 3 a 20 %.** 17 foi o total de referência sem perda e o melhor observado nestas configurações. A 30 % nem 4 reenvios o atingem |
 | Ameaça de 15 s e guarda longe | guarda a 5, 6, 7, 8 e 9 células do alvo | 5, 6, 7 células: 5 de 5 a tempo (fecho aos 12, 13, 14 s) · 8 e 9: 0 de 5 | **Guarda a 7 células ou menos.** Regra: verificação (6 s) + caminho do guarda + 1 s tem de ser menor do que a duração da ameaça |
 | Ameaça em (7,0), fora do alcance do `sensor-1` | sem e com um sensor iniciador em (6,1) | sem: 0 alertas em 10 · com: 10 alertas, 9 chegam ao guarda | **Cada zona ao alcance de um sensor que inicia** (e de um informador: aqui corrobora o `sensor-2`) |
 | Um informador para 4 ameaças | 1, 2 e 4 informadores ([informadores.csv](../results/stress/informadores.csv)) | 10, 20 e 40 de 40 mobilizadas | **1 informador por iniciador** |
+
+**Leitura de `sugestoes.csv`.** O cabeçalho histórico `t_fecho_sim_mean` tem unidades estatísticas diferentes: em `distancia` e `cobertura`, `row()` calcula a média dos instantes `closed_at` de cada ocorrência `closed/confirmed`, agregando os fechos individuais das execuções; em `guardas`, `guardas()` calcula a média de `last_close_time`, o instante do último fecho de cada execução. Ambos usam segundos simulados desde `t=0`, mas não devem ser comparados diretamente como a mesma métrica nem interpretados como duração desde cada alerta. Em `reenvios` o campo fica vazio.
+
+No grupo `guardas`, `chegam_ao_guarda` é a soma de `incidents_closed`, usada como aproximação das intervenções confirmadas porque essa equivalência foi observada no cenário E desta recolha, sem fechos `not_confirmed` ou `duplicate_alert`. Não é uma equivalência geral de `closed`, nem se aplica ao cenário D. Os CSV e o script mantêm o esquema histórico.
 
 **Limites.** 5 a 20 execuções por ponto, sem intervalos de confiança. No grupo dos guardas, a repetição com 2 guardas deu 136 e 3 por resolver; a recolha publicada do cenário E deu 132 e 7: a ordem na fila depende do relógio real. As sugestões valem para estes mapas e durações; não são regras gerais.
 
@@ -772,7 +801,7 @@ PYTHONPATH=src python scripts/sugestoes.py distancia  # um só grupo
 
 ## Estado de C1–C8
 
-Os oito limites identificados na análise inicial, conferidos com o código atual.
+Os oito limites identificados na análise inicial, conferidos com o código atual. C8 reunia dois aspetos na [tabela original](development-plan.md#etapa-9a--escalabilidade-computacional-e-situacional): histórico da reputação e processo partilhado. As duas linhas abaixo desdobram esse mesmo identificador histórico; não são dois limites numerados C8 por engano.
 
 | Ref. | Limite | Onde | Estado | O que existe hoje |
 |---|---|---|---|---|
@@ -780,7 +809,7 @@ Os oito limites identificados na análise inicial, conferidos com o código atua
 | C2 | Candidato calado obriga a esperar o prazo inteiro | [incident.py](../src/isia/agents/incident.py), `allocate` | **Só medido** | 1,5 s → 5,5 s reais. Com o prazo dinâmico, se todos se calam a espera sobe para 2,0 s. Proposta: não voltar a chamar quem ficou calado |
 | C3 | Prazos em tempo real, missões em tempo simulado | [runner.py](../src/isia/simulation/runner.py), `clock_loop` | **Em aberto** | O relógio simulado só avança com missões em curso; a negociação usa o relógio real. Por isso o limite das mensagens inválidas depende da máquina e os cenários com fila não se repetem byte a byte |
 | C4 | Recursos e sensores fixos no runner | [runner.py](../src/isia/simulation/runner.py), `run_mvp`; [collector.py](../src/isia/evaluation/collector.py), `world_options` | **Resolvido** | Mapa, sensores, iniciadores, informadores, patrulhas e guardas vêm do ficheiro de cenário (`world`). Os recursos adicionais são sempre drones ou guardas com 100 % de autonomia; só no transporte local |
-| C5 | `ObservationFeed.recent()` percorre todo o histórico, O(H) | [scenario.py](../src/isia/simulation/scenario.py), `recent` | **Em aberto** | Não medido: cada fonte guarda, no máximo, uma leitura por segundo simulado (pouco mais de uma centena no cenário E). Proposta: `bisect` ou `deque` da janela |
+| C5 | `ObservationFeed.recent()` percorre todo o histórico, O(H) | [scenario.py](../src/isia/simulation/scenario.py), `recent` | **Em aberto** | Não medido: uma fonte pode produzir várias observações na mesma amostra temporal, uma por evento ativo detetado; o histórico cresce com eventos detetados × amostras, não apenas com segundos simulados. Proposta: `bisect` ou `deque` da janela |
 | C6 | Corroboração com um único par fixo | [runner.py](../src/isia/simulation/runner.py), `run_mvp` | **Parcial** | Cada iniciador adicional pergunta ao informador mais próximo (`extra_informants`): 10 → 40 de 40 mobilizadas. Continua a ser um só por iniciador, fixo. Proposta: perguntar a k vizinhos |
 | C7 | Uma ocorrência por janela, ancorada na primeira observação | [incident.py](../src/isia/agents/incident.py), `IncidentBehaviour.run`; [allocation.py](../src/isia/reasoning/allocation.py), `create_from_decision` | **Contornado, não resolvido** | Vários iniciadores abrem uma ocorrência cada (cenários D e E). Cada iniciador continua a juntar tudo o que ouve numa só; em A, B e C só o `sensor-1` inicia (8 de 10, 8 de 20, 8 de 30 atendidos). Proposta: agrupar observações por proximidade |
 | C8 (reputação) | O histórico da reputação cresce em memória | [reputation.py](../src/isia/reasoning/reputation.py), `update` | **Só medido** | 1824 registos e 1,3 MB em 1000 execuções (1,3 kB por execução). Proposta: truncar ou gravar em disco |
@@ -804,7 +833,8 @@ As duas propostas situacionais da análise inicial estão feitas como opções: 
 - **Amostra pequena:** 10 execuções por ponto (20 com perda, 5 no `teto.csv`), sem intervalos de confiança. Os resultados não demonstram escalabilidade geral.
 - **Um cenário de base:** o F1 usa o cenário A; o F2 usa fontes sem ruído e política sem corroboração, exceto nos grupos `informadores` e `humano` e nos cenários D e E.
 - **Só transporte local.** Nada disto valida a rede XMPP; os iniciadores, informadores e recursos adicionais nem existem nesse transporte.
-- **Tempo real.** Os tempos reais e o limite das mensagens inválidas dependem da máquina e da carga: com o prazo fixo, entre 300 e 2000 por mensagem real; com o prazo dinâmico, entre 5000 e 8000.
+- **Tempo real.** Os tempos reais e o limite histórico das mensagens inválidas dependem da máquina, da carga e da versão da validação temporal (não revalidado no código atual): com o prazo fixo, entre 300 e 2000 por mensagem real; com o prazo dinâmico, entre 5000 e 8000.
 - **Repetição.** Sem fila, as contagens repetem-se com as mesmas sementes: `scale.csv` e `dist.csv` foram gerados de novo na revisão deste documento (commit `d99ede4`) e saíram iguais. Com fila, as ocorrências fechadas repetem-se nos grupos sem ameaças curtas, mas as mensagens e os instantes variam; nos cenários D e E variam também algumas contagens (ver acima).
-- **Data dos CSV.** Todos os CSV de `results/stress/`, exceto `alerta.csv`, são anteriores à última correção do código (commit `94aaaf9`) e não foram gerados de novo depois dela. Essa correção mudou o aviso entre iniciadores e a espera pela `VERIFY_RESPONSE`; não se espera que mude contagens, mas muda os tempos reais dos casos com perda.
+- **Validação temporal posterior.** Os resultados históricos com `flood` preservam os números originais, mas as mensagens futuras são agora rejeitadas; os limites de carga e a redução de respostas 5 → 1 exigem nova recolha para descrever o comportamento atual.
+- **Data dos CSV.** Todos os CSV de `results/stress/`, exceto `alerta.csv`, são anteriores à correção do código no commit `94aaaf9` e não foram gerados de novo depois dela. Essa correção mudou o aviso entre iniciadores e a espera pela `VERIFY_RESPONSE`; à data, não se esperava que mudasse contagens, mas mudava os tempos reais dos casos com perda. Esta expectativa não abrange as correções posteriores da validação temporal descritas acima.
 - **O que não foi testado:** atraso na `VERIFY_RESPONSE`; `alert_distance` diferente de 1; `cfp_limit` com várias ocorrências; perda de mensagens com vários iniciadores; ameaças que não começam em `t = 0`; falsos relatos de informadores humanos.

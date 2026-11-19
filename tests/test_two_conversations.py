@@ -15,6 +15,7 @@ class IncomingMessage:
         self.metadata = {
             "conversation-id": conversation_id,
             "in-reply-to": in_reply_to,
+            "performative": "inform",
         }
 
     def get_metadata(self, name):
@@ -60,6 +61,7 @@ class TestIndependentVerificationConversations(unittest.TestCase):
                 response,
                 request,
                 "informant@localhost",
+                current_time=0.0,
             )
             for incoming, response, request in received_out_of_order
         ]
@@ -72,11 +74,11 @@ class TestIndependentVerificationConversations(unittest.TestCase):
 
         self.assertFalse(
             response_matches_request(
-                incoming_a, response_a, request_b, "informant@localhost"
+                incoming_a, response_a, request_b, "informant@localhost", current_time=0.0
             )
         )
         self.assertFalse(
             response_matches_request(
-                incoming_b, response_b, request_a, "informant@localhost"
+                incoming_b, response_b, request_a, "informant@localhost", current_time=0.0
             )
         )

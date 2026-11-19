@@ -179,6 +179,8 @@ class TestRealObservationVerification(unittest.IsolatedAsyncioTestCase):
         )
 
         def response_for(request):
+            # O pedido saiu em t=1; o relógio do recetor avança enquanto espera.
+            agent.created_at = 1.5
             return Message(
                 "response-001",
                 MessageType.VERIFY_RESPONSE,

@@ -161,6 +161,13 @@ sequenceDiagram
   Note over S1: Avaliar a evidência e decidir
 ```
 
+O iniciador só aceita `VERIFY_RESPONSE` com performativa `inform`, identidade e
+correlação válidas, e `pedido.created_at <= resposta.created_at <= instante simulado
+atual do recetor`. O limite é consultado após a espera: um avanço legítimo do
+relógio durante a receção é aceite, incluindo igualdade nos extremos. Os prazos
+de espera usam tempo real e não entram nesta comparação. `no_data` e
+`informative_absence` válidos continuam a ser respostas `inform`.
+
 Como funciona:
 
 1. O iniciador envia **um** pedido a **uma** fonte. No MVP e nos cenários A, B e C é o `sensor-2`. Nos cenários D e E, cada iniciador pergunta ao informador mais próximo.
@@ -199,16 +206,21 @@ Ambos estão cobertos por testes unitários ([tests/unit/](../tests/unit/)).
 
 ### Aviso entre iniciadores (opcional)
 
-Com vários iniciadores, dois sensores que ouvem a mesma ameaça abrem duas ocorrências e mandam duas patrulhas. A opção `alert_distance=D` evita-o, **antes** da verificação:
+Com vários iniciadores, dois sensores que ouvem a mesma ameaça podem abrir duas ocorrências e mandar duas patrulhas. A opção `alert_distance=D` procura reduzir essa duplicação, **antes** da verificação:
 
 1. Cada iniciador com uma leitura envia um `ALERT` aos vizinhos, com o tipo, a posição, o instante e a confiança.
 2. Espera pelos `ALERT` dos vizinhos, até um prazo de receção.
-3. Dois `ALERT` são «a mesma ameaça» se estiverem a D células ou menos e a 2,0 s ou menos.
+3. Observações do mesmo tipo, a D células ou menos e a 2,0 s ou menos, são agrupadas como candidatas à mesma ameaça; isto não prova identidade do evento real.
 4. Tem prioridade a leitura mais antiga; em caso de empate, o menor `source_id`. Os dois lados calculam a mesma ordem.
 5. Segunda volta: cada um diz a quem lhe cederia se fica com a ameaça (`{"keeps": true}` ou `false`).
 6. Só se cede a um vizinho que fica. Quem cede fecha como `closed` / `duplicate_alert`.
 
 Um `ALERT` ou um veredicto perdido deixa os dois a tratar a ameaça: falha para o lado seguro (duas respostas em vez de nenhuma).
+
+O agrupamento é heurístico: ameaças distintas próximas podem ser confundidas e
+uma ocorrência pode fechar como `duplicate_alert` sem a sua ameaça ser visitada.
+O teste da cadeia de três ameaças em `test_stress_extensions.py` mostra esse
+limite; não demonstra deduplicação exata por ameaça.
 
 Custos: um vizinho sem leitura não responde, por isso a espera dura o prazo todo. Depois da espera, o iniciador volta a ler o sensor; se a ameaça já não for vista, fecha como `expired` / `threat_expired`.
 
@@ -253,7 +265,7 @@ sequenceDiagram
 3. A proposta leva uma `Bid` com ETA (s), energia (pontos percentuais) e carga.
 4. Propor não reserva. A reserva só acontece quando o recurso processa o `ACCEPT`.
 5. O iniciador aceita uma resposta por candidato e ignora o que não bate com o CFP: outra conversa, outra missão, performativa errada ou data fora do prazo.
-6. `STATUS(reserved)` confirma. `STATUS(reservation_failed)` é recusa explícita e permite nova ronda. Sem `STATUS` no prazo, o resultado é `confirmation_unknown` e **não** há outro `ACCEPT`: o silêncio não prova que o recurso ficou livre.
+6. `STATUS(reserved)` comunica a reserva local; a exclusividade é assegurada por `LocalResourceReservation`. Exige emissão contemporânea ou posterior ao `ACCEPT` e não futura relativamente ao recetor. `STATUS(reservation_failed)` permite nova ronda. Sem confirmação no prazo, há `confirmation_unknown`: sem reenvio configurado, não sai outro `ACCEPT`; com reenvio, repete-se apenas o mesmo, nunca uma atribuição alternativa por silêncio.
 7. O `deadline` do CFP é inclusivo e em segundos simulados (`created_at + 100`). Quem limita a espera na prática é o prazo real de receção.
 8. Cada nova ronda usa um CFP novo, com `message_id`, `conversation_id` e `round_number` novos. O recurso ignora rondas mais antigas do que a última que viu.
 9. Mensagens repetidas não criam segunda reserva nem segunda missão.
@@ -333,8 +345,8 @@ Nenhuma destas opções cria tipos de mensagem novos. Valores por omissão de `r
 | `queue_priority` | Fila ordenada no recurso: primeiro a ocorrência mais grave, depois a que espera há mais tempo. Os outros recebem `waiting_turn` | desligado | desligado | ligado | ligado |
 | `expire_unseen` | Antes de cada CFP, o iniciador volta a ler o sensor. Janela vazia (5 s simulados): `expired` / `threat_expired` | desligado | desligado | ligado | ligado |
 | `queue_until_free` | A recusa por ocupação traz `busy_until`; o iniciador espera até lá em vez de 5 em 5 s | desligado | desligado | ligado | ligado |
-| `chain_missions` | No regresso à base, com o resultado já entregue, o recurso propõe a partir da posição atual | desligado | desligado | ligado | ligado |
-| `retransmit` | Reenvio: sem resposta, o mesmo `VERIFY_REQUEST`, `CFP` ou `ACCEPT` (mesmo `message_id`) volta a sair até N vezes; o destinatário repete a resposta já dada | 0 | 0 | 0 | 1 |
+| `chain_missions` | No regresso à base, depois de o envio do resultado retornar sem exceção (sem ACK de entrega), o recurso propõe a partir da posição atual | desligado | desligado | ligado | ligado |
+| `retransmit` | Reenvio: o mesmo pedido volta a sair até N vezes. Recursos reutilizam respostas guardadas; o informador volta a ler o feed ([semântica](faults.md#reenvio)) | 0 | 0 | 0 | 1 |
 | `alert_distance` | [Aviso entre iniciadores](#aviso-entre-iniciadores-opcional) | desligado | desligado | desligado | 1,0 |
 | `cfp_limit` | CFP só às K patrulhas com base mais próxima do alvo | desligado | desligado | desligado | desligado |
 
@@ -367,7 +379,9 @@ Receber uma mensagem, aceitar um pedido e concluir uma tarefa são três coisas 
 
 ## 7. Gestão de erros e falhas
 
-O protocolo responde a cada falha com um estado explícito, nunca com silêncio:
+Para as falhas de comunicação modeladas, o iniciador usa prazos e motivos
+explícitos. Mensagens inválidas podem ser ignoradas em silêncio; crashes e
+exceções arbitrárias não têm recuperação garantida:
 
 | Falha | Resposta do protocolo |
 |---|---|
@@ -378,7 +392,7 @@ O protocolo responde a cada falha com um estado explícito, nunca com silêncio:
 | `ACCEPT` ou `STATUS` perdido | `confirmation_unknown` |
 | `MISSION_RESULT` perdido | `mission_result_unknown` |
 | Missão falha a meio | `MISSION_RESULT` com `outcome=failed`; nova tentativa com outro recurso |
-| Mensagem duplicada ou inválida | Ignorada, sem segundo efeito e sem erro |
+| Mensagem duplicada ou inválida | Validações por tipo; uma repetição não volta a executar a missão. O informador pode reavaliar pedidos repetidos |
 | Iniciador desaparece | **Sem recuperação**: a ocorrência fica parada |
 
 A injeção de falhas, os estados resultantes medidos e o reenvio estão em [faults.md](faults.md).
@@ -441,6 +455,9 @@ Contra medido: com um recurso silencioso, cada execução espera mais um prazo d
 
 No Contract Net clássico, `accept-proposal` vale como compromisso. Aqui, entre propor e ser aceite, o recurso pode ter sido reservado por outra ocorrência. Sem `STATUS`, o iniciador acreditaria ter um recurso que não tem.
 
+Quem impede duas reservas é a operação atómica local no recurso. O `STATUS`
+apenas comunica o resultado dessa operação ao iniciador.
+
 O teste `test_resource_occupied_after_proposal_renegotiates_once` ([test_faults.py](../tests/integration/test_faults.py)) cobre este caso: o recurso responde `reservation_failed` e o iniciador renegoceia uma vez.
 
 - **Pró:** nunca há duas missões no mesmo recurso.
@@ -453,6 +470,6 @@ O teste `test_resource_occupied_after_proposal_renegotiates_once` ([test_faults.
 | Confirmação de reserva | não existe | `inform` / `STATUS` depois do `ACCEPT` | Evita a condição de corrida descrita acima |
 | Falha de missão | `failure` | `inform` / `MISSION_RESULT` com `outcome=failed` | Um único tipo de resultado; o iniciador valida um só caminho |
 | Fonte sem dados | `refuse` ou `failure` | `inform` com `status=no_data` | «Não vi» é informação, não recusa |
-| Conteúdo | FIPA-SL | JSON validado | Compatível com SPADE e testável sem XMPP |
+| Conteúdo | — | JSON validado do projeto | Contrato próprio; não demonstra conformidade integral FIPA |
 
 A recusa de um CFP segue o FIPA: o recurso envia `refuse` e o iniciador envia `reject-proposal` às propostas não escolhidas. O tipo do corpo é `REJECT` nos dois casos.
