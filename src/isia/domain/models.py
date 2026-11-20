@@ -1,3 +1,4 @@
+"""Modelos de domínio imutáveis, validados na construção."""
 
 from dataclasses import dataclass, replace
 from enum import Enum
@@ -7,10 +8,22 @@ from isia.domain.validation import is_finite_number
 
 @dataclass(frozen=True)
 class Position:
+    """Célula da grelha com coordenadas inteiras não negativas.
+
+    Attributes:
+        x (int): Coluna, a contar da esquerda a partir de 0.
+        y (int): Linha, a contar de baixo a partir de 0.
+    """
     x: int
     y: int
 
     def __post_init__(self):
+        """Exigir coordenadas ``int`` e não negativas.
+
+        Raises:
+            TypeError: Se alguma coordenada não for exatamente ``int`` (``bool`` também é recusado).
+            ValueError: Se alguma coordenada for negativa.
+        """
         if type(self.x) is not int or type(self.y) is not int:
             raise TypeError("As coordenadas devem ser números inteiros.")
 
@@ -21,6 +34,17 @@ class Position:
 
 @dataclass(frozen=True)
 class Observation:
+    """Leitura de uma fonte: tipo de evento, posição, instante e confiança em [0, 1].
+
+    Attributes:
+        event_id (str): Identificador único da observação.
+        source_id (str): Fonte que a produziu (sensor ou informador).
+        event_type (str): Tipo de evento observado.
+        position (Position): Célula onde o evento foi visto.
+        observed_at (float): Instante da leitura, em segundos simulados.
+        confidence_score (float): Confiança da fonte, em [0, 1].
+        intensity_score (float | None): Intensidade em [0, 1]; ``None`` se a fonte não a mede.
+    """
     event_id: str
     source_id: str
     event_type: str
@@ -30,6 +54,13 @@ class Observation:
     intensity_score: float | None = None
 
     def __post_init__(self):
+        """Validar identificadores não vazios, instante finito e pontuações em [0, 1].
+
+        Raises:
+            TypeError: Se a posição não for ``Position``.
+            ValueError: Se um identificador ou o tipo estiver vazio, o instante for negativo ou
+                não finito, ou uma pontuação estiver fora de [0, 1].
+        """
         if not isinstance(self.event_id, str) or not self.event_id.strip():
             raise ValueError("O identificador não pode estar vazio.")
 
@@ -60,10 +91,25 @@ class Observation:
 
 @dataclass(frozen=True)
 class Incident:
+    """Observações agrupadas sob um identificador de incidente.
+
+    Attributes:
+        incident_id (str): Identificador do incidente.
+        observations (tuple[Observation, ...]): Observações, pelo menos uma e sem
+            ``event_id`` repetidos.
+    """
     incident_id: str
     observations: tuple[Observation, ...]
 
     def __post_init__(self):
+        """Exigir um tuplo não vazio de ``Observation`` com ``event_id`` distintos.
+
+        Raises:
+            TypeError: Se ``observations`` não for tuplo ou tiver elementos que não são
+                ``Observation``.
+            ValueError: Se o identificador estiver vazio, não houver observações ou houver
+                ``event_id`` repetidos.
+        """
         if not isinstance(self.incident_id, str) or not self.incident_id.strip():
             raise ValueError("O identificador do incidente não pode estar vazio.")
 
@@ -83,6 +129,16 @@ class Incident:
 
 
 class ResourceStatus(Enum):
+    """Estados do ciclo de um recurso móvel, da disponibilidade ao regresso.
+
+    Attributes:
+        AVAILABLE: Livre para receber uma missão.
+        RESERVED: Reservado para uma missão que ainda não começou.
+        MOVING: A deslocar-se para o alvo.
+        VERIFYING: A inspecionar o alvo.
+        RETURNING: A regressar à base.
+        UNAVAILABLE: Fora de serviço (por exemplo, sem energia).
+    """
     AVAILABLE = "available"
     RESERVED = "reserved"
     MOVING = "moving"
@@ -93,6 +149,18 @@ class ResourceStatus(Enum):
 
 @dataclass(frozen=True)
 class ResourceState:
+    """Estado imutável de um recurso; ``available`` acompanha sempre ``status``.
+
+    Attributes:
+        resource_id (str): Identificador do recurso.
+        resource_type (str): Tipo de recurso (ex.: ``drone``, ``vehicle``).
+        position (Position): Célula atual.
+        available (bool): ``True`` só quando ``status`` é ``AVAILABLE``.
+        autonomy_percent (float | None): Energia restante, em % de 0 a 100; ``None`` se
+            desconhecida.
+        status (ResourceStatus | None): Estado do ciclo; se omitido, é deduzido de
+            ``available``.
+    """
     resource_id: str
     resource_type: str
     position: Position
@@ -101,6 +169,13 @@ class ResourceState:
     status: ResourceStatus | None = None
 
     def __post_init__(self):
+        """Validar os campos e deduzir ``status`` de ``available`` quando omitido.
+
+        Raises:
+            TypeError: Se ``position``, ``available`` ou ``status`` tiverem um tipo inválido.
+            ValueError: Se um identificador ou o tipo estiver vazio, a autonomia estiver fora
+                de [0, 100] ou ``available`` não coincidir com ``status is AVAILABLE``.
+        """
         if not isinstance(self.resource_id, str) or not self.resource_id.strip():
             raise ValueError("O identificador do recurso não pode estar vazio.")
 
@@ -137,6 +212,18 @@ class ResourceState:
             )
 
     def change_status(self, new_status: ResourceStatus):
+        """Devolver uma cópia no novo estado, com ``available`` recalculado.
+
+        Args:
+            new_status (ResourceStatus): Estado pedido.
+
+        Returns:
+            ResourceState: Nova instância no estado pedido; a atual não muda.
+
+        Raises:
+            TypeError: Se o estado não for ``ResourceStatus``.
+            ValueError: Se a transição não for permitida a partir do estado atual.
+        """
         allowed_transitions = {
             ResourceStatus.AVAILABLE: {ResourceStatus.RESERVED},
             ResourceStatus.RESERVED: {
@@ -166,14 +253,14 @@ class ResourceState:
 
 class MissionStatus(Enum):
     """
-    Represent the possible status of a patrol mission.
+    Estados possíveis de uma missão.
 
     Attributes:
-        PROPOSED: Mission created and awaiting resource allocation.
-        RESERVED: Mission assigned to a resource but not started yet.
-        RUNNING: Mission currently being executed.
-        DONE: Mission successfully completed.
-        FAILED: Mission execution failed
+        PROPOSED: Missão criada, à espera de um recurso.
+        RESERVED: Atribuída a um recurso, mas ainda não iniciada.
+        RUNNING: Em execução.
+        DONE: Concluída com um resultado (confirmed, not_confirmed ou inconclusive).
+        FAILED: Terminou com resultado ``failed``.
     """
     PROPOSED = "proposed"
     RESERVED = "reserved"
@@ -186,16 +273,16 @@ class MissionStatus(Enum):
 @dataclass(frozen=True)
 class Mission:
     """
-    Represent a patrol mission created in response to an incident.
+    Missão (verificação por patrulha ou resposta por ranger) criada em resposta a uma ocorrência.
 
     Attributes:
-        mission_id (str): Unique identifier of the mission.
-        incident_id (str): Identifier of the associated incident.
-        task (str): Task to be performed during the mission.
-        target (Position): Target position of the mission.
-        required_capability (str): Required capability to execute the mission.
-        priority (int): Non-negative integer representing the priority of the mission.
-        status (MissionStatus): Current mission status, initially PROPOSED.
+        mission_id (str): Identificador único da missão.
+        incident_id (str): Identificador da ocorrência associada.
+        task (str): Tarefa a executar.
+        target (Position): Posição de destino.
+        required_capability (str): Capacidade necessária para a executar.
+        priority (int): Prioridade, inteiro não negativo.
+        status (MissionStatus): Estado atual; começa em PROPOSED.
     """
 
     mission_id: str
@@ -208,11 +295,12 @@ class Mission:
 
     def __post_init__(self):
         """
-        Validate the mission attributes after initialization.
+        Validar os atributos da missão depois de criada.
 
         Raises:
-            ValueError: If an identifier, task or required capability is missing or the priority is invalid.
-            TypeError: If the target or status has an invalid type.
+            ValueError: Se faltar um identificador, a tarefa ou a capacidade, ou se a
+                prioridade não for um inteiro não negativo.
+            TypeError: Se o destino ou o estado tiverem um tipo inválido.
         """
         if not isinstance(self.mission_id, str) or not self.mission_id.strip():
             raise ValueError("O identificador da missão não pode estar vazio.")
@@ -237,17 +325,19 @@ class Mission:
 
     def change_status(self, new_status: MissionStatus):
         """
-        Return a new mission with the updated status if the transition is valid.
+        Devolver uma nova missão com o estado atualizado, se a transição for válida.
+
+        Transições permitidas: PROPOSED → RESERVED → RUNNING → DONE ou FAILED.
 
         Args:
-            new_status (MissionStatus): Requested new mission status.
+            new_status (MissionStatus): Novo estado pedido.
 
         Returns:
-            Mission: A new mission instance with updated status.
+            Mission: Uma nova instância com o estado atualizado.
 
         Raises:
-            TypeError: If the new status is not a MissionStatus.
-            ValueError: If the requested status transition is invalid.
+            TypeError: Se o novo estado não for um MissionStatus.
+            ValueError: Se a transição não for permitida.
         """
         allowed_transitions = {
             MissionStatus.PROPOSED: {MissionStatus.RESERVED},
@@ -268,14 +358,14 @@ class Mission:
 @dataclass(frozen=True)
 class Bid:
     """
-    Represents a resource's bid to execute a patrol mission.
+    Proposta de um recurso para executar uma missão.
 
     Attributes:
-        mission_id (str): Identifier of the mission being bid on.
-        resource_id (str): Identifier of the resource submitting the bid.
-        eta (float): Estimated time of arrival at the mission target.
-        energy_cost (float): Estimated energy cost of executing the mission.
-        load (float): Workload value reported by the resource.
+        mission_id (str): Missão a que a proposta se refere.
+        resource_id (str): Recurso que faz a proposta.
+        eta (float): Tempo estimado de chegada ao destino.
+        energy_cost (float): Custo de energia estimado da missão.
+        load (float): Carga de trabalho declarada pelo recurso, em [0, 1].
     """
 
     mission_id: str
@@ -285,10 +375,11 @@ class Bid:
     load: float
 
     def __post_init__(self):
-        """Validate the bid attributes after initialization.
+        """Validar os atributos da proposta depois de criada.
 
         Raises:
-            ValueError: If an identifier is missing or if the eta, energy_cost and load is not a non-negative finite number.
+            ValueError: Se faltar um identificador, se ``eta`` ou ``energy_cost`` não forem
+                finitos e não negativos, ou se ``load`` estiver fora de [0, 1].
         """
 
         if not isinstance(self.mission_id, str) or not self.mission_id.strip():

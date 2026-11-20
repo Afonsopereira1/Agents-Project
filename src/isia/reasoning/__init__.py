@@ -1,4 +1,10 @@
-"""Regras de raciocínio sobre observações e ocorrências."""
+"""Regras de decisão dos agentes, separadas do SPADE para serem testáveis.
+
+- `isia.reasoning.corroboration`: que fontes consultar e se as respostas confirmam a observação.
+- `isia.reasoning.policy`: observar, pedir verificação ou mobilizar, a partir do score.
+- `isia.reasoning.allocation`: Contract Net — avaliar o CFP, escolher a proposta e reservar o recurso.
+- `isia.reasoning.reputation`: fiabilidade de cada fonte, atualizada com os resultados das missões.
+"""
 
 from .corroboration import (
     aggregate_verification_responses,

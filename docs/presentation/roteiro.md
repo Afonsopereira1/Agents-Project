@@ -2,20 +2,20 @@
 
 ## Em resumo
 
-- **Diapositivos:** <https://claude.ai/artifact/1Sn3z364MWc1cbjCLoVQUU>. São 15, para **10 minutos**, com notas do orador em cada um.
-- **A história:** um alerta na reserva → a ideia (quem deteta coordena) → ver a funcionar → como é feito → como o explorámos (cenários, resultados, valor de cada peça, sensibilidade, stress, escala) → o que aprendemos.
-- **As 3 perguntas do professor** têm diapositivo próprio: P1 no 5, P2 no 3 e no 6, P3 no 13 e no 14.
+- **Slides:** <https://claude.ai/artifact/1Sn3z364MWc1cbjCLoVQUU>. São 16: **10 para apresentar** (cerca de 7 minutos, com folga até aos 10), um separador e **5 de apêndice** só para perguntas. Cada um tem notas do orador.
+- **A história:** um alerta na reserva → a ideia (quem deteta coordena) → ver a funcionar → como é feito → o que deu (resultados, valor de cada peça, escala) → o que aprendemos.
+- **As 3 perguntas do professor:** P1 no 5, P2 no 3 e no 6, P3 no 9. O apoio de P3 está no apêndice: o 15 (stress) e o 16 (escala computacional).
 - **Números:** todos conferidos com os CSV de `results/` a 18-11-2026.
 
-A ligação é privada até ser partilhada no menu Share. Para a entrega, exportar para PDF ou PowerPoint (Share › Export) e guardar em `docs/presentation/`. A versão anterior, com 18 diapositivos e 14 minutos, continua em <https://claude.ai/artifact/8unfFKR29LmPhbGwdKwggj>.
+A ligação é privada até ser partilhada no menu Share. Para a entrega, exportar para PDF ou PowerPoint (Share › Export) e guardar em `docs/presentation/`. A versão anterior, com 18 slides e 14 minutos, continua em <https://claude.ai/artifact/8unfFKR29LmPhbGwdKwggj>.
 
 **Grupo, por ordem alfabética:** Afonso Pereira, Guilherme Gomes e Guilherme Kotchergenko.
 
 ## Ordem e tempos
 
-Os tempos somam 9:50. Sugestão de divisão: diapositivos 1 a 6 (o sistema), 7 a 11 (a exploração e o valor) e 12 a 15 (stress, escala e fecho), um bloco por elemento. Os diapositivos 8, 11 e 12 são para passar depressa: diz-se a conclusão, não se lê o conteúdo.
+A apresentação acaba no slide 10. Os tempos somam 7:05. Sugestão de divisão, um bloco por elemento: 1 a 4 (o problema e a ideia, 2:35), 5 a 7 (como é feito e o que deu, 2:15) e 8 a 10 (o valor, a escala e o fecho, 2:15).
 
-| # | Diapositivo | Tempo | Responde a | Fonte dos números |
+| # | Slide | Tempo | Responde a | Fonte dos números |
 |---|---|---|---|---|
 | 1 | Capa | 0:20 | — | — |
 | 2 | O Problema | 0:40 | — | enunciado |
@@ -23,19 +23,14 @@ Os tempos somam 9:50. Sugestão de divisão: diapositivos 1 a 6 (o sistema), 7 a
 | 4 | Uma Ocorrência do Alerta ao Fecho | 0:45 | — | `results/demo/mvp.json` |
 | 5 | Construção dos Agentes | 0:50 | **P1** | [architecture.md](../architecture.md), [p1-agentes.md](p1-agentes.md) |
 | 6 | Protocolos | 0:45 | **P2** (protocolos) | [protocols.md](../protocols.md), [p2-protocolos.md](p2-protocolos.md) |
-| 7 | Percurso da Exploração | 0:30 | — | [evaluation.md](../evaluation.md) |
-| 8 | Os Cinco Cenários | 0:30 | — | `config/scenarios/` |
-| 9 | Resultados por Cenário | 0:40 | — | [experiments.md](../experiments.md#resultados), [scalability.md](../scalability.md#cenário-d--dia-movimentado) |
-| 10 | Valor de Cada Peça | 0:50 | — | [experiments.md](../experiments.md#discussão) |
-| 11 | Sensibilidade dos Parâmetros | 0:30 | — | [sensitivity.md](../sensitivity.md#resultados-por-parâmetro) |
-| 12 | Testes de Stress | 0:35 | **P3** (apoio) | [scalability.md](../scalability.md#mapa-de-limites) |
-| 13 | Escalabilidade Computacional | 0:40 | **P3** | [p3-escalabilidade.md](p3-escalabilidade.md), [scalability.md](../scalability.md#custo-computacional-scalecsv) |
-| 14 | Escalabilidade Situacional | 0:40 | **P3** | [scalability.md](../scalability.md#escalabilidade-situacional-distcsv) |
-| 15 | Conclusões e Limites | 0:45 | — | os anteriores |
+| 7 | Resultados por Cenário | 0:40 | — | [experiments.md](../experiments.md#resultados), [scalability.md](../scalability.md#cenário-d--dia-movimentado) |
+| 8 | Valor de Cada Peça | 0:50 | — | [experiments.md](../experiments.md#discussão) |
+| 9 | Escalabilidade Situacional | 0:40 | **P3** | [scalability.md](../scalability.md#escalabilidade-situacional-distcsv) |
+| 10 | Conclusões e Limites | 0:45 | — | os anteriores |
 
-## O que dizer em cada diapositivo
+## O que dizer em cada slide
 
-As falas são guias, não texto para ler. O texto completo está nas notas do orador de cada diapositivo. Aqui fica só a ideia e a frase que não pode faltar.
+As falas são guias, não texto para ler. O texto completo está nas notas do orador de cada slide. Aqui fica só a ideia e a frase que não pode faltar.
 
 | # | A ideia | A frase que não pode faltar |
 |---|---|---|
@@ -45,27 +40,45 @@ As falas são guias, não texto para ler. O texto completo está nas notas do or
 | 4 | Ver antes de explicar | «15 mensagens, verificação aos 4 s, fecho aos 10 s.» |
 | 5 | Três camadas | «Os comportamentos só comunicam; as decisões são funções puras, por isso 560 testes correm sem servidor.» |
 | 6 | Dois protocolos e uma extensão | «Uma ronda, até 3N + 2 mensagens, e é o recurso que decide.» |
-| 7 | A viragem da história | «Funcionava num caso. Fomos à procura de onde deixava de funcionar.» |
-| 8 | O mapa para ler os resultados | «Cada cenário testa uma coisa: o caso base, o ruído, as falhas e a escala.» |
-| 9 | Três histórias, não cinco barras | «Em C, basta uma mensagem perdida para travar a ocorrência.» |
-| 10 | Como funciona cada peça, antes e depois | «Três peças provaram valor; duas ainda não, e dizemo-lo.» |
-| 11 | Depende dos valores escolhidos? | «Quase não: 55 de 75 combinações não mudaram nenhuma mobilização.» |
-| 12 | Onde partia e o que mudámos | «Contar só os três cartões com contorno: fila, gravidade e reenvio.» |
-| 13 | O custo deixa de crescer | «Das 57 mensagens, 50 eram para negociar com 16 patrulhas; pedindo só a 2, ficam 8.» |
-| 14 | Antes, depois e sugestão testada | «Antes a parte cheia não crescia; agora acompanha: 13 de 16 em E. E com 3 guardas, nenhuma das 139 mobilizadas ficou por resolver nesse ensaio.» |
-| 15 | As três restrições, com a sugestão testada para cada uma | «Trocámos alguma deteção e rapidez por fiabilidade e por não ter um centro, e medimos quanto custou.» |
+| 7 | Três histórias, não cinco barras | «Em C, basta uma mensagem perdida para travar a ocorrência.» |
+| 8 | Como funciona cada peça, antes e depois | «Três peças provaram valor; duas ainda não, e dizemo-lo.» |
+| 9 | Antes, depois e sugestão testada | «Antes a parte cheia não crescia; agora acompanha: 13 de 16 em E. E com 3 guardas, nenhuma das 139 mobilizadas ficou por resolver nesse ensaio.» |
+| 10 | As três restrições, com a sugestão testada para cada uma | «Trocámos alguma deteção e rapidez por fiabilidade e por não ter um centro, e medimos quanto custou.» |
+
+### O que os slides que saíram deixam por dizer
+
+Os slides 12 e 13 (método e cenários) passaram para o apêndice. Três coisas que eles explicavam têm de ser ditas em voz alta:
+
+1. **Antes do 7, numa frase:** «Corremos cinco cenários: A é o caso normal, B tem ruído, C tem falhas, D e E têm várias ameaças ao mesmo tempo. As mesmas sementes em todas as variantes.» Os nomes dos cenários já estão nas barras.
+2. **No 7, ao falar de falsos alarmes:** «Recall é a fração das ameaças reais que mobilizaram; FPR é a fração dos episódios sem ameaça que mobilizaram por engano.» O 8 usa os dois.
+3. **No 6 ou no 9, para P3 computacional:** «Pedindo propostas só às 2 patrulhas mais próximas, uma ocorrência custa 15 mensagens com qualquer número de patrulhas.» O detalhe está no 16.
 
 ### Avisos para quem fala
 
-1. **Diapositivo 10:** dizer em voz alta que a variante sem corroboração também desce o limiar para 0,01. A diferença junta as duas mudanças.
-2. **Diapositivos 9 e 14:** os números de D e E são de uma recolha. Ao repetir, E fechou entre 132 e 139 de 160; as 40 confirmadas de D repetiram-se sempre. A ordem na fila depende do relógio real.
-3. **Diapositivos 4 e 10 mostram vencedores diferentes.** Na demonstração ninguém leva carga e ganha o drone, que está mais perto. No cenário A o drone leva carga 0,5 e ganha o veículo. Não é contradição: é a função de custo.
+1. **Slide 8:** dizer em voz alta que a variante sem corroboração também desce o limiar para 0,01. A diferença junta as duas mudanças.
+2. **Slides 7 e 9:** os números de D e E são de uma recolha. Ao repetir, E fechou entre 132 e 139 de 160; as 40 confirmadas de D repetiram-se sempre. A ordem na fila depende do relógio real.
+3. **Os slides 4 e 8 mostram vencedores diferentes.** Na demonstração ninguém leva carga e ganha o drone, que está mais perto. No cenário A o drone leva carga 0,5 e ganha o veículo. Não é contradição: é a função de custo.
 4. **P3:** os limites de `flood` e a redução de respostas 5 → 1 são históricos, anteriores à validação temporal atual. A reserva local atómica garante exclusividade; `STATUS` comunica-a.
 5. **Sugestões:** 139 foi o melhor total observado, não um máximo geral. Quatro guardas mantiveram esse total, reduziram o último fecho médio (102,6 → 94,1 s) e aumentaram o tráfego (1148,9 → 1163,5 mensagens). A coluna temporal de `sugestoes.csv` tem unidades estatísticas diferentes entre grupos; ver [folha P3](p3-escalabilidade.md#sugestões-testadas).
 6. **Proveniência de D:** o manifesto tem `dirty: true`; o commit registado não recupera integralmente o estado da recolha. Esta limitação não prova invalidade dos resultados.
-7. **Sensibilidade:** o limiar do guarda 0,5 mantém a classificação em A e reduz tempo e energia, mas deixa só 4 verificações confirmadas e atualizações de reputação; em C reduz o recall. Não generalizar o benefício de A a falsos alarmes.
+7. **Sensibilidade (apêndice, 14):** o limiar do guarda 0,5 mantém a classificação em A e reduz tempo e energia, mas deixa só 4 verificações confirmadas e atualizações de reputação; em C reduz o recall. Não generalizar o benefício de A a falsos alarmes.
 
-## Demonstração (diapositivo 4)
+## Apêndice (slides 11 a 16)
+
+O 11 é o separador: lista os cinco seguintes com o número de cada um. Na apresentação, parar no 10. Numa pergunta, saltar diretamente para o número.
+
+| # | Slide | Saltar para aqui quando perguntarem | Fonte dos números |
+|---|---|---|---|
+| 11 | Apêndice (separador) | — | — |
+| 12 | Percurso da Exploração | «Como avaliaram?», «O que é recall e FPR?» | [evaluation.md](../evaluation.md) |
+| 13 | Os Cinco Cenários | «O que muda entre os cenários?» | `config/scenarios/` |
+| 14 | Sensibilidade dos Parâmetros | «Os resultados dependem dos limiares que escolheram?» | [sensitivity.md](../sensitivity.md#resultados-por-parâmetro) |
+| 15 | Testes de Stress | «Onde é que o sistema parte?», «Como trataram as mensagens perdidas?» | [scalability.md](../scalability.md#mapa-de-limites) |
+| 16 | Escalabilidade Computacional | «E com muitas patrulhas?», «Quantas mensagens custa?» | [p3-escalabilidade.md](p3-escalabilidade.md), [scalability.md](../scalability.md#custo-computacional-scalecsv) |
+
+As notas do 12 dizem «os slides seguintes seguem esta ordem». Isso era da ordem antiga: ignorar.
+
+## Demonstração (slide 4)
 
 O vídeo é `results/demo/mvp.mp4` (25 s, relatório do `run_mvp`, semente 6). Se não tocar, reproduzir no terminal, sem Python nem SPADE:
 
@@ -79,18 +92,18 @@ Para perguntas sobre várias ocorrências há uma segunda gravação, com o [cen
 scriptreplay --log-timing results/demo/replay-d.tim --log-out results/demo/replay-d.log
 ```
 
-## O que mudou em relação à versão de 18 diapositivos
+## O que mudou em relação à versão de 15 slides
 
-Três diapositivos vieram da versão anterior quase iguais: Os Cinco Cenários (8), Sensibilidade dos Parâmetros (11) e Testes de Stress (12). O resto foi reorganizado; nada se perdeu.
+Nenhum slide foi apagado nem reescrito: mudou a ordem e entrou o separador.
 
 | Antes | Agora |
 |---|---|
-| Arquitetura (diagrama de componentes) | Diapositivo 3, como comparação de três arquiteturas |
-| Decisão dos Agentes (score, custo, reputação) | Notas do 5 e do 10; detalhe em [reputation-policy.md](../reputation-policy.md) |
-| SPADE e Falhas | Diapositivo 5 (SPADE) e cartão do reenvio no 12 |
-| Método, As Quatro Variantes | Diapositivo 7; detalhe em [experiments.md](../experiments.md) |
-| Comparação entre Variantes, Ponderações | Diapositivo 10, em «antes · sem a peça» e «depois · com a peça» |
-| Conclusões | Diapositivo 15, agora ligado às três restrições do diapositivo 2 |
+| 1 a 6 (capa ao Protocolos) | 1 a 6, iguais |
+| 7 Percurso da Exploração, 8 Os Cinco Cenários | Apêndice, 12 e 13 |
+| 9 Resultados, 10 Valor | 7 e 8 |
+| 11 Sensibilidade, 12 Stress, 13 Escala Computacional | Apêndice, 14, 15 e 16 |
+| 14 Escala Situacional, 15 Conclusões | 9 e 10 |
+| — | 11, separador do apêndice |
 
 ---
 
@@ -161,19 +174,21 @@ Simulámos uma reserva onde sensores com ruído detetam possíveis caçadores e,
 
 ### Perguntas prováveis e resposta curta
 
-As respostas longas, com alternativas e limites, estão em `temp/perguntas-defesa.md` (Parte 0).
+As respostas longas, com alternativas e limites, estão em `temp/perguntas-defesa.md` (Parte 0). Entre parênteses, o slide para onde saltar.
 
-- **«O sensor-1 não é um despachante disfarçado?»** Não. Coordena só a sua ocorrência, não conhece o estado dos recursos e não os pode obrigar: eles recusam. Em E há 16 coordenadores ao mesmo tempo.
-- **«Porquê Contract Net e não um leilão de várias rondas?»** Uma ronda custa até 3N + 2 mensagens e chega. Várias rondas seriam mais lentas, e não temos pagamentos para um Vickrey.
-- **«Porquê Request e não Subscribe?»** Uma pergunta e uma resposta, com um prazo simples. O Subscribe traria evidência posterior, com mais mensagens.
-- **«Isto é BDI?»** Não. É híbrido: reativo nos sensores, com estado e uma função de custo nos recursos.
-- **«Onde está a autonomia?»** No recurso: decide se propõe, conta a energia de ida e volta e pode negar a reserva mesmo depois de aceite.
+- **«O sensor-1 não é um despachante disfarçado?»** (3) Não. Coordena só a sua ocorrência, não conhece o estado dos recursos e não os pode obrigar: eles recusam. Em E há 16 coordenadores ao mesmo tempo.
+- **«Porquê Contract Net e não um leilão de várias rondas?»** (6) Uma ronda custa até 3N + 2 mensagens e chega. Várias rondas seriam mais lentas, e não temos pagamentos para um Vickrey.
+- **«Porquê Request e não Subscribe?»** (6) Uma pergunta e uma resposta, com um prazo simples. O Subscribe traria evidência posterior, com mais mensagens.
+- **«Isto é BDI?»** (5) Não. É híbrido: reativo nos sensores, com estado e uma função de custo nos recursos.
+- **«Onde está a autonomia?»** (5) No recurso: decide se propõe, conta a energia de ida e volta e pode negar a reserva mesmo depois de aceite.
 - **«E se o sensor que coordena falhar?»** O recurso acaba a missão e liberta-se sozinho. A ocorrência fica por resolver; ninguém a assume.
-- **«Reenviam mensagens perdidas?»** Sim, como opção: o mesmo pedido, com o mesmo identificador. Está ligado em E e nos testes de stress, não em A, B e C.
+- **«Reenviam mensagens perdidas?»** (15) Sim, como opção: o mesmo pedido, com o mesmo identificador. Está ligado em E e nos testes de stress, não em A, B e C.
+- **«E com muitas patrulhas?»** (16) Pedindo só às 2 mais próximas, 15 mensagens por ocorrência com qualquer N; antes eram 57 com 16 patrulhas.
 
 ### Antes de apresentar
 
-- Partilhar a ligação dos diapositivos e exportar o PDF para `docs/presentation/`.
-- Abrir o diapositivo 4 e confirmar que o vídeo toca no computador da apresentação.
+- Partilhar a ligação dos slides e exportar o PDF para `docs/presentation/`.
+- Abrir o slide 4 e confirmar que o vídeo toca no computador da apresentação.
 - Deixar um terminal aberto na pasta do projeto, com o comando do `scriptreplay` pronto.
-- Ensaiar uma vez com cronómetro: os diapositivos 5 e 10 são os que mais derrapam; o 8, o 11 e o 12 passam-se depressa.
+- Ensaiar uma vez com cronómetro, parando no 10: o 5 e o 8 são os que mais derrapam.
+- Ensaiar uma vez o salto para o apêndice (ir do 10 ao 16 e voltar).

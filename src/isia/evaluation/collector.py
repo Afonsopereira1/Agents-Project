@@ -44,7 +44,17 @@ def world_options(config):
 
     ``world`` aceita width, height e, como {id: {x, y}}: sensors (sensor-1 e sensor-2),
     initiators, informants, patrols e rangers (os adicionais). Os três recursos base
-    continuam em ``resources``. Sem estas chaves, o resultado é vazio: o mundo do MVP.
+    continuam em ``resources``. Sem ``world``, o mapa e as posições são os do MVP; só
+    passam as ``options``.
+
+    Args:
+        config (dict[str, Any]): Cenário lido do JSON.
+
+    Returns:
+        dict[str, Any]: Argumentos nomeados para ``run_mvp`` (``map_size``, posições e opções).
+
+    Raises:
+        ValueError: Se ``world`` ou ``options`` tiverem chaves desconhecidas ou posições inválidas.
     """
     world, options = config.get("world", {}), config.get("options", {})
     if not isinstance(world, dict) or set(world) - set(WORLD_KEYS) - {"width", "height"}:
@@ -64,7 +74,16 @@ def world_options(config):
 
 
 def validate_scenario(config):
-    """Validar também os campos que identificam relatórios e avaliações."""
+    """Validar também os campos que identificam relatórios e avaliações.
+
+    Args:
+        config (dict[str, Any]): Cenário lido do JSON.
+
+    Raises:
+        ValueError: Se faltarem ou sobrarem chaves, ``world``/``options`` forem inválidos,
+            ``scenario_id`` estiver vazio, ``repetitions`` não for positivo, ou os
+            episódios não forem uma lista de ``{label, events}`` com labels únicos.
+    """
     expected = {"scenario_id", "description", "repetitions", "base_seed", "episodes",
                 "sources", "resources", "faults", "response_settings"}
     if not isinstance(config, dict) or not expected <= set(config) <= expected | {"world", "options"}:
@@ -85,6 +104,19 @@ def validate_scenario(config):
 
 
 def load_scenario(path):
+    """Ler e validar um ficheiro de cenário; os erros de validação indicam o caminho.
+
+    Args:
+        path (str | Path): Caminho do ficheiro JSON do cenário.
+
+    Returns:
+        dict[str, Any]: Cenário validado.
+
+    Raises:
+        ValueError: Se o cenário for inválido (a mensagem começa pelo caminho) ou o JSON
+            estiver malformado.
+        OSError: Se o ficheiro não puder ser lido.
+    """
     with open(path, encoding="utf-8") as stream:
         config = json.load(stream)
     try:
@@ -95,10 +127,19 @@ def load_scenario(path):
 
 
 def validate_runner_options(options):
-    """Overrides experimentais separados do contrato oficial dos cenários.
+    """Validar os overrides experimentais, que ficam separados do contrato oficial dos cenários.
 
     As extensões de stress do Bloco F ficam fora deste conjunto: a referência
     do Bloco G usa as condições da Etapa 9. O chamador conserva os seus dados.
+
+    Args:
+        options (dict[str, Any] | None): Overrides do Bloco G; ``None`` significa nenhum.
+
+    Returns:
+        dict[str, Any]: Cópia profunda dos overrides validados (vazia se ``None``).
+
+    Raises:
+        ValueError: Se houver chaves não permitidas ou valores inválidos.
     """
     allowed = {"corroboration_settings", "receive_timeout", "minimum_autonomy_percent", "selection_weights"}
     if options is None:
@@ -110,10 +151,26 @@ def validate_runner_options(options):
 
 
 async def run_scenario(config, variant, *, repetitions=None, output=None, runner_options=None):
-    """Execuções sequenciais; em "full" a reputação aprende ao longo delas.
+    """Correr as execuções de um cenário em sequência.
 
+    A reputação aprende ao longo delas em todas as variantes exceto "no_reputation".
     ``runner_options`` permite variar parâmetros do Bloco G sem acrescentar
     campos aos JSON oficiais nem ativar as extensões opcionais de stress.
+
+    Args:
+        config (dict[str, Any]): Cenário validado.
+        variant (str): Variante do pipeline, uma das chaves de ``VARIANTS``.
+        repetitions (int | None): Número de sementes; ``None`` usa o do cenário.
+        output (str | Path | None): Pasta onde gravar um JSON por execução; ``None`` não grava.
+        runner_options (dict[str, Any] | None): Overrides do Bloco G para ``run_mvp``.
+
+    Returns:
+        list[dict[str, Any]]: Uma linha por execução (repetição × episódio), com a
+            identificação, as métricas de ``run_metrics`` e a reputação final do sensor-1.
+
+    Raises:
+        ValueError: Se o cenário, ``repetitions``, ``variant`` ou ``runner_options`` forem
+            inválidos, ou ``selection_weights`` colidir com os pesos da variante.
     """
     validate_scenario(config)
     count = config["repetitions"] if repetitions is None else repetitions
@@ -163,6 +220,19 @@ async def run_scenario(config, variant, *, repetitions=None, output=None, runner
 
 
 def flat_summary(scenario, variant, rows):
+    """Achatar o resumo de summarize numa linha de CSV do cenário e da variante.
+
+    Cada métrica numérica dá as colunas ``_mean``, ``_median``, ``_stdev`` e
+    ``_n``; os restantes campos são copiados tal como estão.
+
+    Args:
+        scenario (str): Identificador do cenário.
+        variant (str): Variante do pipeline.
+        rows (list[dict[str, Any]]): Linhas de ``run_scenario`` deste cenário e variante.
+
+    Returns:
+        dict[str, Any]: Linha de resumo sem valores aninhados.
+    """
     summary = summarize(rows)
     flat = {"scenario": scenario, "variant": variant}
     for key, value in summary.items():
@@ -175,6 +245,12 @@ def flat_summary(scenario, variant, rows):
 
 
 def write_csv(path, rows):
+    """Escrever CSV com a união das colunas; None e colunas em falta ficam "N/A".
+
+    Args:
+        path (str | Path): Ficheiro de destino; é reescrito.
+        rows (list[dict[str, Any]]): Linhas a escrever, pela ordem dada.
+    """
     with open(path, "w", newline="", encoding="utf-8") as stream:
         # União das colunas: os cenários com vários iniciadores têm contagens a mais.
         fields = list(dict.fromkeys(key for row in rows for key in row))
@@ -184,10 +260,22 @@ def write_csv(path, rows):
 
 
 def git_provenance():
-    """A proveniência pertence ao código carregado, não ao diretório do chamador."""
+    """Registar a proveniência git do código carregado, não a do diretório do chamador.
+
+    Returns:
+        tuple[str, bool]: Commit ``HEAD`` e se há alterações sem commit em ``src`` ou ``config``.
+
+    Raises:
+        ValueError: Se o git não estiver disponível ou falhar.
+    """
     root = Path(__file__).resolve().parents[3]
 
     def git(*args):
+        """Correr git na raiz do repositório e devolver a saída sem espaços nas pontas.
+
+        Raises:
+            subprocess.CalledProcessError: Se o git terminar com código diferente de zero.
+        """
         return subprocess.run(
             ["git", *args], cwd=root, capture_output=True, text=True, check=True,
         ).stdout.strip()
@@ -201,6 +289,15 @@ def git_provenance():
 
 
 def main():
+    """Recolher cenários × variantes e escrever runs.csv, summary.csv e manifesto.
+
+    Os argumentos e a proveniência Git são validados antes de apagar os
+    resultados anteriores em ``--output``. O manifest.json só é escrito no
+    fim: uma recolha que falhe fica sem ele.
+
+    Raises:
+        SystemExit: Se os argumentos, os cenários ou a proveniência Git forem inválidos.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("scenarios", nargs="+", type=Path)
     parser.add_argument("--variants", nargs="+", choices=sorted(VARIANTS), default=list(VARIANTS))
@@ -227,6 +324,7 @@ def main():
     args.output.mkdir(parents=True, exist_ok=True)
 
     async def collect():
+        """Correr cada cenário e variante em sequência; devolver linhas e resumos."""
         runs, summaries = [], []
         for config in configs:
             for variant in args.variants:

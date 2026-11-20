@@ -20,6 +20,16 @@ def initial_score(report):
     No MVP de janela única existe no máximo uma avaliação inicial por run.
     Históricos com várias avaliações exigem definir outra unidade estatística;
     rejeitá-los evita escolher silenciosamente um score favorável.
+
+    Args:
+        report (dict[str, Any]): Relatório de uma execução de ``run_mvp``.
+
+    Returns:
+        float | None: ``suspicion_score`` em [0, 1], ou ``None`` se não houve avaliação inicial.
+
+    Raises:
+        ValueError: Se ``verification`` estiver malformado, houver mais de uma avaliação
+            ou o score não for um número finito em [0, 1].
     """
     history = report.get("verification")
     if not isinstance(history, dict):
@@ -48,6 +58,12 @@ def initial_score(report):
 
 
 def _threat(report):
+    """Indicar se a execução contém alguma ameaça real, segundo ground_truth.events.
+
+    Raises:
+        ValueError: Se faltar ``ground_truth.events`` ou algum evento não tiver
+            ``is_threat`` booleano.
+    """
     truth = report.get("ground_truth")
     if not isinstance(truth, dict) or not isinstance(truth.get("events"), list):
         raise ValueError("A calibração exige ground_truth.events do avaliador.")
@@ -66,6 +82,18 @@ def calibration_tables(records):
     estes dois últimos campos permitem separar experiências diferentes.
     A verdade vem exclusivamente de ground_truth, nunca de decisões ou scores.
     As fronteiras são [0,.25), [.25,.5), [.5,.75), [.75,1].
+
+    Args:
+        records (Iterable[dict[str, Any]]): Envelopes ``{metrics, report}`` do coletor.
+
+    Returns:
+        tuple[list[dict[str, Any]], list[dict[str, Any]]]: Linhas por intervalo (``n``,
+            ameaças e frequência observada, ``None`` se vazio) e linhas de cobertura do
+            score, ambas por grupo (cenário, variante, parâmetro, valor).
+
+    Raises:
+        ValueError: Se um envelope estiver malformado, faltar ``run_id``, o mesmo
+            relatório aparecer duas vezes no grupo, ou o relatório for inválido.
     """
     groups = defaultdict(list)
     seen = set()

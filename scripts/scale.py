@@ -15,7 +15,18 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "results" / "scalability" / "scale.csv"
 base = load_scenario(ROOT / "config" / "scenarios" / "A.json")
 threat = base["episodes"][0]
-def ev(i, x, y): return {**threat["events"][0], "event_id": f"threat-{i:02d}", "position": {"x": x, "y": y}}
+def ev(i, x, y):
+    """Copiar a ameaça base do cenário A com o id ``threat-NN`` e a posição (x, y).
+
+    Args:
+        i (int): Número da ameaça, usado no id (``threat-01``, …).
+        x (int): Coluna da ameaça, em células.
+        y (int): Linha da ameaça, em células.
+
+    Returns:
+        dict: Evento de ameaça pronto a pôr num episódio.
+    """
+    return {**threat["events"][0], "event_id": f"threat-{i:02d}", "position": {"x": x, "y": y}}
 CASES = {
   "base: 2 patrulhas + 1 guarda, 1 caçador": (None, [ev(1, 3, 2)]),
   "-drone silencioso (1 patrulha)": ({"unavailable_agents": ["drone-mvp"]}, [ev(1, 3, 2)]),
@@ -27,6 +38,10 @@ FIELDS = ["caso", "runs", "TP", "FN", "confirmed_runs", "unresolved_runs", "t_ve
           "msgs_mean", "msgs_por_execucao", "energia_mean", "tempo_real_s", "motivos"]
 
 async def go():
+    """Correr cada caso com 10 repetições, medir o tempo real e gravar ``scale.csv``.
+
+    Também imprime cada linha à medida que o caso termina.
+    """
     out = []
     for name, (faults, events) in CASES.items():
         c = copy.deepcopy(base); c["faults"] = faults

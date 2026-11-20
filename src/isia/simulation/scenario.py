@@ -21,6 +21,19 @@ CHANNELS = {"threat": frozenset(SIGNALS), "thunder": {"acoustic"},
 
 @dataclass(frozen=True)
 class Source:
+    """Perfil de perceção de um sensor: canal, alcance, taxas de erro e confiança.
+
+    Attributes:
+        kind (str): Canal: ``acoustic``, ``visual`` ou ``human``.
+        detection_range (float): Alcance euclidiano, em células.
+        sensitivity (float): Fator de deteção, em [0, 1].
+        false_positive_rate (float): Taxa de falsos positivos (multiplicada por
+            ``sensitivity``) para eventos que não são ameaça, em [0, 1].
+        false_negative_rate (float): Taxa de falsos negativos; uma ameaça é lida com
+            probabilidade sensitivity × (1 − taxa), em [0, 1].
+        position_error (int): Ruído máximo da posição lida, em células por eixo.
+        confidence (float): Confiança atribuída às observações geradas, em [0, 1].
+    """
     kind: str
     detection_range: float
     sensitivity: float = 1.0
@@ -30,6 +43,13 @@ class Source:
     confidence: float = 0.8
 
     def __post_init__(self):
+        """Validar canal, alcance, taxas e confiança em [0, 1] e erro de posição.
+
+        Raises:
+            ValueError: Se o canal for desconhecido, um valor for negativo ou não finito,
+                uma taxa ou a confiança passar de 1, ou ``position_error`` não for um
+                inteiro não negativo.
+        """
         if not isinstance(self.kind, str) or self.kind not in SIGNALS:
             raise ValueError("Fonte deve ser acoustic, visual ou human.")
         nonnegative(self.detection_range, "detection_range")
@@ -44,6 +64,17 @@ class Source:
 
 @dataclass(frozen=True)
 class Event:
+    """Evento de referência (threat, thunder ou tourist), fixo ou em movimento.
+
+    Attributes:
+        event_id (str): Identificador único do evento.
+        kind (str): Tipo real: ``threat``, ``thunder`` ou ``tourist``.
+        position (Position): Posição inicial.
+        starts_at (float): Instante de início, em segundos simulados.
+        duration (float): Duração, em segundos simulados; positiva.
+        destination (Position | None): Destino do movimento; ``None`` se o evento é fixo.
+        speed (float): Velocidade em direção ao destino, em células por segundo.
+    """
     event_id: str
     kind: str
     position: Position
@@ -53,6 +84,14 @@ class Event:
     speed: float = 1.0
 
     def __post_init__(self):
+        """Validar identificador, tipo, posições e tempos; exige duração positiva.
+
+        Raises:
+            ValueError: Se o identificador estiver vazio, o tipo for desconhecido, um tempo
+                ou a velocidade for negativo ou não finito, ou o fim não for finito e posterior
+                ao início.
+            TypeError: Se ``position`` ou ``destination`` não forem ``Position``.
+        """
         if not isinstance(self.event_id, str) or not self.event_id.strip():
             raise ValueError("O evento precisa de um identificador.")
         if not isinstance(self.kind, str) or self.kind not in CHANNELS:
@@ -71,15 +110,41 @@ class Event:
             raise ValueError("O evento precisa de duração positiva e fim finito.")
 
     def active(self, now: float) -> bool:
+        """Indicar se ``now`` pertence a [starts_at, starts_at + duration[.
+
+        Args:
+            now (float): Instante, em segundos simulados.
+
+        Returns:
+            bool: ``True`` se o evento estiver ativo nesse instante.
+        """
         return self.starts_at <= now < self.starts_at + self.duration
 
     def position_at(self, now: float) -> Position:
+        """Devolver a posição real do evento em ``now``.
+
+        Sem destino ou antes do início é a posição inicial; depois do fim mantém
+        a posição alcançada no último instante da duração.
+
+        Args:
+            now (float): Instante, em segundos simulados.
+
+        Returns:
+            Position: Célula onde o evento está.
+        """
         elapsed = min(self.duration, max(0, now - self.starts_at))
         return position_at(self.position, self.destination or self.position, self.speed, elapsed)
 
 
 def event_from_dict(item) -> Event:
-    """Converter um evento JSON (posições como objetos {x, y}) em Event."""
+    """Converter um evento JSON (posições como objetos {x, y}) em Event.
+
+    Args:
+        item (dict[str, object]): Evento lido do JSON, com os campos de ``Event``.
+
+    Returns:
+        Event: Evento validado.
+    """
     values = dict(item)
     values["position"] = model_from_dict(values["position"], Position)
     if values.get("destination") is not None:
@@ -91,21 +156,56 @@ class ObservationFeed:
     """API entregue a uma fonte: apenas as suas observações, sem eventos reais."""
 
     def __init__(self, clock, window: float):
+        """Inicializar o feed com o histórico vazio.
+
+        Args:
+            clock (SimulationClock): Relógio da simulação, para saber o instante atual.
+            window (float): Largura da janela de leituras recentes, em segundos simulados.
+        """
         self._clock = clock
         self._window = window
         self._history: list[Observation] = []
 
     def recent(self) -> tuple[Observation, ...]:
-        """Janela inclusiva [agora - window, agora], no tempo da simulação."""
+        """Devolver as leituras da janela inclusiva [agora - window, agora].
+
+        Returns:
+            tuple[Observation, ...]: Observações da fonte nessa janela, por ordem de geração.
+        """
         return tuple(obs for obs in self._history
                      if self._clock.now - self._window <= obs.observed_at <= self._clock.now)
 
 
 class Scenario:
-    """O avaliador conserva este objeto; agentes recebem apenas source(id)."""
+    """O avaliador conserva este objeto; agentes recebem apenas source(id).
+
+    Attributes:
+        world (World): Mundo do cenário, com o relógio da execução.
+    """
 
     def __init__(self, world: World, sources: dict[str, Source], events: tuple[Event, ...],
                  seed: int, corroboration_window: float = 5.0, observation_prefix: str = "obs"):
+        """Inicializar o cenário: validar mundo, fontes e eventos e amostrar o instante zero.
+
+        Fontes e eventos ficam ordenados por identificador, pelo que a amostragem
+        não depende da ordem de entrada.
+
+        Args:
+            world (World): Mundo com o relógio ainda em zero.
+            sources (dict[str, Source]): Perfil de cada sensor do mundo, exatamente um por
+                sensor.
+            events (tuple[Event, ...]): Eventos de referência, com identificadores únicos.
+            seed (int): Semente do gerador aleatório da amostragem.
+            corroboration_window (float): Largura da janela dos feeds, em segundos simulados.
+            observation_prefix (str): Prefixo dos identificadores das observações geradas.
+
+        Raises:
+            TypeError: Se ``world`` não for ``World`` ou houver perfis ou eventos de tipo
+                errado.
+            ValueError: Se o relógio não estiver em zero, ``seed`` não for inteira, a janela
+                for inválida, as fontes não coincidirem com os sensores, houver eventos
+                repetidos ou posições fora do mapa.
+        """
         if not isinstance(world, World):
             raise TypeError("world deve ser World.")
         if world.clock.now != 0:
@@ -153,6 +253,19 @@ class Scenario:
 
     @classmethod
     def from_config(cls, path: str | Path) -> "Scenario":
+        """Ler mundo e cenário de um JSON; aqui a secção ``scenario`` é obrigatória.
+
+        Exige exatamente seed, corroboration_window, sources e events.
+
+        Args:
+            path (str | Path): Ficheiro JSON com o mundo e a secção ``scenario``.
+
+        Returns:
+            Scenario: Cenário pronto, já amostrado no instante zero.
+
+        Raises:
+            ValueError: Se houver chaves em falta, a mais ou repetidas, ou tipos errados.
+        """
         with open(path, encoding="utf-8") as source:
             data = json.load(source, object_pairs_hook=_unique_keys)
         world = World.from_dict(data)
@@ -169,10 +282,32 @@ class Scenario:
             raise ValueError("Configuração de cenário inválida ou incompleta.") from error
 
     def source(self, source_id: str) -> ObservationFeed:
+        """Devolver o feed local da fonte.
+
+        Args:
+            source_id (str): Identificador do sensor.
+
+        Returns:
+            ObservationFeed: Feed só com as observações dessa fonte.
+
+        Raises:
+            KeyError: Se o identificador não existir.
+        """
         return self._feeds[source_id]
 
     def advance(self, seconds: float = 1.0) -> float:
-        """Avança e amostra no novo instante. Eventos saltados não geram leituras."""
+        """Avançar e amostrar no novo instante; eventos saltados não geram leituras.
+
+        Args:
+            seconds (float): Duração do avanço, em segundos simulados.
+
+        Returns:
+            float: Novo instante atual.
+
+        Raises:
+            ValueError: Se o relógio tiver sido avançado fora do cenário ou ``seconds`` não
+                for finito e positivo.
+        """
         if self.world.clock.now != self._sampled_at:
             raise ValueError("Usar scenario.advance() para manter tempo e amostras sincronizados.")
         now = self.world.clock.advance(seconds)
@@ -182,12 +317,25 @@ class Scenario:
         return now
 
     def inspect(self, position: Position, now: float, task: str) -> str:
-        """Inspeção local idealizada do MVP; não expõe eventos nem ground_truth.
+        """Inspecionar localmente, de forma idealizada, uma posição.
 
-        Só classifica a célula visitada no instante indicado. A intervenção
-        do guarda só é bem-sucedida se a ameaça ainda lá estiver; um guarda
-        que chega tarde devolve not_confirmed. Não remove eventos globais.
+        Não expõe eventos nem ground_truth: só classifica a célula visitada no
+        instante indicado. A intervenção do guarda só é bem-sucedida se a ameaça
+        ainda lá estiver; um guarda que chega tarde devolve not_confirmed. Não
+        remove eventos globais.
         Sensibilidade e falhas de inspeção ficam para os cenários posteriores.
+
+        Args:
+            position (Position): Célula inspecionada.
+            now (float): Instante da inspeção, em segundos simulados; não pode ser futuro.
+            task (str): Tarefa da missão: ``verify_incident`` ou ``respond_incident``.
+
+        Returns:
+            str: ``confirmed`` se houver uma ameaça ativa na célula, ``not_confirmed`` se
+                não, ou ``failed`` para uma tarefa desconhecida.
+
+        Raises:
+            ValueError: Se a posição estiver fora do mapa ou ``now`` for inválido ou futuro.
         """
         self.world.validate_position(position)
         nonnegative(now, "now")
@@ -201,6 +349,15 @@ class Scenario:
         ) else "not_confirmed"
 
     def _sample(self) -> None:
+        """Gerar as observações do instante atual para cada evento ativo e cada fonte.
+
+        Só contam fontes de canal compatível com o evento dentro do alcance
+        euclidiano. A probabilidade de leitura é sensitivity × (1 −
+        false_negative_rate) para ameaças e sensitivity × false_positive_rate
+        para os outros eventos. A posição observada leva ruído inteiro até
+        ``position_error`` por eixo, limitado ao mapa. A ligação entre observação
+        e evento fica apenas em ``_attributions``, para o avaliador.
+        """
         now = self.world.clock.now
         for event in self._events:
             if not event.active(now):
@@ -230,7 +387,12 @@ class Scenario:
 
     @property
     def ground_truth(self) -> dict:
-        """Cópia para avaliação: rótulos, posições reais e ligação às leituras."""
+        """Devolver uma cópia da verdade para avaliação.
+
+        Returns:
+            dict: ``events`` (rótulo, posição real e estado de cada evento) e
+                ``observations`` (ligação de cada leitura ao evento que a gerou).
+        """
         now = self.world.clock.now
         return {
             "events": [{"event_id": event.event_id, "kind": event.kind,
@@ -243,7 +405,16 @@ class Scenario:
         }
 
     def save_run(self, path: str | Path) -> None:
-        """Regista configuração inicial, avanços e resultados; nunca substitui uma execução."""
+        """Gravar a configuração inicial, os avanços e os resultados.
+
+        Nunca substitui uma execução: o ficheiro é aberto em modo ``x``.
+
+        Args:
+            path (str | Path): Novo ficheiro JSON; não pode existir.
+
+        Raises:
+            ValueError: Se o relógio tiver sido avançado fora do cenário.
+        """
         if self.world.clock.now != self._sampled_at:
             raise ValueError("O relógio foi avançado fora do cenário.")
         data = {"config": self._config, "steps": self._steps,

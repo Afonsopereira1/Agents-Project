@@ -1,4 +1,8 @@
-"""Agente informador que responde a pedidos de verificação."""
+"""Agente informador que responde a pedidos de verificação.
+
+Por onde começar: `InformantAgent.VerificationBehaviour.run`, que responde a cada
+VERIFY_REQUEST só com as suas observações locais recentes.
+"""
 
 from __future__ import annotations
 
@@ -26,9 +30,28 @@ logger = logging.getLogger(__name__)
 
 
 class InformantAgent(Agent):
-    """Agente que responde apenas com evidência do seu feed local."""
+    """Agente que responde apenas com evidência do seu feed local.
+
+    Attributes:
+        observation_feed (ObservationFeed | None): Feed local de leituras; None até ser configurado.
+        source_id (str | None): Identificador da fonte nas respostas; None usa
+            ``informant-example``.
+        created_at (float | None): Instante simulado local; só entram leituras até este instante.
+        coverage_position (Position | None): Centro da área que o agente vigia.
+        coverage_radius (float | None): Raio da área vigiada, em células.
+        coverage_capability (str | None): Capacidade de deteção declarada.
+        coverage_observed_from (float | None): Início da janela vigiada, em tempo simulado.
+        coverage_observed_until (float | None): Fim da janela vigiada, em tempo simulado.
+        coverage_opportunity_confirmed (bool): Se houve de facto oportunidade de detetar na janela.
+    """
 
     def __init__(self, jid: str, password: str):
+        """Inicializar o agente ainda sem feed local nem cobertura configurados.
+
+        Args:
+            jid (str): JID XMPP do informador.
+            password (str): Palavra-passe XMPP.
+        """
         super().__init__(jid, password)
         self.observation_feed = None
         self.source_id: str | None = None
@@ -53,7 +76,24 @@ class InformantAgent(Agent):
         coverage_observed_until=None,
         coverage_opportunity_confirmed=False,
     ) -> None:
-        """Give the agent only its local feed and local message metadata."""
+        """Dar ao agente só o seu feed local e os metadados das suas mensagens.
+
+        Os parâmetros ``coverage_*`` só servem para declarar ausência informativa; sem eles
+        completos e válidos, uma resposta sem observações fica como ``no_data``.
+
+        Args:
+            observation_feed (ObservationFeed): Feed com as leituras recentes desta fonte.
+            source_id (str): Identificador da fonte nas respostas.
+            created_at (float): Instante simulado local, em segundos.
+            coverage_position (Position | None): Centro da área vigiada.
+            coverage_radius (float | None): Raio da área vigiada, em células.
+            coverage_capability (str | None): Capacidade de deteção; tem de suportar o tipo de
+                evento da hipótese.
+            coverage_observed_from (float | None): Início da janela vigiada, em tempo simulado.
+            coverage_observed_until (float | None): Fim da janela vigiada; não pode passar de
+                ``created_at``.
+            coverage_opportunity_confirmed (bool): True só se houve oportunidade real de deteção.
+        """
         self.observation_feed = observation_feed
         self.source_id = source_id
         self.created_at = created_at
@@ -65,7 +105,18 @@ class InformantAgent(Agent):
         self.coverage_opportunity_confirmed = coverage_opportunity_confirmed
 
     class VerificationBehaviour(CyclicBehaviour):
+        """Responder a cada VERIFY_REQUEST com as observações locais recentes."""
         async def run(self):
+            """Responder a um VERIFY_REQUEST com VERIFY_RESPONSE; o resto é ignorado.
+
+            Só entram observações até ao instante local do agente. O estado é
+            ``observations_available``, ``no_data`` ou, sem observações e com
+            cobertura demonstrada, ``informative_absence``. Um pedido emitido depois
+            do instante local fica sem resposta.
+
+            Overrides:
+                spade.behaviour.CyclicBehaviour.run
+            """
             incoming = await self.receive(timeout=10)
             if incoming is None:
                 return
@@ -125,6 +176,11 @@ class InformantAgent(Agent):
             logger.info("VERIFY_RESPONSE enviada para %s", incoming.sender)
 
     async def setup(self):
+        """Registar o comportamento para pedidos ``request`` de verificação.
+
+        Overrides:
+            spade.agent.Agent.setup
+        """
         template = Template(
             metadata={
                 "performative": PERFORMATIVE_REQUEST,
@@ -136,7 +192,8 @@ class InformantAgent(Agent):
 
 
 def _informative_absence_payload(agent, request: Message) -> dict[str, object] | None:
-    """Return a non-detection claim only when local coverage is configured."""
+    """Declarar a não deteção só se a cobertura local, configurada e com oportunidade
+    confirmada, abranger a posição e a janela da hipótese; senão ``None``."""
     hypothesis = request.payload.get("hypothesis")
     if not isinstance(hypothesis, dict):
         return None

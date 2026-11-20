@@ -17,8 +17,29 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "results" / "scalability" / "dist.csv"
 base = load_scenario(ROOT / "config" / "scenarios" / "A.json")
 T = base["episodes"][0]["events"][0]
-def ev(i, x, y): return {**T, "event_id": f"threat-{i:02d}", "position": {"x": x, "y": y}}
-def pos(x, y): return {"position": {"x": x, "y": y}}
+def ev(i, x, y):
+    """Copiar a ameaça base do cenário A com o id ``threat-NN`` e a posição (x, y).
+
+    Args:
+        i (int): Número da ameaça, usado no id (``threat-01``, …).
+        x (int): Coluna da ameaça, em células.
+        y (int): Linha da ameaça, em células.
+
+    Returns:
+        dict: Evento de ameaça pronto a pôr num episódio.
+    """
+    return {**T, "event_id": f"threat-{i:02d}", "position": {"x": x, "y": y}}
+def pos(x, y):
+    """Criar um override de recurso que só fixa a posição (x, y).
+
+    Args:
+        x (int): Coluna, em células.
+        y (int): Linha, em células.
+
+    Returns:
+        dict: ``{"position": {"x": x, "y": y}}``.
+    """
+    return {"position": {"x": x, "y": y}}
 LOSS = {"loss": 0.1, "delay": {"PROPOSAL": 0.05, "MISSION_RESULT": 0.05}, "duplicate": ["MISSION_RESULT"]}
 CASES = [
  ("P-a 1 caçador perto (3,2)", [ev(1, 3, 2)], {}, None, 10),
@@ -39,6 +60,17 @@ FIELDS = ["caso", "runs", "alerta", "mobilizou", "confirmou", "unresolved", "ate
           "t_verif_mean", "t_guarda_mean", "energia_mean", "motivos"]
 
 def attended(report):
+    """Devolver (ameaças reais confirmadas por patrulha na sua posição, total).
+
+    Uma ameaça conta como atendida se houver um ``verify_incident`` com resultado
+    ``confirmed`` exatamente na posição dela.
+
+    Args:
+        report (dict): Relatório de uma execução de ``run_mvp``.
+
+    Returns:
+        tuple[int, int]: Ameaças reais atendidas e total de ameaças reais.
+    """
     threats = [e for e in report["ground_truth"]["events"] if e["is_threat"]]
     ok = {(r["payload"]["position"]["x"], r["payload"]["position"]["y"]) for r in report["results"]
           if r["payload"]["task"] == "verify_incident" and r["payload"]["outcome"] == "confirmed"}
@@ -51,10 +83,20 @@ assert attended({"ground_truth": {"events": [{"is_threat": True, "position": {"x
                                           "position": {"x": 3, "y": 2}}}]}) == (1, 2)
 
 def mean(rows, key):
+    """Calcular a média de ``key`` nas linhas com valor, a 1 casa; ``None`` se não houver.
+
+    Args:
+        rows (list[dict]): Métricas por execução (saída de ``run_metrics``).
+        key (str): Métrica a agregar; valores ``None`` são ignorados.
+
+    Returns:
+        float | None: Média arredondada a 1 casa, ou ``None`` se nenhuma linha tiver valor.
+    """
     values = [r[key] for r in rows if r[key] is not None]
     return round(sum(values) / len(values), 1) if values else None
 
 async def go():
+    """Correr os ``CASES`` com reputação nova por execução e gravar ``dist.csv``."""
     s = copy.deepcopy(base["response_settings"])
     out = []
     for name, events, res, faults, reps in CASES:

@@ -1,4 +1,12 @@
-"""Ciclo local de um incidente iniciado pelo próprio sensor, sem despachante."""
+"""Ciclo local de um incidente iniciado pelo próprio sensor, sem despachante.
+
+Por onde começar:
+
+- `IncidentSensorAgent.IncidentBehaviour.run`: o ciclo completo, do alerta ao fecho.
+- `IncidentSensorAgent.IncidentBehaviour.allocate`: uma ronda de Contract Net, com renegociação.
+- `IncidentSensorAgent.IncidentBehaviour.execute_task`: alocar uma missão e repetir com outro recurso se falhar.
+- `IncidentSensorAgent.configure_mvp`: parâmetros (prazos, fila, limite de CFP, vizinhos).
+"""
 
 import asyncio
 from dataclasses import replace
@@ -28,25 +36,81 @@ QUEUE_INTERVAL_SECONDS = 5.0  # tempo simulado entre dois pedidos a um recurso o
 
 
 class IncidentSensorAgent(SensorAgent):
-    """O sensor corrobora, negoceia, recebe resultados e encerra a ocorrência."""
+    """O sensor corrobora, negoceia, recebe resultados e encerra a ocorrência.
+
+    Os atributos abaixo só existem depois de ``configure_mvp``.
+
+    Attributes:
+        patrols (dict[str, str]): ``resource_id`` de cada patrulha de verificação, por JID.
+        rangers (dict[str, str]): ``resource_id`` de cada ranger, por JID.
+        receive_timeout (float): Prazo real curto, em segundos, para propostas e avisos de vizinhos.
+        max_receive_timeout (float): Teto do prazo dinâmico e da espera pela confirmação.
+        max_attempts (int): Missões a tentar, cada uma com outro recurso, antes de desistir.
+        queue_rounds (int): Pedidos repetidos com os recursos ocupados; 0 desliga a fila.
+        queue_until_free (bool): Se a espera na fila vai até ao ``busy_until`` da recusa.
+        expire_unseen (bool): Se fecha como expirado quando o feed deixa de ver a ameaça.
+        retransmit (int): Reenvios do mesmo pedido sem resposta; 0 desliga o reenvio.
+        cfp_limit (int | None): K de C1 (CFP só aos K recursos mais próximos); None envia a todos.
+        base_positions (dict[str, Position]): Posição base de cada recurso, por JID.
+        selection_weights (dict[str, float]): Pesos passados a ``select_best_proposal``.
+        neighbours (tuple[str, ...]): JIDs dos iniciadores vizinhos; vazio sem ``alert_distance``.
+        alert_distance (float | None): Distância, em células, para dois alertas serem a mesma
+            ameaça; None desliga o aviso entre iniciadores.
+        simulated_time (float): Instante simulado atual, avançado pelo runner.
+        incident_state (IncidentState | None): Estado da ocorrência; None antes do alerta.
+        timeline (list[dict[str, object]]): Cronologia de eventos, com o instante simulado.
+        results (list[Message]): MISSION_RESULT aceites, por ordem de chegada.
+        missions (list[Mission]): Missões terminadas, em ``DONE`` ou ``FAILED``.
+        incident_observations (tuple[Observation, ...]): Leituras do feed que abriram a ocorrência.
+        cycle_done (bool): True quando o ciclo terminou, com ou sem incidente.
+        close_reason (str | None): Motivo do fecho (ex.: ``confirmed``, ``threat_expired``).
+        behaviour (IncidentBehaviour): Comportamento registado em ``setup``.
+    """
 
     def configure_mvp(self, patrols, rangers, *, receive_timeout=2.0, max_attempts=2,
                       selection_weights=None, base_positions=None, cfp_limit=None,
                       max_receive_timeout=None, queue_rounds=0, expire_unseen=False,
                       queue_until_free=False, retransmit=0, neighbours=(), alert_distance=None):
-        """base_positions ({jid: Position}) e cfp_limit=K ativam C1: CFP só aos K mais próximos.
+        """Configurar a ocorrência do MVP.
 
-        max_receive_timeout ativa o prazo dinâmico: sem nenhuma proposta ao fim de
-        receive_timeout, o iniciador espera até este teto; o STATUS espera sempre até ao teto.
-        queue_rounds ativa a fila: com os recursos ocupados, o iniciador espera
-        QUEUE_INTERVAL_SECONDS simulados e volta a pedir, até queue_rounds vezes.
-        queue_until_free: se a recusa trouxer busy_until, espera até esse instante em vez do intervalo.
-        expire_unseen ativa o prazo de validade: antes de cada pedido o iniciador volta a ler o
-        seu sensor; sem nenhuma leitura na janela do feed, fecha como expired e não manda ninguém.
-        retransmit=N ativa o reenvio: sem resposta no prazo, o mesmo VERIFY_REQUEST, CFP ou ACCEPT
-        (mesmo message_id) volta a sair, até N vezes por pedido.
-        neighbours (JIDs de outros iniciadores) e alert_distance ativam o aviso entre iniciadores:
-        cada um envia um ALERT aos vizinhos e desiste se um deles viu a mesma ameaça primeiro.
+        Também reinicia a cronologia, os resultados e o estado do incidente.
+
+        Args:
+            patrols (Mapping[str, str]): ``resource_id`` de cada patrulha de verificação, por JID.
+            rangers (Mapping[str, str]): ``resource_id`` de cada ranger, por JID.
+            receive_timeout (float): Prazo real, em segundos, para propostas e avisos de
+                vizinhos; tem de ser positivo.
+            max_attempts (int): Missões a tentar, cada uma com outro recurso; pelo menos 1.
+            selection_weights (Mapping[str, float] | None): Pesos de ``select_best_proposal``
+                (ex.: ``eta_weight``); None usa os valores por omissão.
+            base_positions (Mapping[str, Position] | None): Posição base de cada recurso, por JID.
+            cfp_limit (int | None): K de C1: com ``base_positions`` de todos os candidatos, o CFP
+                só vai aos K recursos mais próximos do alvo (K x ronda nas rondas seguintes).
+                None envia a todos.
+            max_receive_timeout (float | None): Ativa o prazo dinâmico: sem nenhuma proposta ao
+                fim de ``receive_timeout``, o iniciador espera até este teto; o STATUS espera
+                sempre até ao teto. None: igual a ``receive_timeout``.
+            queue_rounds (int): Ativa a fila: com os recursos ocupados, o iniciador espera
+                ``QUEUE_INTERVAL_SECONDS`` simulados e volta a pedir, até este número de vezes.
+            expire_unseen (bool): Ativa o prazo de validade: antes de cada ronda de CFP o
+                iniciador volta a ler o seu sensor; sem nenhuma leitura na janela do feed,
+                fecha como expirado e não manda ninguém.
+            queue_until_free (bool): Se a recusa trouxer ``busy_until``, a fila espera até esse
+                instante em vez do intervalo.
+            retransmit (int): Ativa o reenvio: sem resposta no prazo, o mesmo VERIFY_REQUEST,
+                CFP (só sem nenhuma proposta e só a quem não respondeu) ou ACCEPT (mesmo
+                ``message_id``) volta a sair, até este número de vezes.
+            neighbours (Iterable[str]): JIDs de outros iniciadores; ignorado sem
+                ``alert_distance``.
+            alert_distance (float | None): Ativa o aviso entre iniciadores: cada um envia um ALERT
+                aos vizinhos e desiste se um deles viu a mesma ameaça, a esta distância em
+                células, primeiro e confirma que fica com ela. None desliga o aviso.
+
+        Raises:
+            ValueError: Se ``max_attempts``, ``cfp_limit``, ``queue_rounds`` ou ``retransmit``
+                não forem inteiros no intervalo válido, se um prazo ou ``alert_distance`` for
+                negativo ou não finito, se ``receive_timeout`` for 0 ou se
+                ``max_receive_timeout`` for inferior a ``receive_timeout``.
         """
         if type(max_attempts) is not int or max_attempts < 1:
             raise ValueError("max_attempts deve ser positivo.")
@@ -88,20 +152,56 @@ class IncidentSensorAgent(SensorAgent):
 
     @property
     def severity_level(self):
-        """Gravidade em três níveis, para a prioridade da missão: 0 leve, 1 média, 2 grave."""
+        """Classificar a gravidade em três níveis, para a prioridade da missão: 0 leve, 1 média, 2 grave.
+
+        Grave a partir de ``severe_threshold`` da política (0.8 sem política); média a partir de
+        metade desse limiar.
+
+        Returns:
+            int: Nível de gravidade, 0, 1 ou 2.
+        """
         severe = self.response_policy.severe_threshold if self.response_policy else 0.8
         return 2 if self.severity >= severe else 1 if self.severity >= severe / 2 else 0
 
     def record(self, event, **details):
+        """Acrescentar à cronologia um evento com o instante simulado e os detalhes.
+
+        Args:
+            event (str): Nome do evento (ex.: ``ALERT``, um tipo de mensagem ou um estado).
+            **details: Campos extra guardados com o evento.
+        """
         self.timeline.append({"time": self.simulated_time, "event": event, **details})
 
     def transition(self, status):
+        """Mudar o estado do incidente e registar o novo estado na cronologia.
+
+        Propaga o ValueError de ``change_status`` numa transição não permitida.
+
+        Args:
+            status (IncidentStatus): Novo estado do incidente.
+        """
         self.incident_state = self.incident_state.change_status(status)
         self.record(status.value)
 
     class IncidentBehaviour(SensorAgent.VerificationBehaviour):
+        """Ciclo único: alerta, verificação, decisão, Contract Net e fecho."""
         def result_matches_assignment(self, incoming, result, assignment, mission):
-            """A mesma validação aplica-se a resultados normais e antecipados."""
+            """Verificar se um resultado corresponde à missão atribuída.
+
+            Vale para resultados normais e antecipados.
+
+            Args:
+                incoming (spade.message.Message): Mensagem SPADE recebida.
+                result (Message | None): Corpo já interpretado; None se for inválido.
+                assignment (tuple[str, Message, str]): ``(jid, accept, resource_id)`` devolvido
+                    por ``allocate``.
+                mission (Mission): Missão atribuída.
+
+            Returns:
+                bool: True se for um MISSION_RESULT ``inform`` do recurso escolhido, em resposta a
+                    este ACCEPT, com a mesma missão e tarefa e emitido até ao instante simulado
+                    atual.
+            """
             jid, accept, resource_id = assignment
             return (result is not None and result.message_type is MessageType.MISSION_RESULT
                     and bare(incoming.sender) == jid and bare(incoming.to) == bare(self.agent.jid)
@@ -118,6 +218,14 @@ class IncidentSensorAgent(SensorAgent):
                     and result.created_at <= self.agent.simulated_time)
 
         async def send_body(self, recipient, body, performative, reply_to=None):
+            """Registar a mensagem na cronologia e enviá-la por Contract Net.
+
+            Args:
+                recipient (str): JID do destinatário.
+                body (Message): Corpo a enviar.
+                performative (str): Performativa FIPA (ex.: ``cfp``, ``accept-proposal``).
+                reply_to (str | None): ``message_id`` a que responde; None se não for resposta.
+            """
             self.agent.record(body.message_type.value, recipient=recipient,
                               mission_id=body.mission_id, payload=body.payload)
             await self.send(build_spade_message(
@@ -126,6 +234,16 @@ class IncidentSensorAgent(SensorAgent):
                 protocol=CONTRACT_NET_PROTOCOL))
 
         async def receive_until(self, deadline):
+            """Receber até ao prazo real ``deadline``; None se o prazo passar.
+
+            Args:
+                deadline (float): Prazo, no relógio de ``time.monotonic``.
+
+            Returns:
+                tuple[spade.message.Message, Message | None] | None: ``(incoming, None)`` se o
+                    corpo for inválido ou tiver sido emitido depois do instante simulado atual;
+                    caso contrário, ``(incoming, corpo)``. None se o prazo passar.
+            """
             remaining = deadline - monotonic()
             if remaining <= 0:
                 return None
@@ -149,16 +267,25 @@ class IncidentSensorAgent(SensorAgent):
             Segunda volta: cada um diz aos vizinhos que lhe cederiam se fica com a ameaça. Só se
             cede a quem fica; assim, numa fila de ameaças vizinhas, quem cederia a um vizinho que
             também desistiu trata a sua. Um veredicto perdido conta como «não fica»: os dois tratam.
+
+            Args:
+                observation (Observation): Leitura que abriu a ocorrência.
+                incident_id (str): Identificador do incidente local.
+
+            Returns:
+                bool: True se um vizinho com prioridade fica com a ameaça e este iniciador desiste.
             """
             agent = self.agent
             key = (observation.observed_at, observation.source_id)
 
             def notice(message_id, payload):
+                """Construir um ALERT sobre esta observação com o payload dado."""
                 return Message(message_id, MessageType.ALERT, agent.simulated_time, payload,
                                event_id=observation.event_id, incident_id=incident_id,
                                source_id=observation.source_id, conversation_id=f"alert-{observation.event_id}")
 
             async def tell(jids, message):
+                """Enviar a mesma mensagem, como ``inform``, a cada JID indicado."""
                 for jid in jids:
                     await self.send(build_spade_message(
                         jid, message, performative="inform", conversation_id=message.conversation_id))
@@ -214,6 +341,25 @@ class IncidentSensorAgent(SensorAgent):
             return False
 
         async def allocate(self, mission, candidates, attempt):
+            """Fazer uma ronda de Contract Net e devolver ``(atribuição, falha)``.
+
+            Envia o CFP, recolhe propostas e recusas válidas, aceita a melhor e rejeita
+            as restantes. A atribuição ``(jid, accept, resource_id)`` só é devolvida
+            depois de o recurso confirmar a reserva; senão devolve None e
+            ``no_eligible_proposals``, ``confirmation_unknown`` ou
+            ``reservation_rejected``. Um MISSION_RESULT que chegue antes da confirmação
+            fica guardado para ``mission_result``.
+
+            Args:
+                mission (Mission): Missão a alocar.
+                candidates (dict[str, str]): ``resource_id`` de cada recurso candidato, por JID.
+                attempt (int): Número da ronda, a partir de 1; com ``cfp_limit``, alarga o CFP a
+                    K x ronda recursos.
+
+            Returns:
+                tuple[tuple[str, Message, str] | None, str | None]: ``((jid, accept,
+                    resource_id), None)`` com a reserva confirmada, ou ``(None, motivo)``.
+            """
             agent = self.agent
             if agent.cfp_limit is not None and all(jid in agent.base_positions for jid in candidates):
                 # C1: só os K mais próximos da base ao alvo; cada nova ronda alarga a K * ronda.
@@ -321,6 +467,20 @@ class IncidentSensorAgent(SensorAgent):
                     self._pending_mission_result = None
 
         async def mission_result(self, assignment, mission):
+            """Esperar o MISSION_RESULT da atribuição; None se o prazo real se esgotar.
+
+            Começa pelo resultado antecipado guardado em ``allocate``. O prazo é dez
+            vezes ``receive_timeout`` e renova-se a cada reenvio do ACCEPT.
+
+            Args:
+                assignment (tuple[str, Message, str]): ``(jid, accept, resource_id)`` devolvido
+                    por ``allocate``.
+                mission (Mission): Missão atribuída.
+
+            Returns:
+                Message | None: MISSION_RESULT válido, também guardado em ``results``; None se o
+                    prazo se esgotar.
+            """
             agent = self.agent
             _, _, resource_id = assignment
             pending = getattr(self, "_pending_mission_result", None)
@@ -347,6 +507,23 @@ class IncidentSensorAgent(SensorAgent):
                     return result
 
         async def execute_task(self, mission, candidates):
+            """Alocar a missão e esperar o resultado; só devolve resultados conclusivos.
+
+            Devolve o resultado ``confirmed`` ou ``not_confirmed``. Com ``failed`` ou
+            ``inconclusive``, o recurso sai dos candidatos e a missão repete-se com novo
+            identificador, até ``max_attempts``. Uma reserva rejeitada também passa à
+            tentativa seguinte, com os mesmos candidatos e a mesma missão. Nos restantes
+            casos, incluindo o silêncio do recurso, devolve None e deixa o motivo em
+            ``close_reason``.
+
+            Args:
+                mission (Mission): Missão a executar.
+                candidates (Mapping[str, str]): ``resource_id`` de cada recurso candidato, por JID.
+
+            Returns:
+                Message | None: MISSION_RESULT ``confirmed`` ou ``not_confirmed``; None sem
+                    resultado conclusivo.
+            """
             agent = self.agent
             remaining = {bare(jid): resource for jid, resource in candidates.items()}
             rounds = 0
@@ -397,6 +574,15 @@ class IncidentSensorAgent(SensorAgent):
             return None
 
         async def run(self):
+            """Tratar um incidente do alerta ao fecho e marcar ``cycle_done``.
+
+            Sem observações termina com ``no_alert``, sem criar incidente. Uma
+            verificação confirmada pela patrulha gera uma segunda missão, de resposta,
+            para os rangers.
+
+            Overrides:
+                isia.agents.sensor.SensorAgent.VerificationBehaviour.run
+            """
             agent = self.agent
             observations = tuple(agent.observation_feed.recent())
             if not observations:
@@ -452,5 +638,10 @@ class IncidentSensorAgent(SensorAgent):
             agent.cycle_done = True
 
     async def setup(self):
+        """Registar o comportamento do incidente, filtrado pela ontologia.
+
+        Overrides:
+            isia.agents.sensor.SensorAgent.setup
+        """
         self.behaviour = self.IncidentBehaviour()
         self.add_behaviour(self.behaviour, Template(metadata={"ontology": ONTOLOGY}))

@@ -1,3 +1,10 @@
+"""Mensagens trocadas entre agentes e conversão JSON dos modelos de domínio.
+
+Por onde começar:
+
+- `MessageType`: os 10 tipos de mensagem (as performativas FIPA estão em `isia.communication.transport`).
+- `Message`: o envelope comum (ids de conversa e de correlação, emissor, payload), validado na construção."""
+
 import json
 from dataclasses import fields, is_dataclass
 from enum import Enum
@@ -18,6 +25,20 @@ from isia.domain.validation import is_finite_number
 
 
 class MessageType(Enum):
+    """Tipos de mensagem do protocolo; o valor é o texto usado no JSON.
+
+    Attributes:
+        ALERT (str): Aviso de uma ameaça observada, trocado entre agentes de incidente vizinhos.
+        VERIFY_REQUEST (str): Pedido de verificação de um evento, enviado a um informador.
+        VERIFY_RESPONSE (str): Resposta do informador a um ``VERIFY_REQUEST``.
+        CFP (str): Pedido de propostas (Contract Net) para uma missão.
+        PROPOSAL (str): Proposta de um recurso a um ``CFP``.
+        ACCEPT (str): Aceitação da proposta escolhida; atribui a missão ao recurso.
+        REJECT (str): Recusa de uma proposta pelo iniciador, ou de um ``CFP`` pelo recurso.
+        MISSION_RESULT (str): Resultado de uma missão, enviado pelo recurso que a executou.
+        STATUS (str): Confirmação (ou não) da reserva, enviada pelo recurso após um ``ACCEPT``.
+        INCIDENT_CLOSED (str): Encerramento de um incidente.
+    """
     ALERT = "ALERT"
     VERIFY_REQUEST = "VERIFY_REQUEST"
     VERIFY_RESPONSE = "VERIFY_RESPONSE"
@@ -31,13 +52,23 @@ class MessageType(Enum):
 
 
 def _require_identifier(value: Any, name: str) -> str:
+    """Devolver ``value`` se for string não vazia; senão, ValueError com ``name``.
+
+    Raises:
+        ValueError: Se ``value`` não for uma string com conteúdo além de espaços.
+    """
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} deve ser uma string não vazia.")
     return value
 
 
 def _validate_json_value(value: Any, path: str = "payload") -> None:
-    """Valida valores JSON estritos antes de serializar ou aceitar payloads."""
+    """Validar valores JSON estritos antes de serializar ou aceitar payloads.
+
+    Raises:
+        ValueError: Se houver um float NaN ou infinito.
+        TypeError: Se houver uma chave de dicionário não string ou um valor não serializável.
+    """
     if value is None or isinstance(value, (str, bool, int)):
         return
     if isinstance(value, float):
@@ -58,10 +89,24 @@ def _validate_json_value(value: Any, path: str = "payload") -> None:
 
 
 def _reject_json_constant(value: str):
+    """Recusar ``NaN`` e ``Infinity`` ao ler JSON, levantando ValueError.
+
+    Raises:
+        ValueError: Sempre, com a constante recebida na mensagem.
+    """
     raise ValueError(f"Constante JSON inválida: {value}.")
 
 
 def _validate_cfp(message_ids: dict[str, str | None], payload: dict[str, Any]) -> None:
+    """Validar os identificadores e o payload de um CFP; ValueError se algo falhar.
+
+    Exige ``mission_id``, ``incident_id`` e ``conversation_id`` e, no payload,
+    ``task``, ``target``, ``required_capability``, ``priority`` e ``deadline``;
+    ``round_number`` é opcional, mas tem de ser um inteiro positivo.
+
+    Raises:
+        ValueError: Se faltar um identificador ou campo, ou algum tiver tipo ou valor inválido.
+    """
     for name in ("mission_id", "incident_id", "conversation_id"):
         _require_identifier(message_ids[name], name)
 
@@ -90,13 +135,30 @@ def _validate_cfp(message_ids: dict[str, str | None], payload: dict[str, Any]) -
 
 
 def model_to_dict(model: Any) -> dict[str, Any]:
-    """Converte um modelo de domínio num dicionário JSON-compatível."""
+    """Converter um modelo de domínio num dicionário compatível com JSON.
+
+    Enums passam ao seu valor, tuplos a listas e dataclasses aninhadas a dicionários.
+
+    Args:
+        model (Any): Instância de um modelo dataclass (ex.: ``Incident``, ``Mission``).
+
+    Returns:
+        dict[str, Any]: Um item por campo do dataclass.
+
+    Raises:
+        TypeError: Se ``model`` não for uma instância de dataclass.
+    """
     if not is_dataclass(model) or isinstance(model, type):
         raise TypeError("O valor deve ser uma instância de um modelo dataclass.")
     return {field.name: _to_json_value(getattr(model, field.name)) for field in fields(model)}
 
 
 def _to_json_value(value: Any) -> Any:
+    """Converter recursivamente um valor para JSON.
+
+    Enums passam ao seu valor, dataclasses a dicionários e tuplos a listas; o
+    resto é devolvido sem alteração.
+    """
     if isinstance(value, Enum):
         return value.value
     if is_dataclass(value) and not isinstance(value, type):
@@ -114,7 +176,22 @@ T = TypeVar("T")
 
 
 def model_from_dict(data: dict[str, Any], model_type: type[T]) -> T:
-    """Reconstrói um modelo de domínio a partir de um dicionário validado."""
+    """Reconstruir um modelo de domínio a partir de um dicionário validado.
+
+    Suporta ``Position``, ``Observation``, ``Incident``, ``ResourceState``, ``Mission`` e
+    ``Bid``; reconstrói as posições, observações e enums aninhados.
+
+    Args:
+        data (dict[str, Any]): Dicionário no formato produzido por ``model_to_dict``.
+        model_type (type[T]): Classe do modelo a reconstruir.
+
+    Returns:
+        T: Instância de ``model_type``, validada pelo próprio modelo.
+
+    Raises:
+        TypeError: Se ``data`` não for um dicionário ou ``model_type`` não for suportado.
+        ValueError: Se faltarem campos ou os valores forem inválidos para o modelo.
+    """
     if not isinstance(data, dict):
         raise TypeError("Os dados do modelo devem ser um objeto JSON.")
 
@@ -152,6 +229,20 @@ def model_from_dict(data: dict[str, Any], model_type: type[T]) -> T:
 
 
 class Message:
+    """Envelope validado de uma mensagem entre agentes, serializável em JSON estrito.
+
+    Attributes:
+        message_id (str): Identificador único da mensagem.
+        message_type (MessageType): Tipo de mensagem do protocolo.
+        created_at (float): Tempo simulado de emissão, não negativo.
+        payload (dict[str, Any]): Conteúdo específico do tipo, só com valores JSON.
+        event_id (str | None): Evento observado a que a mensagem se refere.
+        incident_id (str | None): Incidente a que a mensagem se refere.
+        mission_id (str | None): Missão a que a mensagem se refere.
+        source_id (str | None): Agente ou recurso emissor.
+        conversation_id (str | None): Conversa (protocolo FIPA) a que a mensagem pertence.
+        schema_version (int): Versão do formato; só é aceite ``1``.
+    """
     schema_version = 1
 
     def __init__(
@@ -168,6 +259,30 @@ class Message:
         conversation_id: str | None = None,
         schema_version: int = 1,
     ):
+        """Validar o envelope e as regras próprias de CFP e MISSION_RESULT.
+
+        Num MISSION_RESULT, ``resource_id`` tem de ser o ``source_id`` e ``completed_at``
+        não pode ultrapassar ``created_at``.
+
+        Args:
+            message_id (str): Identificador único da mensagem, não vazio.
+            message_type (MessageType): Tipo de mensagem do protocolo.
+            created_at (float): Tempo simulado de emissão, finito e não negativo.
+            payload (dict[str, Any]): Conteúdo da mensagem, só com valores JSON estritos.
+            event_id (str | None): Evento observado; ``None`` se não se aplicar.
+            incident_id (str | None): Incidente; obrigatório em CFP e MISSION_RESULT.
+            mission_id (str | None): Missão; obrigatória em CFP e MISSION_RESULT.
+            source_id (str | None): Emissor; obrigatório em MISSION_RESULT.
+            conversation_id (str | None): Conversa; obrigatória em CFP e MISSION_RESULT.
+            schema_version (int): Versão do formato; tem de ser ``1``.
+
+        Raises:
+            TypeError: Se ``message_type`` não for ``MessageType``, ``payload`` não for um
+                dicionário ou contiver valores não serializáveis.
+            ValueError: Se um identificador estiver vazio, ``created_at`` ou
+                ``schema_version`` forem inválidos, ou o payload tiver NaN/infinito ou
+                violar as regras do tipo.
+        """
         self.message_id = _require_identifier(message_id, "message_id")
         if not isinstance(message_type, MessageType):
             raise TypeError("message_type deve ser MessageType.")
@@ -220,6 +335,11 @@ class Message:
         self.schema_version = schema_version
 
     def to_dict(self) -> dict[str, Any]:
+        """Devolver o envelope como dicionário, sem os identificadores a None.
+
+        Returns:
+            dict[str, Any]: Campos do envelope, com ``message_type`` como texto.
+        """
         data = {
             "schema_version": self.schema_version,
             "message_id": self.message_id,
@@ -234,6 +354,17 @@ class Message:
         return data
 
     def to_json(self) -> str:
+        """Serializar em JSON com chaves ordenadas, revalidando antes o conteúdo.
+
+        A revalidação apanha um payload alterado depois da criação.
+
+        Returns:
+            str: JSON estrito, sem escapar caracteres não ASCII.
+
+        Raises:
+            ValueError: Se o conteúdo tiver NaN ou infinito.
+            TypeError: Se o conteúdo tiver valores não serializáveis.
+        """
         data = self.to_dict()
         _validate_json_value(data, "message")
         return json.dumps(
@@ -245,6 +376,20 @@ class Message:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]):
+        """Construir a mensagem a partir de um dicionário, validada pelo construtor.
+
+        Args:
+            data (dict[str, Any]): Dicionário no formato de ``to_dict``.
+
+        Returns:
+            Message: Mensagem reconstruída.
+
+        Raises:
+            TypeError: Se ``data`` não for um dicionário.
+            ValueError: Se faltarem campos obrigatórios ou ``message_type`` for desconhecido.
+
+        Propaga também os erros do construtor (TypeError/ValueError).
+        """
         if not isinstance(data, dict):
             raise TypeError("A mensagem deve ser um objeto JSON.")
         required = {"schema_version", "message_id", "message_type", "created_at", "payload"}
@@ -270,6 +415,18 @@ class Message:
 
     @classmethod
     def from_json(cls, payload: str):
+        """Ler uma mensagem em JSON; ValueError se for inválido ou tiver NaN.
+
+        Args:
+            payload (str): Texto JSON, normalmente o corpo de uma mensagem SPADE.
+
+        Returns:
+            Message: Mensagem descodificada e validada.
+
+        Raises:
+            ValueError: Se o JSON for inválido ou tiver ``NaN``/``Infinity``.
+            TypeError: Se o JSON não for um objeto ou o payload não for um dicionário.
+        """
         try:
             data = json.loads(payload, parse_constant=_reject_json_constant)
         except (TypeError, json.JSONDecodeError) as error:

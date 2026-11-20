@@ -49,20 +49,60 @@ LIMITATIONS = [
 
 
 def number(value):
+    """Converter um valor de resumo em float; ``None`` e "N/A" dão ``None``.
+
+    Args:
+        value (str | float | None): Valor lido do ``summary.csv`` ou já numérico.
+
+    Returns:
+        float | None: O valor numérico, ou ``None`` se faltar.
+    """
     return None if value in (None, "N/A") else float(value)
 
 
 def delta(before, after):
+    """Devolver (diferença absoluta, diferença relativa) entre dois valores.
+
+    Args:
+        before (float | None): Valor da referência.
+        after (float | None): Valor da alternativa.
+
+    Returns:
+        tuple[float | None, float | None]: ``after - before`` e essa diferença dividida por
+            ``before``. A absoluta é ``None`` se faltar um dos valores; a relativa é ``None``
+            nesse caso ou quando a base é zero.
+    """
     absolute = None if before is None or after is None else after - before
     relative = None if absolute is None or before == 0 else absolute / before
     return absolute, relative
 
 
 def identity(row):
+    """Devolver a chave de emparelhamento (repetição, episódio, semente), em texto.
+
+    Args:
+        row (dict): Linha de execução, com ``repetition``, ``episode`` e ``seed``.
+
+    Returns:
+        tuple[str, str, str]: A chave, com cada valor convertido em texto.
+    """
     return tuple(str(row[name]) for name in ("repetition", "episode", "seed"))
 
 
 def paired_rows(baseline, alternative):
+    """Emparelhar execuções de referência e alternativa, na ordem da referência.
+
+    Args:
+        baseline (list[dict]): Execuções da referência do lote e cenário.
+        alternative (list[dict]): Execuções da alternativa, com as mesmas identidades.
+
+    Returns:
+        list[tuple[dict, dict]]: Pares (referência, alternativa) com a mesma identidade.
+
+    Raises:
+        ValueError: Se as identidades estiverem duplicadas ou diferirem entre os braços, ou se a
+            verdade de referência (``threat``) não coincidir num par.
+    """
     before = {identity(row): row for row in baseline}
     after = {identity(row): row for row in alternative}
     if len(before) != len(baseline) or len(after) != len(alternative) or before.keys() != after.keys():
@@ -74,6 +114,17 @@ def paired_rows(baseline, alternative):
 
 
 def group_metrics(rows):
+    """Calcular a matriz de confusão (ameaça × mobilização), as taxas e as frações de estado.
+
+    As frações são as de execuções confirmadas e não resolvidas.
+
+    Args:
+        rows (list[dict]): Execuções tipadas (booleanos já convertidos), pelo menos uma.
+
+    Returns:
+        dict: ``TP``, ``FP``, ``TN``, ``FN``, as taxas de ``rates`` e ainda ``confirmed_rate``
+            e ``unresolved_rate`` (frações entre 0 e 1).
+    """
     counts = confusion((row["threat"], row["dispatched"]) for row in rows)
     return {**counts, **rates(counts),
             "confirmed_rate": mean(row["confirmed"] for row in rows),
@@ -81,6 +132,19 @@ def group_metrics(rows):
 
 
 def paired_values(pairs, metric):
+    """Devolver (valor antes, valor depois, n) de uma métrica sobre os pares.
+
+    Nas métricas numéricas a média usa só os pares com valor nos dois braços; nas
+    restantes, as métricas de grupo são recalculadas em cada braço.
+
+    Args:
+        pairs (list[tuple[dict, dict]]): Pares (referência, alternativa) de ``paired_rows``.
+        metric (str): Métrica de ``NUMERIC`` ou de ``group_metrics``.
+
+    Returns:
+        tuple[float | None, float | None, int]: Média ou taxa em cada braço e número de pares
+            usados; ``(None, None, 0)`` se nenhum par numérico tiver valor nos dois braços.
+    """
     if metric in NUMERIC:
         available = [(before[metric], after[metric]) for before, after in pairs
                      if before[metric] is not None and after[metric] is not None]
@@ -91,6 +155,15 @@ def paired_values(pairs, metric):
 
 
 def percentile(values, fraction):
+    """Calcular um percentil por interpolação linear; ``None`` para uma lista vazia.
+
+    Args:
+        values (list[float]): Amostra, em qualquer ordem.
+        fraction (float): Percentil pedido, entre 0 e 1 (ex.: 0.025).
+
+    Returns:
+        float | None: O percentil, ou ``None`` se ``values`` estiver vazia.
+    """
     if not values:
         return None
     ordered = sorted(values)
@@ -101,7 +174,24 @@ def percentile(values, fraction):
 
 
 def descriptive_intervals(pairs, *, samples, seed):
-    """Reamostrar sementes emparelhadas, mantendo juntos os episódios da semente."""
+    """Reamostrar sementes emparelhadas, mantendo juntos os episódios da semente.
+
+    É um bootstrap descritivo por cluster de semente, não um intervalo inferencial.
+
+    Args:
+        pairs (list[tuple[dict, dict]]): Pares (referência, alternativa) de ``paired_rows``.
+        samples (int): Número de reamostragens (positivo).
+        seed (int): Semente do gerador aleatório.
+
+    Returns:
+        dict[str, dict]: Por métrica de ``INTERVAL_METRICS``, os percentis 2,5 e 97,5 da
+            diferença emparelhada (``descriptive_delta_p025``/``p975``, ``None`` sem amostras
+            válidas), o número de amostras válidas e a descrição do método.
+
+    Raises:
+        ValueError: Se ``samples`` não for um inteiro positivo, ``seed`` não for inteiro, ou não
+            houver pares para reamostrar.
+    """
     if type(samples) is not int or samples < 1 or type(seed) is not int:
         raise ValueError("O bootstrap exige amostras positivas e uma semente inteira.")
     clusters = defaultdict(list)
@@ -132,6 +222,28 @@ def descriptive_intervals(pairs, *, samples, seed):
 
 
 def compare_group(baseline, alternative, before_summary, after_summary, *, samples=2000, seed=917):
+    """Comparar um grupo alternativo com a referência do mesmo lote e cenário.
+
+    Os efeitos trazem deltas absolutos e relativos, denominadores das taxas e, nas métricas
+    emparelháveis, delta emparelhado, cobertura e intervalo descritivo de reamostragem.
+
+    Args:
+        baseline (list[dict]): Execuções tipadas da referência.
+        alternative (list[dict]): Execuções tipadas da alternativa.
+        before_summary (dict): Linha de ``summary.csv`` da referência.
+        after_summary (dict): Linha de ``summary.csv`` da alternativa (dá ``batch_id``,
+            ``parametro``, ``valor`` e ``cenario``).
+        samples (int): Reamostragens do intervalo descritivo.
+        seed (int): Semente da reamostragem.
+
+    Returns:
+        tuple[dict, list[dict]]: Linha de ``comparisons.csv`` e uma linha de ``effects.csv`` por
+            métrica.
+
+    Raises:
+        ValueError: Se os braços não emparelharem (ver ``paired_rows``) ou a reamostragem
+            falhar (ver ``descriptive_intervals``).
+    """
     pairs = paired_rows(baseline, alternative)
     metadata = {name: after_summary[name] for name in ("batch_id", "parametro", "valor", "cenario")}
     intervals = descriptive_intervals(pairs, samples=samples, seed=seed)
@@ -160,6 +272,7 @@ def compare_group(baseline, alternative, before_summary, after_summary, *, sampl
                   "delta_relative": relative}
         if metric in ("precision", "recall", "fpr", "accuracy"):
             def denominator(values):
+                """Calcular o denominador da taxa ``metric`` numa matriz de confusão."""
                 if metric == "precision":
                     return values["TP"] + values["FP"]
                 if metric == "recall":
@@ -187,6 +300,21 @@ def compare_group(baseline, alternative, before_summary, after_summary, *, sampl
 
 
 def load_consolidated(directory):
+    """Ler uma consolidação concluída: (manifesto, execuções tipadas, resumos).
+
+    Revalida os lotes originais com ``load_batches`` antes de aceitar os CSV.
+
+    Args:
+        directory (str | Path): Pasta da consolidação em ``results/sensitivity/``.
+
+    Returns:
+        tuple[dict, list[dict], list[dict]]: O manifesto, as execuções com booleanos e números
+            convertidos, e as linhas de ``summary.csv`` em texto.
+
+    Raises:
+        ValueError: Se a consolidação não estiver completa, se o hash de um lote original tiver
+            mudado ou se os CSV e as contagens não corresponderem aos lotes revalidados.
+    """
     directory = Path(directory).resolve()
     manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
     if manifest.get("mode") != "consolidation" or manifest.get("status") != "complete":
@@ -213,7 +341,21 @@ def load_consolidated(directory):
 
 
 def report_application(report, parameter, value):
-    """Verificar configurações efetivas disponíveis no relatório operacional."""
+    """Verificar configurações efetivas disponíveis no relatório operacional.
+
+    Args:
+        report (dict): Relatório de uma execução da alternativa.
+        parameter (str): Fator experimental (chave de ``sensitivity.PARAMETERS``).
+        value (object): Valor da alternativa aplicado a esse fator.
+
+    Returns:
+        tuple[str, object]: Método de verificação e valor lido do relatório.
+            ``sensor_quality`` não é serializado e devolve
+            ``("configuration_and_code_provenance", None)``.
+
+    Raises:
+        ValueError: Se o fator for desconhecido ou o relatório não confirmar o valor.
+    """
     settings = report["response_settings"]
     if parameter == "corroboration_distance":
         actual = report["corroboration_settings"]["max_distance"]
@@ -249,6 +391,18 @@ def report_application(report, parameter, value):
 
 
 def verify_report(record, expected):
+    """Garantir que um relatório individual corresponde à linha CSV esperada.
+
+    Confere ``run_id`` e semente, as métricas do envelope contra ``expected`` e contra
+    as recalculadas a partir do relatório.
+
+    Args:
+        record (dict): Ficheiro de relatório, com as chaves ``metrics`` e ``report``.
+        expected (dict): Linha de ``runs.csv`` correspondente.
+
+    Raises:
+        ValueError: Se a identidade, a semente ou as métricas divergirem.
+    """
     metadata, report = record["metrics"], record["report"]
     expected_id = f"{metadata['scenario']}-full-{int(metadata['repetition']):03d}-{metadata['episode']}"
     if report["run_id"] != expected_id or report["scenario_seed"] != int(metadata["seed"]):
@@ -260,6 +414,24 @@ def verify_report(record, expected):
 
 
 def calibration_and_audit(manifest, reference_reports):
+    """Reunir relatórios de referência e de alternativas para calibrar e auditar.
+
+    Exige os 140 relatórios full da Etapa 9 e todos os relatórios planeados de cada
+    lote, verificando cada um contra o CSV.
+
+    Args:
+        manifest (dict): Manifesto da consolidação (com ``sources``).
+        reference_reports (str | Path): Pasta com os relatórios JSON da Etapa 9.
+
+    Returns:
+        tuple[list[dict], list[dict], list[dict], list[dict], list[dict]]: Bins de calibração,
+            cobertura, amostras de score, auditoria da aplicação de cada fator e ficheiros lidos
+            com hash.
+
+    Raises:
+        ValueError: Se faltarem relatórios da referência ou das alternativas, ou se algum não
+            corresponder ao plano ou ao CSV.
+    """
     records, sources, application = [], [], defaultdict(list)
     expected = sensitivity.read_csv(sensitivity.REFERENCE_ROOT / "runs.csv")
     expected = [row for row in expected if row["variant"] == "full"]
@@ -320,6 +492,24 @@ def calibration_and_audit(manifest, reference_reports):
 
 
 def analyze(directory, *, reference_reports=None, run_id=None, bootstrap_samples=2000, bootstrap_seed=917):
+    """Comparar cada alternativa com a referência do seu lote e gravar a análise.
+
+    Não simula. Escreve numa pasta nova de results/sensitivity/ os CSV de comparações,
+    efeitos, calibração e auditoria e ``findings.json``. Depois de criada a pasta de saída,
+    o ``manifest.json`` é gravado mesmo que a escrita falhe; erros na leitura, comparação
+    ou auditoria terminam antes de criar a pasta.
+
+    Args:
+        directory (str | Path): Pasta da consolidação a analisar.
+        reference_reports (str | Path | None): Pasta dos relatórios da Etapa 9; ``None`` usa
+            ``results/experiments/runs``.
+        run_id (str | None): Nome da pasta nova; ``None`` gera um.
+        bootstrap_samples (int): Reamostragens por grupo.
+        bootstrap_seed (int): Semente da reamostragem.
+
+    Returns:
+        Path: A pasta de saída.
+    """
     manifest, runs, summaries = load_consolidated(directory)
     grouped = defaultdict(list)
     for row in runs:
@@ -368,6 +558,14 @@ def analyze(directory, *, reference_reports=None, run_id=None, bootstrap_samples
 
 
 def main(argv=None):
+    """Ler os argumentos e correr a análise; erros de dados terminam via ``parser.error``.
+
+    Args:
+        argv (list[str] | None): Argumentos da linha de comandos; ``None`` usa ``sys.argv``.
+
+    Returns:
+        int: 0 quando a análise termina.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("consolidation", type=Path)
     parser.add_argument("--reference-reports", type=Path, default=sensitivity.REFERENCE_ROOT / "runs")

@@ -29,6 +29,17 @@ FIELDS = ["grupo", "valor", "runs", "ameacas", "com_alerta", "chegam_ao_guarda",
 
 
 def row(grupo, valor, reports):
+    """Agregar relatórios numa linha do CSV, contando uma ocorrência por iniciador.
+
+    Args:
+        grupo (str): Nome do grupo, na coluna ``grupo``.
+        valor (str): Descrição do caso, na coluna ``valor``.
+        reports (list[dict]): Relatórios das execuções do caso (saída de ``run_mvp``).
+
+    Returns:
+        dict: Linha com as colunas de ``FIELDS``; ``t_fecho_sim_mean`` é a média, em s
+            simulados, das ocorrências fechadas com ameaça confirmada.
+    """
     views = [v for r in reports for v in incidents(r)]
     done = [v for v in views if v["status"] == "closed" and v["reason"] == "confirmed"]
     return {"grupo": grupo, "valor": valor, "runs": len(reports),
@@ -40,6 +51,14 @@ def row(grupo, valor, reports):
 
 
 async def guardas():
+    """Testar o cenário E com 2, 3 e 4 guardas (acrescenta ``ranger-3`` e ``ranger-4``).
+
+    Returns:
+        list[dict]: Uma linha por caso, com as colunas de ``FIELDS``: ``grupo``, ``valor``,
+            ``runs``, ``ameacas``, ``com_alerta``, ``chegam_ao_guarda``, ``unresolved``,
+            ``t_fecho_sim_mean`` (média, por execução, do instante do último fecho, em s
+            simulados) e ``msgs_mean``.
+    """
     extra = {"ranger-3": {"x": 8, "y": 3}, "ranger-4": {"x": 8, "y": 9}}
     out = []
     for n in (2, 3, 4):
@@ -57,6 +76,13 @@ async def guardas():
 
 
 async def reenvios():
+    """Testar perdas de 10, 20 e 30 % com 0 a 4 reenvios; 20 execuções por caso no cenário A.
+
+    Returns:
+        list[dict]: Uma linha por caso, com as colunas de ``FIELDS``: ``grupo``, ``valor``,
+            ``runs``, ``ameacas``, ``com_alerta``, ``chegam_ao_guarda``, ``unresolved``,
+            ``t_fecho_sim_mean`` (sempre ``None``) e ``msgs_mean``.
+    """
     out = []
     for loss in (0.1, 0.2, 0.3):
         for n in range(5):
@@ -69,6 +95,20 @@ async def reenvios():
 
 
 async def simple(run_id, events, resources, sources, settings, **options):
+    """Correr uma execução com reputação nova; a semente é 1000 + o sufixo do ``run_id``.
+
+    Args:
+        run_id (str): Id da execução, terminado em ``-N`` (ex.: ``dist-3``).
+        events (list[dict]): Eventos do episódio.
+        resources (dict): Overrides dos recursos.
+        sources (dict): Fontes (tipo e alcance) por ID de sensor.
+        settings (dict): ``response_settings`` do cenário, com ``reputation``.
+        **options: Argumentos extra do ``run_mvp`` (ex.: ``extra_initiators``); sobrepõem-se às
+            condições publicadas.
+
+    Returns:
+        dict: Relatório da execução devolvido pelo ``run_mvp``.
+    """
     return await run_mvp(response_settings=settings, reputation=ReputationBook(**settings["reputation"]),
                          **{**PUBLISHED_CONDITIONS, **options}, max_seconds=30.0,
                          scenario={"run_id": run_id, "seed": 1000 + int(run_id.rsplit("-", 1)[1]),
@@ -76,7 +116,16 @@ async def simple(run_id, events, resources, sources, settings, **options):
 
 
 async def distancia():
-    """O veículo verifica aos 6 s; o guarda sai depois e demora distância + 1 s. A ameaça dura 15 s."""
+    """Testar a distância do guarda até ao alvo, de 5 a 9 células, com uma ameaça de 15 s.
+
+    O veículo verifica aos 6 s, o guarda sai depois e demora distância + 1 s. Fontes sem
+    ruído; 5 execuções por caso.
+
+    Returns:
+        list[dict]: Uma linha por caso, com as colunas de ``FIELDS``: ``grupo``, ``valor``,
+            ``runs``, ``ameacas``, ``com_alerta``, ``chegam_ao_guarda``, ``unresolved``,
+            ``t_fecho_sim_mean`` e ``msgs_mean``.
+    """
     sources = {"sensor-1": {"kind": "acoustic", "detection_range": 5.0}, "sensor-2": {"kind": "visual", "detection_range": 5.0}}
     out = []
     for cells, (x, y) in ((5, (5, 5)), (6, (6, 5)), (7, (7, 5)), (8, (7, 6)), (9, (7, 7))):
@@ -88,6 +137,13 @@ async def distancia():
 
 
 async def cobertura():
+    """Testar uma ameaça em (7,0) sem e com um iniciador adicional em (6,1); 10 execuções cada.
+
+    Returns:
+        list[dict]: Uma linha por caso, com as colunas de ``FIELDS``: ``grupo``, ``valor``,
+            ``runs``, ``ameacas``, ``com_alerta``, ``chegam_ao_guarda``, ``unresolved``,
+            ``t_fecho_sim_mean`` e ``msgs_mean``.
+    """
     out = []
     for label, extra in (("só o sensor-1 inicia", None), ("mais um iniciador em (6,1)", {"sensor-3": Position(6, 1)})):
         settings = copy.deepcopy(A["response_settings"])
@@ -107,6 +163,11 @@ GROUPS = {"guardas": guardas, "reenvios": reenvios, "distancia": distancia, "cob
 
 if __name__ == "__main__":
     async def go(names):
+        """Correr os grupos pedidos e regravar o CSV, mantendo as linhas dos outros.
+
+        Args:
+            names (list[str]): Nomes de grupos de ``GROUPS``, pela ordem a correr.
+        """
         rows = []
         for name in names:
             for r in await GROUPS[name]():

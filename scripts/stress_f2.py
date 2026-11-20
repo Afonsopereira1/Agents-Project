@@ -36,6 +36,17 @@ EXTRA = {f"sensor-{i + 3}": Position(x, y) for i, (x, y) in enumerate(
     ((6, 2), (0, 5), (2, 5), (4, 5), (6, 5), (1, 7), (4, 7)))}
 
 def setup(count):
+    """Preparar ``count`` ocorrências paralelas, uma ameaça na célula de cada iniciador.
+
+    Os limiares de patrulha ficam a 0,01, como na variante ``no_corroboration``.
+
+    Args:
+        count (int): Número de iniciadores, incluindo o ``sensor-1`` (1 a 8).
+
+    Returns:
+        tuple[dict[str, Position], dict, dict, list[dict]]: Iniciadores extra, fontes sem ruído,
+            definições de resposta ajustadas e eventos (uma ameaça por iniciador).
+    """
     extra = dict(list(EXTRA.items())[:count - 1])
     noiseless = {"kind": "acoustic", "detection_range": 1.0}
     sources = {"sensor-1": noiseless, "sensor-2": {"kind": "visual", "detection_range": 0.0},
@@ -49,6 +60,25 @@ def setup(count):
     return extra, sources, settings, events
 
 async def run(count, rep, flood=0, faults=None, duration=None, severities=None, **options):
+    """Correr uma execução com ``count`` iniciadores, sem corroboração e com a semente 1000+rep.
+
+    ``faults`` tem precedência sobre ``flood``; ``options`` sobrepõe-se às condições
+    publicadas do runner.
+
+    Args:
+        count (int): Número de iniciadores (ver ``setup``).
+        rep (int): Índice da repetição; dá o ``run_id`` e a semente.
+        flood (int): Repetições de lixo por mensagem real (cada uma gera 3 mensagens inválidas,
+            2 num CFP); 0 não injeta.
+        faults (dict | None): Falhas a injetar; se dado, ``flood`` é ignorado.
+        duration (float | None): Duração das ameaças, em s; ``None`` mantém a do cenário A.
+        severities (dict[str, float] | None): Gravidade por fonte (``severity_by_source``);
+            ``None`` usa a gravidade única.
+        **options: Argumentos extra do ``run_mvp`` (ex.: ``queue_rounds``).
+
+    Returns:
+        dict: Relatório da execução devolvido pelo ``run_mvp``.
+    """
     extra, sources, settings, events = setup(count)
     if severities is not None:
         settings["severity_by_source"] = severities
@@ -63,7 +93,17 @@ async def run(count, rep, flood=0, faults=None, duration=None, severities=None, 
                                      "events": events, "resources": base["resources"]})
 
 def incidents(report):
-    """Uma linha por iniciador: estado, motivo, confirmação pela patrulha e instante do fecho."""
+    """Gerar uma linha por iniciador: estado, motivo, confirmação pela patrulha e instante do fecho.
+
+    Args:
+        report (dict): Relatório de uma execução de ``run_mvp``.
+
+    Returns:
+        list[dict]: Uma linha por iniciador (``sensor-1`` primeiro), com ``status``, ``reason``,
+            ``closed_at`` (instante simulado do evento ``INCIDENT_CLOSED``, registado em qualquer
+            estado final; ``None`` se a ocorrência não terminou) e ``confirmed`` (``True`` se uma
+            patrulha confirmou a ameaça).
+    """
     closed_at = {e.get("initiator", "sensor-1"): e["time"] for e in report["timeline"]
                  if e["event"] == "INCIDENT_CLOSED"}
     views = {"sensor-1": report, **report["extra_initiators"]}
@@ -72,6 +112,14 @@ def incidents(report):
                               for r in v["results"])} for key, v in views.items()]
 
 async def paralelo():
+    """Testar a disputa pelos três recursos com 1, 2, 4 e 8 ocorrências em simultâneo.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por número de ocorrências,
+            com confirmações pela patrulha, fechos com guarda, ``unresolved``, motivos, mensagens
+            STATUS com estado diferente de ``reserved``, CFP de rondas posteriores à primeira,
+            recusas, duplas reservas, tempo médio de fecho (s simulados), mensagens e tempo real.
+    """
     fields = ["ocorrencias", "runs", "total", "confirmadas_patrulha", "fechadas_com_guarda", "unresolved",
               "motivos", "status_reservation_failed", "cfp_ronda_2", "recusas_REJECT", "duplas_reservas",
               "t_fecho_sim_fechadas_mean", "msgs_mean", "tempo_real_s"]
@@ -99,6 +147,18 @@ async def paralelo():
     return fields, out
 
 async def invalidas():
+    """Testar uma rajada de mensagens inválidas (``faults.flood``), de 0 a 1000 repetições por mensagem.
+
+    Cada repetição gera 3 mensagens inválidas (2 num CFP).
+
+    Compara o resultado de cada semente com o da primeira rajada que concluiu essa
+    semente (normalmente flood=0) e conta as exceções do runner.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por tamanho de rajada,
+            com o lixo injetado, execuções iguais à referência, exceções, estados finais,
+            mensagens, respostas ao lixo e tempo real.
+    """
     fields = ["flood_por_mensagem", "runs", "lixo_injetado_mean", "resultado_igual_a_referencia", "excecoes",
               "estados", "msgs_mean", "respostas_a_lixo_mean", "tempo_real_s"]
     out, reference = [], {}
@@ -127,7 +187,16 @@ async def invalidas():
     return fields, out
 
 async def escala():
-    """Mensagens em função do número de patrulhas N, sem limite (antes) e com CFP só às K=2 mais próximas (C1)."""
+    """Medir as mensagens em função do número de patrulhas N, sem limite (antes) e com limite (C1).
+
+    Com limite, a primeira ronda de CFP só vai às K=2 patrulhas mais próximas (cada ronda
+    seguinte alarga em K); as extra ficam longe do alvo.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por (patrulhas, limite),
+            com fechos com guarda, médias de mensagens, CFP, PROPOSAL e REJECT, tempo de fecho
+            (s simulados), a primeira patrulha reservada e o tempo real.
+    """
     fields = ["patrulhas", "cfp_limit", "runs", "fechadas_com_guarda", "msgs_mean", "cfp_mean", "proposal_mean",
               "reject_mean", "t_fecho_sim_fechadas_mean", "primeira_patrulha", "tempo_real_s"]
     far = [Position(x, y) for x in (7, 6, 5) for y in range(8)]  # bases longe do alvo (2,2)
@@ -154,7 +223,15 @@ async def escala():
     return fields, out
 
 async def prazo():
-    """Antes e depois do prazo dinâmico: as mesmas falhas com o prazo fixo (0,5 s) e com teto de 2,0 s."""
+    """Comparar antes e depois do prazo dinâmico: as mesmas falhas com prazo fixo e dinâmico.
+
+    O fixo é de 0,5 s; o dinâmico vai de 0,5 s a um teto de 2,0 s.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por (falha, prazo), com
+            as execuções fechadas, a contagem de estados finais (ou exceções) e o tempo real por
+            execução.
+    """
     fields = ["caso", "prazo", "runs", "fechadas", "estados", "tempo_real_por_execucao_s"]
     off = lambda *names: {"unavailable_agents": [f"{n}-mvp" for n in names]}
     cases = [("sem falhas", None),
@@ -179,7 +256,15 @@ async def prazo():
     return fields, out
 
 async def teto():
-    """Sensibilidade do teto do prazo dinâmico: atraso tolerado contra tempo perdido quando ninguém responde."""
+    """Medir a sensibilidade do teto do prazo dinâmico.
+
+    Compara o atraso tolerado com o tempo perdido quando ninguém responde; 5 execuções por
+    célula, porque sem perdas aleatórias são iguais.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por (falha, teto em s),
+            com as execuções fechadas, a contagem de estados finais e o tempo real por execução.
+    """
     fields = ["caso", "teto_s", "runs", "fechadas", "estados", "tempo_real_por_execucao_s"]
     cases = [*((f"PROPOSAL delay={d}s", {"delay": {"PROPOSAL": d}}) for d in (0.6, 1.5, 3.0)),
              ("-drone -vehicle", {"unavailable_agents": ["drone-mvp", "vehicle-mvp"]})]
@@ -197,7 +282,13 @@ async def teto():
     return fields, out
 
 async def fila():
-    """Antes e depois da fila: 2, 4 e 8 ocorrências com queue_rounds a 0 e a 60."""
+    """Comparar antes e depois da fila: 2, 4 e 8 ocorrências com queue_rounds a 0 e a 60.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por (ocorrências,
+            ``queue_rounds``), com fechos com guarda, ``unresolved``, motivos, último fecho
+            (s simulados), mensagens, CFP, duplas reservas e tempo real por execução.
+    """
     fields = ["ocorrencias", "queue_rounds", "runs", "total", "fechadas_com_guarda", "unresolved", "motivos",
               "t_ultimo_fecho_sim_mean", "msgs_mean", "cfp_mean", "duplas_reservas", "tempo_real_por_execucao_s"]
     out = []
@@ -223,7 +314,15 @@ async def fila():
     return fields, out
 
 async def espera():
-    """Problemas de esperar na fila: 8 ocorrências, queue_rounds=60, ameaças que duram 1000, 60 e 30 s."""
+    """Mostrar os problemas de esperar na fila, com ameaças que duram 1000, 60 e 30 s.
+
+    8 ocorrências, ``queue_rounds=60``.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por duração da ameaça,
+            com fechos confirmados, verificações em vão, intervenções que acabam depois da
+            ameaça, rondas de CFP até ao guarda (média e máximo) e mensagens.
+    """
     fields = ["duracao_ameaca_s", "runs", "total", "fechadas_confirmadas", "patrulha_em_vao", "guarda_apos_fim_da_ameaca",
               "rondas_ao_guarda_mean", "rondas_ao_guarda_max", "msgs_mean"]
     out = []
@@ -252,7 +351,15 @@ async def espera():
     return fields, out
 
 async def prioridade():
-    """Antes e depois da fila ordenada: 8 ocorrências (2 graves, 3 médias, 3 leves) com queue_rounds=60."""
+    """Comparar antes e depois da fila ordenada por gravidade.
+
+    8 ocorrências (2 graves, 3 médias, 3 leves) com ``queue_rounds=60``.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por (ordem da fila,
+            gravidade), com ocorrências, fechos, tempo de fecho médio e máximo (s simulados),
+            mensagens e duplas reservas.
+    """
     fields = ["fila", "gravidade", "ocorrencias", "fechadas", "t_fecho_sim_mean", "t_fecho_sim_max",
               "msgs_mean", "duplas_reservas"]
     names = {0.2: "leve", 0.5: "média", 0.9: "grave"}  # limiar grave da política: 0,8; média a partir de 0,4
@@ -277,7 +384,13 @@ async def prioridade():
     return fields, out
 
 async def silencio():
-    """Antes e depois de silent_invalid: quantas respostas os agentes dão às mensagens inválidas."""
+    """Comparar antes e depois de silent_invalid: respostas dos agentes às mensagens inválidas.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por (rajada,
+            ``silent_invalid``), com fechos, lixo injetado, respostas ao lixo (média e por
+            remetente) e mensagens.
+    """
     fields = ["flood_por_mensagem", "silent_invalid", "runs", "fechadas", "lixo_injetado_mean",
               "respostas_a_lixo_mean", "respostas_por_remetente", "msgs_mean"]
     out = []
@@ -299,7 +412,17 @@ async def silencio():
     return fields, out
 
 def tally(reports):
-    """Contagens comuns aos grupos da fila: fechos, último fecho, mensagens e rondas ao guarda."""
+    """Contar o que é comum aos grupos da fila: fechos, último fecho, mensagens e rondas ao guarda.
+
+    Args:
+        reports (list[dict]): Relatórios das execuções de um caso.
+
+    Returns:
+        dict: ``runs``, ``total``, ``fechadas_confirmadas``, ``expiradas``, ``unresolved``,
+            ``patrulha_em_vao``, ``guarda_em_vao``, ``t_ultimo_fecho_sim_mean`` (s simulados),
+            ``msgs_mean``, ``rondas_ao_guarda_mean``, ``rondas_ao_guarda_max`` e
+        ``duplas_reservas``.
+    """
     rows = [row for r in reports for row in incidents(r)]
     results = [x["payload"] for r in reports for v in (r, *r["extra_initiators"].values()) for x in v["results"]]
     rounds = []
@@ -322,7 +445,19 @@ def tally(reports):
             "duplas_reservas": sum(double_bookings(r) for r in reports)}
 
 async def before_after(name, cases, **common):
-    """Uma linha por caso; cada caso são argumentos de run() por cima dos comuns (8 ocorrências com fila)."""
+    """Gerar uma linha por caso; cada caso são argumentos de run() por cima dos comuns.
+
+    Por omissão, 8 ocorrências com fila (``queue_rounds=60``).
+
+    Args:
+        name (str): Nome da primeira coluna, que guarda o rótulo do caso.
+        cases (list[tuple[object, dict]]): Pares (rótulo, argumentos de ``run``).
+        **common: Argumentos de ``run`` comuns a todos os casos.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV (as da primeira linha) e uma linha por
+            caso: o rótulo, as contagens de ``tally`` e o tempo real por execução.
+    """
     out = []
     for label, options in cases:
         t0 = time.monotonic()
@@ -332,33 +467,63 @@ async def before_after(name, cases, **common):
     return list(out[0]), out
 
 async def validade():
-    """Antes e depois do prazo de validade: ameaças de 60 e 30 s, sem e com expire_unseen."""
+    """Comparar antes e depois do prazo de validade: ameaças de 60 e 30 s, sem e com expire_unseen.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por caso (ver ``before_after``).
+    """
     return await before_after("caso", [(f"ameaça {d:g} s, {'com' if e else 'sem'} validade",
                                         {"duration": d, "expire_unseen": e}) for d in (60.0, 30.0) for e in (False, True)])
 
 RANGERS = {"ranger-2": Position(1, 4), "ranger-3": Position(6, 1), "ranger-4": Position(3, 7)}
 
 async def guardas():
-    """Mais guardas (extra_rangers): 8 ocorrências com fila e 1, 2 e 4 guardas."""
+    """Testar mais guardas (extra_rangers): 8 ocorrências com fila e 1, 2 e 4 guardas.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por número de guardas (ver
+            ``before_after``).
+    """
     return await before_after("guardas", [(n, {"extra_rangers": dict(list(RANGERS.items())[:n - 1])}) for n in (1, 2, 4)])
 
 async def ocupado():
-    """Antes e depois de o recurso ocupado dizer quando fica livre (busy_until na recusa)."""
+    """Comparar antes e depois de o recurso ocupado dizer quando fica livre (busy_until na recusa).
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por caso (ver ``before_after``).
+    """
     return await before_after("espera", [("de 5 em 5 s", {}), ("até busy_until", {"queue_until_free": True})])
 
 async def encadear():
-    """Antes e depois de os recursos aceitarem a missão seguinte durante o regresso à base."""
+    """Comparar antes e depois de os recursos aceitarem a missão seguinte durante o regresso à base.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por caso (ver ``before_after``).
+    """
     return await before_after("recursos", [("livres só na base", {}), ("encadeiam missões", {"chain_missions": True})])
 
 async def informadores():
-    """Um informador por iniciador (C6): 4 ocorrências a 4 células umas das outras, política completa
-    com corroboração, e 1, 2 e 4 informadores visuais (alcance 1) ao lado dos iniciadores."""
+    """Testar um informador por iniciador (C6), com 1, 2 e 4 informadores visuais.
+
+    4 ocorrências a 4 células umas das outras, política completa com corroboração e
+    informadores com alcance 1 ao lado dos iniciadores.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por número de informadores
+            (ver ``informant_cases``).
+    """
     return await informant_cases("informadores", [(n, n, {"kind": "visual", "detection_range": 1.0}) for n in (1, 2, 4)])
 
 async def humano():
-    """Informadores humanos no lugar das câmaras: as mesmas 4 ocorrências, com 4 informadores.
-    O relato humano fiável só muda o tipo de sinal; o realista falha 30 % das vezes, erra a posição
-    em 1 célula e declara confiança 0,5."""
+    """Testar 4 informadores humanos no lugar das câmaras, nas mesmas 4 ocorrências.
+
+    O relato humano fiável só muda o tipo de sinal; o realista falha 30 % das vezes, erra a
+    posição até 1 célula por eixo e declara confiança 0,5.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por tipo de informador (ver
+            ``informant_cases``).
+    """
     return await informant_cases("informador", [
         ("câmara", 4, {"kind": "visual", "detection_range": 1.0}),
         ("humano fiável", 4, {"kind": "human", "detection_range": 1.0}),
@@ -366,7 +531,21 @@ async def humano():
                                "position_error": 1, "confidence": 0.5})])
 
 async def informant_cases(name, cases):
-    """Uma linha por caso (rótulo, número de informadores, perfil da fonte dos informadores)."""
+    """Gerar uma linha por caso (rótulo, número de informadores, perfil da fonte dos informadores).
+
+    Envolve temporariamente ``SensorAgent.VerificationBehaviour.run`` para medir o tempo real
+    de cada corroboração, e repõe-no no fim.
+
+    Args:
+        name (str): Nome da primeira coluna, que guarda o rótulo do caso.
+        cases (list[tuple[object, int, dict]]): Triplos (rótulo, número de informadores,
+            perfil da fonte dos informadores).
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por caso, com ocorrências,
+            corroboradas, mobilizadas, fechadas, expiradas, decisões, médias de VERIFY_REQUEST e
+            VERIFY_RESPONSE, tempo real de corroboração (ms) e mensagens.
+    """
     from isia.agents.sensor import SensorAgent
     fields = [name, "runs", "total", "corroboradas", "mobilizadas", "fechadas", "expiradas", "decisoes",
               "verify_request_mean", "verify_response_mean", "t_corroboracao_real_ms_mean", "msgs_mean"]
@@ -375,6 +554,7 @@ async def informant_cases(name, cases):
     waits, original = [], SensorAgent.VerificationBehaviour.run
 
     async def timed(self):
+        """Chamar o ``run`` original e registar a sua duração real em ``waits``."""
         t0 = time.monotonic()
         await original(self)
         waits.append(time.monotonic() - t0)
@@ -422,8 +602,16 @@ async def informant_cases(name, cases):
     return fields, out
 
 async def alerta():
-    """Aviso entre iniciadores com cobertura sobreposta (alert_distance): sem ele, cada iniciador que
-    ouve a mesma ameaça abre a sua ocorrência. Fontes sem ruído, alcance 1,5, política sem corroboração."""
+    """Testar o aviso entre iniciadores com cobertura sobreposta (alert_distance).
+
+    Sem ele, cada iniciador que ouve a mesma ameaça abre a sua ocorrência. Fontes sem ruído,
+    alcance 1,5, política sem corroboração.
+
+    Returns:
+        tuple[list[str], list[dict]]: Colunas do CSV e uma linha por (caso, aviso), com
+            ocorrências tratadas, desistências, fechos confirmados, missões de patrulha e de
+            guarda, energia, mensagens, alertas, duplas reservas e tempo real por execução.
+    """
     fields = ["caso", "aviso", "runs", "iniciadores", "ameacas", "ocorrencias_tratadas", "desistencias",
               "fechadas_confirmadas", "missoes_patrulha", "missoes_guarda", "energia_mean", "msgs_mean",
               "alertas_mean", "duplas_reservas", "tempo_real_por_execucao_s"]
@@ -465,6 +653,11 @@ async def alerta():
     return fields, out
 
 async def go(groups):
+    """Correr os grupos indicados (funções deste módulo) e gravar um CSV por grupo.
+
+    Args:
+        groups (list[str]): Nomes das funções de grupo, pela ordem a correr.
+    """
     OUT.mkdir(parents=True, exist_ok=True)
     for group in groups:
         fields, out = await globals()[group]()

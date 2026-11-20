@@ -25,7 +25,14 @@ CONTRACT_NET_PROTOCOL = "contract-net"
 
 
 def bare_jid(value: object) -> str:
-    """JID sem recurso e em minúsculas, para comparar remetentes."""
+    """Devolver o JID sem recurso e em minúsculas, para comparar remetentes.
+
+    Args:
+        value (object): JID, em texto ou objeto JID do SPADE (ex.: ``msg.sender``).
+
+    Returns:
+        str: Parte ``utilizador@domínio`` do JID, em minúsculas.
+    """
     return str(value).split("/", 1)[0].lower()
 
 
@@ -39,7 +46,25 @@ def build_spade_message(
     in_reply_to: str | None = None,
     protocol: str = VERIFICATION_PROTOCOL,
 ) -> Any:
-    """Cria uma mensagem SPADE com corpo e metadados do contrato ISIA."""
+    """Criar uma mensagem SPADE com o corpo e os metadados do contrato ISIA.
+
+    Args:
+        recipient (str): JID do destinatário.
+        body (Message): Mensagem ISIA, enviada como JSON no corpo.
+        performative (str): Performativa FIPA (uma das constantes ``PERFORMATIVE_*``).
+        conversation_id (str): Conversa; tem de coincidir com a do ``body``.
+        reply_with (str | None): Valor de ``reply-with``; omitido se ``None``.
+        in_reply_to (str | None): Valor de ``in-reply-to``; omitido se ``None``.
+        protocol (str): Protocolo FIPA, por omissão o de verificação.
+
+    Returns:
+        Any: ``spade.message.Message`` com corpo e metadados preenchidos.
+
+    Raises:
+        RuntimeError: Se o SPADE não estiver instalado.
+        TypeError: Se ``body`` não for uma ``Message``.
+        ValueError: Se ``conversation_id`` não coincidir com o do ``body``.
+    """
     if SpadeMessage is None:
         raise RuntimeError("SPADE não está instalado. Instale requirements.txt primeiro.")
     if not isinstance(body, Message):
@@ -68,7 +93,20 @@ def parse_spade_message(
     *,
     expected_protocol: str = VERIFICATION_PROTOCOL,
 ) -> Message:
-    """Valida metadados essenciais e descodifica o corpo JSON ISIA."""
+    """Validar os metadados essenciais e descodificar o corpo JSON ISIA.
+
+    Args:
+        message (Any): Mensagem SPADE recebida, ou ``None`` se o ``receive`` expirou.
+        expected_protocol (str): Protocolo FIPA que a mensagem tem de declarar.
+
+    Returns:
+        Message: Corpo descodificado e validado.
+
+    Raises:
+        ValueError: Se a mensagem faltar, a ontologia, o protocolo ou o ``conversation-id``
+            forem inesperados, ou este não coincidir com o do corpo.
+        TypeError: Se o corpo JSON não for um objeto ou o payload não for um dicionário.
+    """
     if message is None:
         raise ValueError("Mensagem SPADE ausente.")
     if message.get_metadata("ontology") != ONTOLOGY:

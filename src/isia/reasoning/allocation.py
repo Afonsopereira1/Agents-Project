@@ -1,4 +1,12 @@
-"""Raciocínio local para criação, negociação e reserva de missões."""
+"""Raciocínio local para criação, negociação e reserva de missões (Contract Net).
+
+Por onde começar:
+
+- `evaluate_cfp`: o recurso decide se propõe (com ETA, energia e carga) ou recusa.
+- `select_best_proposal`: o iniciador escolhe a melhor proposta (custo ponderado).
+- `LocalResourceReservation`: reserva atómica que impede reservas duplas.
+- `build_cfp_message`, `build_accept_message`, `build_reservation_status_message`: as mensagens do protocolo.
+"""
 
 from __future__ import annotations
 
@@ -35,6 +43,13 @@ CONTRACT_NET_REJECT_REASON = "cfp_rejected"
 
 
 def _validate_contract_net_message(message: Message, message_type: MessageType) -> None:
+    """Exigir uma ``Message`` do tipo dado com missão, incidente e conversa.
+
+    Raises:
+        TypeError: Se ``message`` não for ``Message``.
+        ValueError: Se o tipo for outro ou algum dos três identificadores de correlação
+            estiver vazio.
+    """
     if not isinstance(message, Message):
         raise TypeError("message deve ser Message.")
     if message.message_type is not message_type:
@@ -47,7 +62,14 @@ def _validate_contract_net_message(message: Message, message_type: MessageType) 
 def _validate_accept_chronology(
     cfp: Message, proposal: Message, accepted_at: float
 ) -> None:
-    """O prazo do CFP limita a proposta; a aceitação só exige ordem temporal."""
+    """Validar a ordem temporal do ACCEPT.
+
+    O prazo do CFP limita a proposta; a aceitação só exige ordem temporal.
+
+    Raises:
+        ValueError: Se a proposta não estiver entre o CFP e o seu prazo, ou se a
+            aceitação for anterior à proposta.
+    """
     if not cfp.created_at <= proposal.created_at <= cfp.payload["deadline"]:
         raise ValueError("A proposta deve ser emitida entre o CFP e o seu deadline.")
     if accepted_at < proposal.created_at:
@@ -69,6 +91,22 @@ def build_accept_message(
     recurso rejeitar ACCEPTs de outra ronda sem reservar nada. A proposta tem
     de respeitar o prazo inclusivo do CFP e a aceitação não pode antecedê-la;
     o prazo do CFP não limita a emissão da aceitação.
+
+    Args:
+        cfp (Message): ``CFP`` emitido pelo iniciador.
+        proposal (Message): ``PROPOSAL`` escolhida, em resposta a ``cfp``.
+        created_at (float): Instante de emissão do ACCEPT.
+        message_id (str | None): ID da mensagem; ``None`` gera um novo.
+        source_id (str | None): Agente que aceita (o iniciador).
+
+    Returns:
+        Message: ``ACCEPT`` com os IDs do CFP, da proposta e do recurso.
+
+    Raises:
+        TypeError: Se ``cfp`` ou ``proposal`` não forem ``Message``.
+        ValueError: Se os tipos ou os IDs de correlação forem inválidos, se a proposta
+            não pertencer ao CFP ou tiver uma ``Bid`` incoerente, se ``created_at`` não
+            for finito e não negativo, ou se a cronologia for inválida.
     """
     _validate_contract_net_message(cfp, MessageType.CFP)
     _validate_contract_net_message(proposal, MessageType.PROPOSAL)
@@ -108,7 +146,25 @@ def build_proposal_rejection_message(
     *,
     message_id: str | None = None,
 ) -> Message:
-    """Construir REJECT do iniciador para uma proposta não selecionada."""
+    """Construir REJECT do iniciador para uma proposta não selecionada.
+
+    Aplica as mesmas validações que :func:`build_accept_message`.
+
+    Args:
+        cfp (Message): ``CFP`` da ronda.
+        proposal (Message): ``PROPOSAL`` não selecionada.
+        created_at (float): Instante de emissão, em segundos simulados.
+        message_id (str | None): ID da mensagem; ``None`` gera um novo.
+
+    Returns:
+        Message: ``REJECT`` com os IDs do CFP e da proposta e motivo
+            ``proposal_not_selected``.
+
+    Raises:
+        TypeError: Se ``cfp`` ou ``proposal`` não forem ``Message``.
+        ValueError: Se a proposta não corresponder ao CFP, ou se ``created_at`` ou a
+            cronologia forem inválidos.
+    """
     accept = build_accept_message(
         cfp, proposal, created_at, message_id=message_id or f"reject-{uuid4()}"
     )
@@ -130,7 +186,19 @@ def accept_matches_proposal(
     proposal: Message,
     resource_id: str,
 ) -> bool:
-    """Validar os identificadores e a cronologia da aceitação para um recurso."""
+    """Validar os identificadores e a cronologia da aceitação para um recurso.
+
+    Mensagens malformadas devolvem ``False`` em vez de levantar erro.
+
+    Args:
+        accept (Message): ``ACCEPT`` recebido.
+        cfp (Message): ``CFP`` a que o recurso respondeu.
+        proposal (Message): ``PROPOSAL`` enviada pelo recurso.
+        resource_id (str): Identificador do próprio recurso.
+
+    Returns:
+        bool: ``True`` se o ACCEPT se referir a este CFP, a esta proposta e a este recurso.
+    """
     try:
         _validate_contract_net_message(accept, MessageType.ACCEPT)
         _validate_contract_net_message(cfp, MessageType.CFP)
@@ -156,7 +224,24 @@ def build_reservation_status_message(
     resource_id: str,
     created_at: float,
 ) -> Message:
-    """Construir STATUS ``reserved`` ou falha, sem esconder a reserva."""
+    """Construir STATUS ``reserved`` ou falha, sem esconder a reserva.
+
+    Args:
+        accept (Message): ``ACCEPT`` a que o recurso responde.
+        result (ReservationResult): Resultado da tentativa de reserva local.
+        resource_id (str): Identificador do recurso que responde.
+        created_at (float): Instante de emissão, em segundos simulados.
+
+    Returns:
+        Message: ``STATUS`` com ``status`` ``reserved`` ou ``reservation_failed`` e o
+            ``reservation_status`` detalhado (mais ``reason`` em caso de falha).
+
+    Raises:
+        TypeError: Se ``accept`` não for ``Message`` ou ``result`` não for
+            ``ReservationResult``.
+        ValueError: Se ``accept`` for inválido, ``resource_id`` estiver vazio, o estado
+            da reserva for desconhecido ou ``created_at`` não for finito e não negativo.
+    """
     _validate_contract_net_message(accept, MessageType.ACCEPT)
     if not isinstance(result, ReservationResult):
         raise TypeError("result deve ser ReservationResult.")
@@ -197,7 +282,19 @@ def reservation_status_matches_accept(
     accept: Message,
     resource_id: str,
 ) -> bool:
-    """Validar confirmação STATUS recebida do recurso vencedor."""
+    """Validar confirmação STATUS recebida do recurso vencedor.
+
+    Mensagens malformadas devolvem ``False`` em vez de levantar erro.
+
+    Args:
+        status (Message): ``STATUS`` recebido.
+        accept (Message): ``ACCEPT`` enviado pelo iniciador.
+        resource_id (str): Recurso vencedor a quem o ACCEPT foi enviado.
+
+    Returns:
+        bool: ``True`` se o STATUS responder a este ACCEPT, vier deste recurso, não for
+            anterior ao ACCEPT e tiver ``status`` coerente com ``reservation_status``.
+    """
     try:
         _validate_contract_net_message(status, MessageType.STATUS)
         _validate_contract_net_message(accept, MessageType.ACCEPT)
@@ -230,7 +327,14 @@ def reservation_status_matches_accept(
 
 
 class ReservationStatus:
-    """Resultados públicos da tentativa de reserva local."""
+    """Resultados públicos da tentativa de reserva local.
+
+    Attributes:
+        RESERVED (str): O recurso ficou reservado para a missão.
+        ALREADY_RESERVED (str): Repetição idempotente para a missão já associada.
+        RESOURCE_OCCUPIED (str): Recurso reservado para outra missão ou indisponível.
+        INVALID_REQUEST (str): Pedido inválido; o estado não foi alterado.
+    """
 
     RESERVED = "reserved"
     ALREADY_RESERVED = "already_reserved"
@@ -240,7 +344,15 @@ class ReservationStatus:
 
 @dataclass(frozen=True)
 class ReservationResult:
-    """Resultado explícito de uma tentativa de reserva."""
+    """Resultado explícito de uma tentativa de reserva.
+
+    Attributes:
+        status (str): Um dos valores de ``ReservationStatus``.
+        resource_state (ResourceState): Estado do recurso depois da tentativa.
+        mission_id (str | None): Missão que detém a reserva; em ``INVALID_REQUEST``, a
+            missão pedida (``None`` se o próprio ``mission_id`` for inválido).
+        reason (str): Motivo legível por máquina (ex.: ``reservation_confirmed``).
+    """
 
     status: str
     resource_state: ResourceState
@@ -249,6 +361,7 @@ class ReservationResult:
 
     @property
     def confirmed(self) -> bool:
+        """Indicar se o recurso ficou reservado, incluindo repetições idempotentes."""
         return self.status in (
             ReservationStatus.RESERVED,
             ReservationStatus.ALREADY_RESERVED,
@@ -265,6 +378,14 @@ class LocalResourceReservation:
     """
 
     def __init__(self, resource_state: ResourceState):
+        """Inicializar a reserva com o estado inicial do recurso e sem missão associada.
+
+        Args:
+            resource_state (ResourceState): Estado inicial do recurso.
+
+        Raises:
+            TypeError: Se ``resource_state`` não for ``ResourceState``.
+        """
         if not isinstance(resource_state, ResourceState):
             raise TypeError("resource_state deve ser ResourceState.")
         self._resource_state = resource_state
@@ -273,11 +394,13 @@ class LocalResourceReservation:
 
     @property
     def resource_state(self) -> ResourceState:
+        """Ler o estado atual do recurso sob o lock."""
         with self._lock:
             return self._resource_state
 
     @property
     def reserved_mission_id(self) -> str | None:
+        """Ler sob o lock a missão que detém a reserva, ou ``None`` se não houver."""
         with self._lock:
             return self._reserved_mission_id
 
@@ -293,6 +416,15 @@ class LocalResourceReservation:
         estado. Uma repetição para a missão já associada é idempotente e
         devolve ``ALREADY_RESERVED``. Nenhuma destas respostas implementa
         ainda ACCEPT por XMPP ou uma reserva distribuída.
+
+        Args:
+            mission_id (object): Missão a associar; tem de ser uma string não vazia.
+            resource_id (object | None): Recurso esperado pelo chamador; se dado, tem de
+                coincidir com o deste recurso.
+
+        Returns:
+            ReservationResult: ``RESERVED``, ``ALREADY_RESERVED``, ``RESOURCE_OCCUPIED``
+                ou ``INVALID_REQUEST``, com o motivo.
         """
         if not isinstance(mission_id, str) or not mission_id.strip():
             return self._result(
@@ -351,11 +483,23 @@ class LocalResourceReservation:
         mission_id: str | None,
         reason: str,
     ) -> ReservationResult:
+        """Construir o resultado adquirindo o lock; só para fora da secção crítica."""
         with self._lock:
             return self._result_locked(status, mission_id, reason)
 
     def update_execution(self, mission_id: str, state: ResourceState, *, release=False) -> None:
-        """Atualizar apenas a missão reservada; libertar mesmo se ficar indisponível."""
+        """Atualizar apenas a missão reservada; libertar mesmo se ficar indisponível.
+
+        Args:
+            mission_id (str): Missão que detém a reserva ativa.
+            state (ResourceState): Novo estado do recurso durante a execução.
+            release (bool): Se ``True``, liberta a reserva; exige estado ``AVAILABLE`` ou
+                ``UNAVAILABLE``.
+
+        Raises:
+            ValueError: Se a missão não for a reservada, o recurso não corresponder, ou se
+                se pedir a libertação num estado que não a permite.
+        """
         with self._lock:
             if self._reserved_mission_id != mission_id:
                 raise ValueError("A execução não pertence à reserva ativa.")
@@ -373,6 +517,12 @@ class LocalResourceReservation:
         mission_id: str | None,
         reason: str,
     ) -> ReservationResult:
+        """Construir o resultado sem adquirir o lock, que o chamador já detém.
+
+        Em ``INVALID_REQUEST`` devolve o ``mission_id`` recebido (``None`` se o
+        próprio ``mission_id`` do pedido for inválido); nos restantes
+        casos devolve a missão que detém a reserva, que pode ser ``None``.
+        """
         return ReservationResult(
             status,
             self._resource_state,
@@ -383,7 +533,16 @@ class LocalResourceReservation:
 
 @dataclass(frozen=True)
 class ProposalSelection:
-    """Resultado determinístico da avaliação de uma ronda de propostas."""
+    """Resultado determinístico da avaliação de uma ronda de propostas.
+
+    Attributes:
+        winner (Message | None): ``PROPOSAL`` vencedora, ou ``None`` se não houver válidas.
+        winner_bid (Bid | None): ``Bid`` da proposta vencedora.
+        winner_cost (float | None): Custo ponderado e adimensional da vencedora.
+        valid_proposals (tuple[Message, ...]): Melhor proposta válida de cada recurso,
+            por ordem crescente de custo.
+        reason (str): ``proposal_selected`` ou ``no_valid_proposals``.
+    """
 
     winner: Message | None
     winner_bid: Bid | None
@@ -393,6 +552,13 @@ class ProposalSelection:
 
 
 def _validate_simulated_time(value: object, name: str) -> float:
+    """Devolver ``value`` como ``float`` se for finito e não negativo.
+
+    ``bool`` não é aceite como número.
+
+    Raises:
+        ValueError: Se ``value`` não for um número finito e não negativo.
+    """
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))
@@ -423,6 +589,23 @@ def build_cfp_message(
     futuras ``PROPOSAL``/respostas com este CFP. ``round_number`` é opcional;
     quando fornecido, é um inteiro positivo que ordena rondas do mesmo
     iniciador e missão sem alterar o relógio simulado.
+
+    Args:
+        mission (Mission): Missão a anunciar.
+        created_at (float): Instante de emissão, em segundos simulados.
+        deadline (float): Prazo inclusivo para propostas, em segundos simulados.
+        message_id (str | None): ID da mensagem; ``None`` gera um novo.
+        conversation_id (str | None): ID da conversa; ``None`` gera um novo.
+        round_number (int | None): Número da ronda, se houver várias.
+
+    Returns:
+        Message: ``CFP`` com tarefa, destino, capacidade exigida, prioridade e prazo.
+
+    Raises:
+        TypeError: Se ``mission`` não for ``Mission``.
+        ValueError: Se um instante não for finito e não negativo, se ``deadline`` for
+            anterior a ``created_at``, ou se ``round_number`` for dado e não for um
+            inteiro positivo.
     """
     if not isinstance(mission, Mission):
         raise TypeError("mission deve ser Mission.")
@@ -463,6 +646,11 @@ def _build_contract_net_response(
     resource_id: str,
     payload: dict[str, object],
 ) -> Message:
+    """Construir a resposta do recurso herdando os IDs de correlação do CFP.
+
+    O ``message_id`` é determinístico (tipo, recurso e CFP), pelo que repetir a
+    avaliação do mesmo CFP pelo mesmo recurso produz o mesmo identificador.
+    """
     return Message(
         f"{message_type.value.lower()}-{resource_id}-{cfp.message_id}",
         message_type,
@@ -495,6 +683,29 @@ def evaluate_cfp(
 
     A avaliação só usa o CFP, o estado local e as capacidades configuradas do
     recurso. Uma proposta não reserva o recurso nem altera qualquer estado.
+
+    Args:
+        cfp (Message): ``CFP`` recebido do iniciador.
+        resource (ResourceState): Estado atual do próprio recurso.
+        capabilities (Iterable[str]): Capacidades configuradas do recurso.
+        current_time (float): Instante atual, em segundos simulados.
+        minimum_autonomy_percent (float): Autonomia mínima, em %, que tem de sobrar
+            depois da missão.
+        eta_seconds (float): Tempo estimado de chegada, em segundos simulados.
+        energy_cost_percent (float): Custo de energia estimado, em pontos percentuais.
+        load (float): Carga atual do recurso, entre 0 e 1.
+
+    Returns:
+        Message: ``PROPOSAL`` com a ``Bid``, ou ``REJECT`` com o motivo (ex.:
+            ``cfp_expired``, ``capability_mismatch``, ``autonomy_insufficient``).
+
+    Raises:
+        TypeError: Se ``cfp`` não for ``Message``, ``resource`` não for
+            ``ResourceState`` ou ``capabilities`` não for iterável.
+        ValueError: Se ``cfp`` não for ``CFP``, se ``current_time`` for inválido ou
+            anterior ao CFP, se ``minimum_autonomy_percent`` for inválido ou > 100, se
+            alguma capacidade não for uma string não vazia, ou se, ao construir a
+            proposta, ``energy_cost_percent``, ``eta_seconds`` ou ``load`` forem inválidos.
     """
     if not isinstance(cfp, Message):
         raise TypeError("cfp deve ser Message.")
@@ -571,6 +782,13 @@ def evaluate_cfp(
 
 
 def _validate_cost_parameter(value: object, name: str, *, positive: bool) -> float:
+    """Devolver ``value`` como ``float`` se for finito e positivo ou não negativo.
+
+    ``positive`` escolhe o limite estrito; ``bool`` não é aceite como número.
+
+    Raises:
+        ValueError: Se ``value`` não for um número finito dentro do limite pedido.
+    """
     if (
         isinstance(value, bool)
         or not isinstance(value, (int, float))
@@ -592,7 +810,11 @@ def _proposal_cost(
     energy_scale_percent: float,
     load_scale: float,
 ) -> float:
-    """Normalizar as três dimensões antes de aplicar os pesos."""
+    """Normalizar as três dimensões antes de aplicar os pesos.
+
+    Raises:
+        ValueError: Se o custo resultante não for finito.
+    """
     cost = 0.0
     for weight, value, scale in (
         (eta_weight, bid.eta, eta_scale_seconds),
@@ -633,6 +855,27 @@ def select_best_proposal(
     ``deadline`` simulado do CFP são ignorados. Quando nenhuma proposta passa
     os filtros, ``winner`` e ``winner_bid`` são ``None`` e ``reason`` é
     ``"no_valid_proposals"``.
+
+    Args:
+        cfp (Message): ``CFP`` da ronda.
+        responses (Iterable[Message]): Respostas recebidas até ao fecho da ronda.
+        eta_weight (float): Peso do ETA; não negativo.
+        energy_weight (float): Peso da energia; não negativo.
+        load_weight (float): Peso da carga; não negativo.
+        eta_scale_seconds (float): Escala de normalização do ETA, em segundos simulados.
+        energy_scale_percent (float): Escala de normalização da energia, em pontos
+            percentuais.
+        load_scale (float): Escala de normalização da carga.
+
+    Returns:
+        ProposalSelection: Vencedora, a sua ``Bid`` e custo, e as propostas válidas
+            ordenadas.
+
+    Raises:
+        TypeError: Se ``cfp`` não for ``Message``.
+        ValueError: Se ``cfp`` não for ``CFP``, se um peso for negativo ou não finito,
+            se nenhum peso for positivo, se uma escala não for positiva e finita, ou se
+            o custo de uma proposta não for finito.
     """
     if not isinstance(cfp, Message):
         raise TypeError("cfp deve ser Message.")
@@ -744,6 +987,7 @@ class MissionRegistry:
     """
 
     def __init__(self) -> None:
+        """Iniciar o registo vazio, indexado por ``(incident_id, decisão)``."""
         self._missions: dict[tuple[str, str], Mission] = {}
 
     def create_from_decision(
@@ -760,7 +1004,23 @@ class MissionRegistry:
         ``None`` representa uma decisão que não pede patrulha nem rangers. Para
         manter a ponte mínima, o destino default é a posição da primeira
         observação do incidente, usada como âncora determinística da
-        ocorrência. O chamador pode fornecer um ``target`` explícito.
+        ocorrência. Repetir a mesma decisão devolve a missão já registada.
+
+        Args:
+            incident (Incident): Ocorrência a que a missão responde.
+            decision (Mapping[str, object]): Decisão da política; usa a chave ``decision``.
+            mission_id (str | None): ID da missão; ``None`` deriva-o do incidente e da decisão.
+            priority (int): Prioridade da missão.
+            target (Position | None): Destino explícito; ``None`` usa a posição da primeira
+                observação.
+
+        Returns:
+            Mission | None: Missão de verificação móvel ou de rangers, ou ``None`` se a
+                decisão não pedir nenhuma.
+
+        Raises:
+            TypeError: Se ``incident`` não for ``Incident`` ou ``decision`` não for um
+                mapping.
         """
         if not isinstance(incident, Incident):
             raise TypeError("incident deve ser Incident.")

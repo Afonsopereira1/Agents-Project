@@ -1,4 +1,12 @@
-"""Negociação, reserva e execução local de um recurso móvel."""
+"""Negociação, reserva e execução local de um recurso móvel.
+
+Por onde começar:
+
+- `MobileResourceAgent.evaluate_request`: o recurso decide se propõe (autonomia, energia, ocupação).
+- `MobileResourceAgent.ContractNetBehaviour`: responde a cada CFP com PROPOSAL ou REJECT.
+- `MobileResourceAgent.AcceptBehaviour`: trata ACCEPT/REJECT e confirma ou nega a reserva com STATUS.
+- `MobileResourceAgent.ExecutionBehaviour`: move o recurso e envia o MISSION_RESULT.
+"""
 
 from __future__ import annotations
 
@@ -50,9 +58,32 @@ WAITING_TTL_REAL_SECONDS = 5.0
 class MobileResourceAgent(Agent):
     """Recurso móvel reutilizável por drones, veículos ou outros agentes.
 
-    Com configure_execution, ETA e energia vêm do percurso de ida e volta.
+    Com configure_execution, o ETA vem da ida até ao alvo e a energia da ida e do regresso.
     Sem essa configuração, mantém a demonstração de reserva da Etapa 5.
     O relógio simulado é atualizado através de ``set_simulated_time``.
+
+    Attributes:
+        silent_invalid (bool): Se um ACCEPT que não bate com a proposta fica sem resposta.
+        ordered_queue (bool): Se, com vários pedidos em espera, só o primeiro da fila recebe
+            proposta.
+        chain_missions (bool): Se, no regresso à base e com o resultado entregue, aceita a missão
+            seguinte.
+        resend_replies (bool): Se repete a recusa já dada a um CFP repetido e, depois da
+            execução, a confirmação e o resultado a um ACCEPT repetido.
+        resource (ResourceState): Estado atual do recurso (posição, energia, ocupação).
+        capabilities (tuple[str, ...]): Capacidades que o recurso oferece nos CFP.
+        minimum_autonomy_percent (float): Energia mínima, em %, que tem de sobrar no regresso.
+        eta_seconds (float): ETA proposto sem execução configurada, em segundos simulados.
+        energy_cost_percent (float): Custo de energia, em %, proposto sem execução configurada.
+        load (float): Carga atual declarada nas propostas.
+        simulated_time (float): Instante simulado local.
+        reservation (LocalResourceReservation): Reserva local do recurso.
+        base (Position): Posição inicial, para onde o recurso regressa.
+        execution_options (dict[str, object] | None): Parâmetros de ``configure_execution``;
+            None sem execução simulada.
+        execution (MissionExecution | None): Execução da missão atual ou da última; None antes
+            da primeira.
+        executions (list[MissionExecution]): Todas as execuções iniciadas, por ordem.
     """
 
     silent_invalid = False  # True: um ACCEPT que não bate com a proposta fica sem resposta
@@ -73,6 +104,22 @@ class MobileResourceAgent(Agent):
         load: float,
         simulated_time: float = 0.0,
     ):
+        """Inicializar o recurso com a sua reserva local; a posição inicial fica como base.
+
+        Args:
+            jid (str): JID XMPP do recurso.
+            password (str): Palavra-passe XMPP.
+            resource (ResourceState): Estado inicial do recurso.
+            capabilities (Iterable[str]): Capacidades que o recurso oferece.
+            minimum_autonomy_percent (float): Energia mínima, em %, que tem de sobrar no regresso.
+            eta_seconds (float): ETA proposto sem execução configurada, em segundos simulados.
+            energy_cost_percent (float): Custo de energia, em %, proposto sem execução configurada.
+            load (float): Carga atual declarada nas propostas.
+            simulated_time (float): Instante simulado inicial.
+
+        Raises:
+            ValueError: Se ``simulated_time`` não for finito e não negativo.
+        """
         simulated_time = _validate_simulated_time(simulated_time, "simulated_time")
         super().__init__(jid, password)
         self.resource = resource
@@ -104,6 +151,22 @@ class MobileResourceAgent(Agent):
 
     def configure_execution(self, world, inspect, *, speed=1.0, energy_per_cell=1.0,
                             service_seconds=1.0):
+        """Ativar a execução simulada de missões em ``world``.
+
+        A posição do recurso é validada no mundo.
+
+        Args:
+            world (World): Mapa onde o recurso se move.
+            inspect (Callable[[Position, float, str], str]): Inspeção local no alvo; recebe a
+                posição, o instante simulado e a tarefa e devolve o resultado.
+            speed (float): Velocidade, em células por segundo simulado; tem de ser positiva.
+            energy_per_cell (float): Energia gasta, em %, por célula percorrida.
+            service_seconds (float): Duração da inspeção no alvo, em segundos simulados.
+
+        Raises:
+            ValueError: Se algum parâmetro for negativo, a velocidade for nula, ``inspect`` não
+                for invocável ou a posição do recurso estiver fora do mapa.
+        """
         for name, value in (("speed", speed), ("energy_per_cell", energy_per_cell),
                             ("service_seconds", service_seconds)):
             nonnegative(value, name)
@@ -115,9 +178,18 @@ class MobileResourceAgent(Agent):
                                       minimum_energy=self.minimum_autonomy_percent)
 
     def is_turn(self, requester, priority):
-        """Fila ordenada: regista quem pede e diz se é a sua vez.
+        """Registar quem pede na fila ordenada e dizer se é a sua vez.
 
         Primeiro a ocorrência mais grave; em caso de empate, a que espera há mais tempo.
+        Pedidos não renovados dentro de ``WAITING_TTL_SECONDS`` simulados ou
+        ``WAITING_TTL_REAL_SECONDS`` reais saem da fila.
+
+        Args:
+            requester (tuple[str, str]): ``(JID do iniciador, mission_id)`` do pedido.
+            priority (int): Prioridade da missão; maior é mais grave.
+
+        Returns:
+            bool: True se este pedido estiver à frente da fila.
         """
         now, real = self.simulated_time, monotonic()
         self._waiting = {key: entry for key, entry in self._waiting.items()
@@ -128,18 +200,36 @@ class MobileResourceAgent(Agent):
         return min(self._waiting, key=lambda key: self._waiting[key][:3]) == requester
 
     def returning(self):
-        """Encadear missões: a caminho da base e com o resultado entregue, o recurso já pode ser pedido."""
+        """Encadear missões: a caminho da base e com o resultado entregue, o recurso já pode ser pedido.
+
+        Returns:
+            bool: True com ``chain_missions`` ativo, o resultado já enviado e o recurso em
+                ``RETURNING``.
+        """
         execution = self.execution
         return (self.chain_missions and execution is not None and not execution.finished
                 and self._result_sent and execution.resource.status is ResourceStatus.RETURNING)
 
     def _close_execution(self):
+        """Fechar a proposta da execução atual: deixa de contar como aceite."""
         accept, _ = self._execution_context
         proposal_id = accept.payload["proposal_message_id"]
         self._accepted_proposal_ids.discard(proposal_id)
         self._invalidate_proposal(proposal_id)
 
     def evaluate_request(self, cfp):
+        """Avaliar um CFP e devolver PROPOSAL ou REJECT, sem alterar a reserva.
+
+        Com execução configurada, o ETA vem da distância ao alvo e a energia da
+        ida e do regresso, e um alvo fora do mapa é recusado com ``target_outside_map``.
+        Ocupado numa missão por terminar, a recusa leva ``busy_until``.
+
+        Args:
+            cfp (Message): CFP recebido do iniciador.
+
+        Returns:
+            Message: ``PROPOSAL`` com ETA, custo e carga, ou ``REJECT`` com o motivo.
+        """
         eta, energy = self.eta_seconds, self.energy_cost_percent
         state = self.reservation.resource_state
         if self.returning():
@@ -172,6 +262,16 @@ class MobileResourceAgent(Agent):
         return response
 
     def start_execution(self, cfp, accept, initiator):
+        """Iniciar a execução da missão aceite, uma única vez por ACCEPT.
+
+        Não faz nada sem execução configurada, com outra missão ainda em curso ou
+        se este ACCEPT já tiver sido executado.
+
+        Args:
+            cfp (Message): CFP da missão; dá a tarefa, o alvo, a capacidade e a prioridade.
+            accept (Message): ACCEPT que confirmou a reserva.
+            initiator (str): JID do iniciador, destinatário do MISSION_RESULT.
+        """
         if self.execution_options is None or accept.message_id in self._completed_accepts:
             return
         if self.execution is not None and not self.execution.finished:
@@ -189,7 +289,15 @@ class MobileResourceAgent(Agent):
         self._result_message = None
 
     class ExecutionBehaviour(CyclicBehaviour):
+        """Avançar a missão com o relógio simulado e enviar o MISSION_RESULT."""
         async def run(self):
+            """Avançar a execução até ao instante simulado e enviar o resultado uma vez.
+
+            Se o envio falhar, a mesma mensagem é tentada de novo no ciclo seguinte.
+
+            Overrides:
+                spade.behaviour.CyclicBehaviour.run
+            """
             agent = self.agent
             await asyncio.sleep(0.001)
             execution = agent.execution
@@ -224,6 +332,14 @@ class MobileResourceAgent(Agent):
                     agent._accept_replies[accept.message_id].append(outgoing)
 
     def set_simulated_time(self, simulated_time: float) -> None:
+        """Avançar o relógio simulado e expirar propostas; ValueError se recuar.
+
+        Args:
+            simulated_time (float): Novo instante simulado, em segundos.
+
+        Raises:
+            ValueError: Se o instante não for finito e não negativo, ou for anterior ao atual.
+        """
         value = _validate_simulated_time(simulated_time, "simulated_time")
         if value < self.simulated_time:
             raise ValueError("O relógio do recurso não pode recuar.")
@@ -231,11 +347,19 @@ class MobileResourceAgent(Agent):
         self._expire_proposals()
 
     def _invalidate_proposal(self, proposal_id: str) -> None:
+        """Esquecer a proposta e fechar o seu CFP, que deixa de ser reavaliado."""
         context = self._proposal_context.pop(proposal_id, None)
         if context is not None:
             self._closed_cfp_ids.add(context[0].message_id)
 
     def _expire_proposals(self) -> None:
+        """Invalidar as propostas não aceites cujo prazo de aceitação já passou.
+
+        O prazo é o ``deadline`` do CFP mais ``PROPOSAL_ACCEPTANCE_WINDOW_SECONDS``.
+
+        Raises:
+            ValueError: Se o relógio simulado do agente não for finito e não negativo.
+        """
         _validate_simulated_time(self.simulated_time, "simulated_time")
         for proposal_id, (cfp, _, _) in tuple(self._proposal_context.items()):
             if proposal_id in self._accepted_proposal_ids:
@@ -247,7 +371,18 @@ class MobileResourceAgent(Agent):
                 self._invalidate_proposal(proposal_id)
 
     class ContractNetBehaviour(CyclicBehaviour):
+        """Responder a cada CFP com uma proposta ou uma recusa."""
         async def run(self):
+            """Responder a um CFP com PROPOSAL ou REJECT, de forma idempotente.
+
+            Um CFP repetido recebe a mesma proposta; CFP fechados, mais antigos ou de
+            rondas anteriores são ignorados; com ``resend_replies``, a recusa já dada
+            a esse CFP é repetida. Uma ronda mais recente invalida as
+            propostas não aceites da mesma negociação.
+
+            Overrides:
+                spade.behaviour.CyclicBehaviour.run
+            """
             incoming = await self.receive(timeout=10)
             if incoming is None:
                 return
@@ -353,7 +488,21 @@ class MobileResourceAgent(Agent):
                 logger.warning("CFP rejeitado: %s", error)
 
     class AcceptBehaviour(CyclicBehaviour):
+        """Tratar o ACCEPT ou o REJECT do iniciador a uma proposta deste recurso."""
         async def run(self):
+            """Reservar o recurso num ACCEPT válido e responder com um STATUS.
+
+            Um REJECT correlacionado só invalida a proposta. Um ACCEPT sem proposta
+            conhecida recebe sempre um STATUS de pedido inválido; um ACCEPT incoerente
+            recebe o mesmo STATUS, ou silêncio com ``silent_invalid``. Com
+            ``ordered_queue`` e outro pedido à frente, o STATUS é de recurso ocupado
+            (``waiting_turn``). Um ACCEPT já executado só repete as respostas guardadas.
+            Com a reserva confirmada, a execução arranca mesmo que a confirmação não
+            chegue a ser enviada.
+
+            Overrides:
+                spade.behaviour.CyclicBehaviour.run
+            """
             incoming = await self.receive(timeout=10)
             if incoming is None:
                 return
@@ -476,6 +625,11 @@ class MobileResourceAgent(Agent):
                 logger.warning("ACCEPT rejeitado: %s", error)
 
     async def setup(self):
+        """Registar os comportamentos de CFP, decisão e, se configurada, execução.
+
+        Overrides:
+            spade.agent.Agent.setup
+        """
         if self.execution_options is not None:
             self.add_behaviour(self.ExecutionBehaviour(), Template(metadata={"protocol": "mission-clock"}))
         template = Template(

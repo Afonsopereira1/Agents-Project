@@ -12,6 +12,17 @@ from isia.agents.sensor import SensorAgent
 
 
 def required_env(name: str) -> str:
+    """Devolver a variável de ambiente; em falta ou vazia, terminar com SystemExit.
+
+    Args:
+        name (str): Nome da variável de ambiente.
+
+    Returns:
+        str: Valor da variável, não vazio.
+
+    Raises:
+        SystemExit: Se a variável não existir ou estiver vazia.
+    """
     value = os.environ.get(name)
     if not value:
         raise SystemExit(f"Defina a variável de ambiente {name}.")
@@ -19,6 +30,15 @@ def required_env(name: str) -> str:
 
 
 async def main():
+    """Iniciar informador e sensor e esperar pelo comportamento do sensor.
+
+    Os JID vêm de SENSOR_JID e INFORMANT_JID (por omissão em localhost); as
+    palavras-passe são obrigatórias. O informador arranca primeiro e, no fim,
+    param apenas os agentes que chegaram a arrancar.
+
+    Raises:
+        SystemExit: Se faltar ``SENSOR_PASSWORD`` ou ``INFORMANT_PASSWORD``.
+    """
     sensor_jid = os.environ.get("SENSOR_JID", "sensor@localhost")
     informant_jid = os.environ.get("INFORMANT_JID", "informant@localhost")
     sensor = SensorAgent(sensor_jid, required_env("SENSOR_PASSWORD"), informant_jid)

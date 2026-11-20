@@ -10,6 +10,15 @@ from isia.simulation.scenario import Scenario
 
 
 def main():
+    """Mostrar o mapa, avançar o cenário e imprimir as observações de cada instante.
+
+    O registo da execução vai para ``--output`` ou, por omissão, para um novo
+    diretório results/simulation/run-*/run.json.
+
+    Raises:
+        SystemExit: Via ``parser.error``, se os argumentos forem inválidos ou ocorrer
+            OSError, TypeError ou ValueError ao ler, simular ou gravar.
+    """
     parser = argparse.ArgumentParser(description="Ambiente 2D e observações da reserva.")
     parser.add_argument("config", type=Path, help="Ficheiro JSON do ambiente.")
     parser.add_argument("--steps", type=int, default=0, help="Número de avanços do relógio.")
