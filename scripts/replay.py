@@ -18,10 +18,31 @@ LOCAL = {"ALERT", "INCIDENT_CLOSED"}  # ficam no registo do sensor; não são en
 
 
 def xy(p):
+    """Converter uma posição ``{"x": ..., "y": ...}`` no tuplo (x, y).
+
+    Args:
+        p (dict): Posição com as chaves ``x`` e ``y``, em células.
+
+    Returns:
+        tuple[int, int]: O par (x, y).
+    """
     return p["x"], p["y"]
 
 
 def grid(threats, positions, world=WORLD):
+    """Desenhar o mapa em texto, com y a crescer para cima e o eixo x por baixo.
+
+    S marca sensores, X ameaças reais, D/V/R recursos pelo tipo e * vários recursos na
+    mesma célula; um recurso tapa o sensor ou a ameaça da sua célula.
+
+    Args:
+        threats (set[tuple[int, int]]): Células com ameaças reais.
+        positions (dict[str, tuple[int, int]]): Célula atual de cada recurso, por ID.
+        world (dict): Mapa com ``width``, ``height`` e ``sensors``; por omissão, o do MVP (8×8).
+
+    Returns:
+        str: Mapa em várias linhas, com a régua do eixo x na última.
+    """
     cells = {**{xy(p): "S" for p in world["sensors"].values()}, **{p: "X" for p in threats}}
     for rid, p in positions.items():
         # Recursos adicionais (drone-2, ranger-2) usam a letra do seu tipo.
@@ -32,6 +53,14 @@ def grid(threats, positions, world=WORLD):
 
 
 def describe(e):
+    """Descrever numa linha uma entrada da timeline; ``None`` para as de posição.
+
+    Args:
+        e (dict): Entrada da ``timeline`` do relatório.
+
+    Returns:
+        str | None: Linha de texto, ou ``None`` se a entrada for só uma posição.
+    """
     sensor = e.get("initiator", "sensor")  # com vários iniciadores, as entradas dos adicionais dizem qual
     who = e.get("resource_id") or e.get("recipient", "").split("-mvp")[0] or sensor
     kind = e["event"]
@@ -52,6 +81,18 @@ def describe(e):
 
 
 def frames(report):
+    """Gerar um fotograma por instante: (tempo, posições, energia, linhas).
+
+    Posições e energia acumulam-se a partir dos recursos iniciais; linhas consecutivas
+    iguais no mesmo instante são omitidas.
+
+    Args:
+        report (dict): Relatório do ``run_mvp`` (``initial_resources`` e ``timeline``).
+
+    Yields:
+        tuple[float, dict[str, tuple[int, int]], dict[str, float], list[str]]: Tempo (s), célula
+            e energia (%) de cada recurso nesse instante, e as linhas a imprimir.
+    """
     positions = {r["resource_id"]: xy(r["position"]) for r in report["initial_resources"]}
     energy = {r["resource_id"]: r["autonomy_percent"] for r in report["initial_resources"]}
     for t, group in groupby(report["timeline"], key=lambda e: e["time"]):
@@ -67,6 +108,14 @@ def frames(report):
 
 
 def summary(report):
+    """Gerar as linhas finais: estado por iniciador, mensagens, tempos e energia gasta.
+
+    Args:
+        report (dict): Relatório do ``run_mvp``.
+
+    Returns:
+        list[str]: Linhas do resumo, pela ordem em que são impressas.
+    """
     tl = report["timeline"]
     sent = sum(e["event"] in SENT or (e["event"] == "MISSION_RESULT" and "payload" in e) for e in tl)
     confirmed = [e["time"] for e in tl if e["event"] == "MISSION_RESULT" and "payload" in e]
@@ -84,6 +133,7 @@ def summary(report):
 
 
 def main():
+    """Ler o relatório indicado, imprimir o mapa e os eventos de cada instante e, no fim, o resumo de métricas."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("report", help="JSON do run_mvp ou de results/experiments/runs/")
     parser.add_argument("--delay", type=float, default=0.0, help="Segundos reais entre fotogramas")

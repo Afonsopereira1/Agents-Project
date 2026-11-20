@@ -22,10 +22,12 @@ FIELDS = ["execucoes", "history_registos", "history_json_kb", "rss_pico_kb", "re
           "confirmou", "unresolved", "tempo_real_s"]
 
 async def go():
+    """Correr ``N`` execuções com o mesmo ``ReputationBook`` e gravar ``longa.csv``."""
     s = copy.deepcopy(base["response_settings"])
     book = ReputationBook(**s["reputation"])
     out, confirmed, unresolved, t0 = [], 0, 0, time.monotonic()
     def line(done):
+        """Acrescentar e imprimir uma linha de medição após ``done`` execuções."""
         out.append({"execucoes": done, "history_registos": len(book.history),
                     "history_json_kb": round(len(json.dumps(book.history, default=str)) / 1024, 1),
                     "rss_pico_kb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,

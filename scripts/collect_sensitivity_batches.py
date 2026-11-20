@@ -24,6 +24,22 @@ except ModuleNotFoundError as error:
 
 
 def missing_jobs(paths):
+    """Listar as combinações parâmetro/cenário ainda sem alternativas concluídas.
+
+    Exclui ``source_diversity=1``, que está bloqueada, e só olha para os cenários A, B e C.
+
+    Args:
+        paths (list[Path]): Pastas dos lotes já concluídos (pelo menos duas), em
+            ``results/sensitivity/``.
+
+    Returns:
+        tuple[list[dict], dict, list[dict]]: Os lotes validados (saída de ``load_batches``), a
+            proveniência comum, e uma tarefa por parâmetro/cenário com ``parameter``,
+            ``scenario`` e os ``values`` em falta.
+
+    Raises:
+        ValueError: Se o código ou o ambiente atual diferir da proveniência dos lotes existentes.
+    """
     batches, signature, completed = load_batches(paths)
     current = sensitivity.provenance()
     if any(current[key] != value for key, value in signature.items()):
@@ -40,7 +56,20 @@ def missing_jobs(paths):
 
 
 def validate_batch(anchor, directory):
-    """Conferir CSV, plano, relatórios e sequência sem executar novas simulações."""
+    """Conferir CSV, plano, relatórios e sequência sem executar novas simulações.
+
+    Args:
+        anchor (Path): Um lote existente, para ``load_batches`` validar o novo em conjunto.
+        directory (Path): Pasta do lote acabado de gerar.
+
+    Returns:
+        dict: ``status``, ``reports``, ``runs``, ``alternatives`` e ``total_simulations`` do
+            lote, e ``baseline_differences`` (diferenças da linha de base face a
+            ``runs.csv`` publicado; vazia se coincidir).
+
+    Raises:
+        ValueError: Se o plano e o manifesto diferirem, ou se os relatórios JSON divergirem do CSV.
+    """
     batches, signature, groups = load_batches([anchor, directory])
     batch = batches[-1]
     manifest = json.loads((directory / "manifest.json").read_text())
@@ -64,6 +93,24 @@ def validate_batch(anchor, directory):
 
 
 def main(argv=None):
+    """Correr ``scripts/sensitivity.py`` num processo por tarefa e validar cada lote.
+
+    O estado fica em ``collection.json`` na pasta nova e a saída de cada processo em
+    ``NN.log``; com ``--dry-run`` só imprime as tarefas. Uma falha fica registada como
+    ``failed`` e é relançada. Erros nos argumentos ou nos lotes de entrada terminam via
+    ``parser.error``.
+
+    Args:
+        argv (list[str] | None): Argumentos da linha de comandos; ``None`` usa ``sys.argv``.
+
+    Returns:
+        int: 0 quando a recolha (ou o ``--dry-run``) termina sem erros.
+
+    Raises:
+        ValueError: Se a proveniência mudar durante a recolha ou se a validação de um lote
+            novo falhar.
+        RuntimeError: Se o processo de um lote terminar com código diferente de 0.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("existing", nargs="+", type=Path)
     parser.add_argument("--run-id")
@@ -87,6 +134,7 @@ def main(argv=None):
              "existing": [batch["path"] for batch in batches], "jobs": jobs}
     # Este checkpoint pertence apenas à nova pasta; nunca se escreve nos lotes de entrada.
     def checkpoint():
+        """Regravar ``collection.json`` com o estado atual da recolha."""
         (output / "collection.json").write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n")
     checkpoint()
     try:

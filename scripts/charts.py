@@ -27,18 +27,54 @@ LABEL, PANEL, GAP, ROW, BAR, TOP = 150, 150, 70, 20, 12, 78
 
 
 def number(text):
+    """Converter uma célula do CSV em float; vazio e "N/A" dão ``None``.
+
+    Args:
+        text (str): Valor da célula, tal como vem do ``csv.DictReader``.
+
+    Returns:
+        float | None: O valor numérico, ou ``None`` se a célula estiver vazia ou for "N/A".
+    """
     return None if text in ("", "N/A") else float(text)
 
 
 def bar(x, y, width, cls, tip):
-    """Barra com a base quadrada e a ponta arredondada (4 px); o <title> dá o valor ao passar o rato."""
+    """Desenhar uma barra com a base quadrada e a ponta arredondada (4 px).
+
+    O ``<title>`` da barra mostra o valor ao passar o rato.
+
+    Args:
+        x (float): Abcissa da base da barra, em px.
+        y (float): Ordenada do topo da barra, em px; a altura é ``BAR``.
+        width (float): Comprimento da barra, em px.
+        cls (str): Classe CSS da cor (``s0``…``s3``, pela variante).
+        tip (str): Texto da dica, já sem escapar.
+
+    Returns:
+        str: Elemento SVG ``<path>`` com o ``<title>``.
+    """
     r = min(4, width)
     path = f"M{x},{y}h{width - r:.1f}a{r},{r} 0 0 1 {r},{r}v{BAR - 2 * r}a{r},{r} 0 0 1 -{r},{r}h-{width - r:.1f}z"
     return f'<path class="{cls}" d="{path}"><title>{escape(tip)}</title></path>'
 
 
 def chart(rows, title, subtitle, columns):
-    """columns: (cabeçalho, coluna do CSV, máximo do eixo, formato). Cada painel tem o seu próprio eixo."""
+    """Desenhar um gráfico de painéis, um por entrada de ``columns``, cada um com o seu eixo.
+
+    Valores acima do máximo do eixo ficam cortados no fim do painel; "N/A" (ou um valor com
+    menos de 1 px) não desenha barra.
+
+    Args:
+        rows (list[dict[str, str]]): Linhas de ``summary.csv``, com ``scenario``, ``variant`` e as
+            colunas pedidas, já contíguas por cenário (o cabeçalho muda quando o cenário muda).
+        title (str): Título do gráfico.
+        subtitle (str): Linha de contexto por baixo do título (fonte, nº de execuções).
+        columns (list[tuple[str, str, float, str]]): Um painel por entrada: (cabeçalho, coluna do
+            CSV, máximo do eixo, formato de ``format``).
+
+    Returns:
+        str: Documento SVG completo, terminado em mudança de linha.
+    """
     scenarios = list(dict.fromkeys(row["scenario"] for row in rows))
     height = TOP + len(rows) * ROW + len(scenarios) * 14 + 28
     width = LABEL + len(columns) * (PANEL + GAP)

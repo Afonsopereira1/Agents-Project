@@ -63,11 +63,30 @@ class BlockedExperiment(ValueError):
 
 
 def encoded(value):
+    """Serializar em JSON canónico: chaves ordenadas, sem espaços, Unicode literal.
+
+    Args:
+        value (object): Valor serializável em JSON.
+
+    Returns:
+        str: Texto JSON, estável entre execuções (serve de chave e de coluna ``valor``).
+    """
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
 def alternative_matches(value, candidate):
-    """JSON booleano/null nunca equivale a um número experimental."""
+    """Dizer se um valor alternativo corresponde ao pedido.
+
+    Números comparam-se por valor (2 e 2.0 equivalem; NaN e infinitos nunca); listas, elemento
+    a elemento. JSON booleano/null nunca equivale a um número.
+
+    Args:
+        value (object): Valor pedido ou lido (ex.: de ``--value`` ou de um relatório).
+        candidate (object): Alternativa prevista em ``PARAMETERS``.
+
+    Returns:
+        bool: ``True`` se os dois representarem a mesma alternativa.
+    """
     if type(value) in (int, float) and type(candidate) in (int, float):
         return math.isfinite(value) and value == candidate
     if isinstance(value, list) and isinstance(candidate, list):
@@ -77,7 +96,21 @@ def alternative_matches(value, candidate):
 
 
 def apply_experiment(config, parameter, value):
-    """Devolver cópias independentes (cenário, opções do runner) de um só fator."""
+    """Devolver cópias independentes (cenário, opções do runner) de um só fator.
+
+    Args:
+        config (dict): Cenário original, que não é alterado.
+        parameter (str): Fator experimental (chave de ``PARAMETERS``).
+        value (object): Alternativa a aplicar; tem de ser uma das previstas.
+
+    Returns:
+        tuple[dict, dict]: O cenário com o fator aplicado e as opções extra do runner.
+
+    Raises:
+        ValueError: Se o parâmetro for desconhecido, a alternativa não estiver prevista ou a
+            configuração resultante for inválida (ver ``validate_configuration``).
+        BlockedExperiment: Para ``source_diversity=1``, que exige aprovação explícita.
+    """
     if parameter not in PARAMETERS:
         raise ValueError(f"Parâmetro desconhecido: {parameter}.")
     spec = PARAMETERS[parameter]
@@ -118,6 +151,19 @@ def apply_experiment(config, parameter, value):
 
 
 def validate_configuration(config, options):
+    """Validar cenário e opções do runner antes de simular; levanta erro se inválidos.
+
+    Além do esquema do cenário, constrói a política e a reputação e passa cada episódio
+    por ``scenario_settings``, para que os erros surjam antes da recolha.
+
+    Args:
+        config (dict): Cenário completo (com ``base_seed``, ``response_settings`` e ``episodes``).
+        options (dict): Opções extra do runner.
+
+    Raises:
+        ValueError: Se ``base_seed`` não for inteiro, ou se o cenário, a política, a reputação
+            ou as opções forem rejeitados pelos validadores.
+    """
     validate_scenario(config)
     if type(config["base_seed"]) is not int:
         raise ValueError("base_seed deve ser inteiro.")
@@ -131,11 +177,29 @@ def validate_configuration(config, options):
 
 
 def compare_rows(actual, expected, *, identity):
-    """Comparar todos os indicadores comuns; N/A e arredondamentos são explícitos."""
+    """Comparar todos os indicadores comuns; N/A e arredondamentos são explícitos.
+
+    A referência (``expected``) define os campos comparados; campos extra em ``actual`` são
+    ignorados. Números comparam-se com tolerância de 1e-10.
+
+    Args:
+        actual (list[dict]): Linhas obtidas.
+        expected (list[dict]): Linhas de referência.
+        identity (tuple[str, ...]): Campos que identificam cada linha nos dois lados.
+
+    Returns:
+        list[dict]: Uma diferença por campo divergente ou linha em falta, com ``identity``,
+            ``field``, ``actual`` e ``expected``; vazia se coincidirem.
+
+    Raises:
+        ValueError: Se uma identidade se repetir em qualquer dos lados.
+    """
     def key(row):
+        """Devolver a identidade da linha: os campos de ``identity`` em texto."""
         return tuple(str(row[name]) for name in identity)
 
     def same(left, right):
+        """Comparar dois valores: N/A só com N/A, números por ``isclose``, o resto em texto."""
         if left is None or right is None or left == "N/A" or right == "N/A":
             return left in (None, "N/A") and right in (None, "N/A")
         if isinstance(left, bool) or right in ("True", "False"):
@@ -167,17 +231,42 @@ def compare_rows(actual, expected, *, identity):
 
 
 def read_csv(path):
+    """Ler um CSV UTF-8 como lista de dicionários, com todos os valores em texto.
+
+    Args:
+        path (Path): Ficheiro a ler.
+
+    Returns:
+        list[dict[str, str]]: Uma entrada por linha, pelas colunas do cabeçalho.
+    """
     with path.open(encoding="utf-8", newline="") as stream:
         return list(csv.DictReader(stream))
 
 
 def write_json(path, value):
+    """Gravar JSON indentado num ficheiro novo; falha se já existir ou houver NaN.
+
+    Valores não serializáveis são gravados com ``str``.
+
+    Args:
+        path (Path): Ficheiro a criar.
+        value (object): Conteúdo a gravar.
+    """
     with path.open("x", encoding="utf-8") as stream:
         json.dump(value, stream, ensure_ascii=False, indent=2, default=str, allow_nan=False)
         stream.write("\n")
 
 
 def write_csv(path, rows):
+    """Gravar as linhas num CSV novo, com ``None`` como "N/A".
+
+    As colunas são a união dos campos, pela ordem em que aparecem. Sem linhas não cria
+    ficheiro; falha se o ficheiro já existir.
+
+    Args:
+        path (Path): Ficheiro a criar.
+        rows (list[dict]): Linhas a gravar.
+    """
     if not rows:
         return
     fields = list(dict.fromkeys(field for row in rows for field in row))
@@ -189,7 +278,21 @@ def write_csv(path, rows):
 
 
 def create_output(run_id=None):
-    """A única raiz de escrita é fixa; mkdir exclusivo impede substituir recolhas."""
+    """Criar a pasta de saída da recolha.
+
+    A raiz de escrita é fixa e o mkdir exclusivo impede substituir recolhas.
+
+    Args:
+        run_id (str | None): Nome da pasta em ``results/sensitivity/``; ``None`` gera um a partir
+            da data UTC e de um sufixo aleatório.
+
+    Returns:
+        Path: A pasta criada.
+
+    Raises:
+        ValueError: Se ``run_id`` não for um nome simples ou se a raiz de resultados for um
+            atalho para outro diretório.
+    """
     name = run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ-") + uuid4().hex[:8]
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name) or name in (".", ".."):
         raise ValueError("--run-id deve ser um nome simples, sem diretórios.")
@@ -202,7 +305,18 @@ def create_output(run_id=None):
 
 
 def provenance():
+    """Descrever o código e o ambiente usados na recolha.
+
+    Inclui commit, ramo, alterações sem commit, versões de Python e SPADE, plataforma e
+    SHA-256 das fontes, cenários, ``requirements.txt`` e ficheiros de referência.
+
+    Returns:
+        dict: ``commit``, ``branch``, ``dirty``, ``git_status``, ``python``, ``platform``,
+            ``spade``, ``sha256`` (por ficheiro: fontes ``src``, este script,
+            ``config/**/*.json`` e ``requirements.txt``) e ``reference_sha256``.
+    """
     def git(*args):
+        """Correr ``git`` na raiz do repositório e devolver o stdout aparado."""
         return subprocess.run(["git", *args], cwd=ROOT, check=True,
                               capture_output=True, text=True).stdout.strip()
 
@@ -220,7 +334,24 @@ def provenance():
 
 
 async def self_check(mode, configs, output):
-    """Comparar a referência por execução e, no modo completo, por agregado."""
+    """Comparar a referência por execução e, no modo completo, por agregado.
+
+    No modo ``initial`` corre só a primeira repetição do cenário A e compara-a com
+    ``runs.csv``; no ``full`` corre os cenários todos e compara execuções, ordem e resumo.
+    Grava ``actual.csv`` (e ``actual-runs.csv``) e ``comparison.json`` em ``output``.
+
+    Args:
+        mode (str): ``"initial"`` ou ``"full"``.
+        configs (list[dict]): Cenários a correr; ignorado no modo ``initial``.
+        output (Path): Pasta do self-check.
+
+    Returns:
+        dict: Resultado com ``passed``, ``run_count``, ``differences`` e, no modo ``full``, as
+            comparações por execução e por resumo.
+
+    Raises:
+        ValueError: Se a referência gravada não tiver as sementes, episódios ou ordem da Etapa 9.
+    """
     actual, expected, run_count = [], [], 0
     actual_runs, expected_runs, order_differences = [], [], []
     run_identity = ("scenario", "variant", "repetition", "episode", "seed")
@@ -292,6 +423,25 @@ async def self_check(mode, configs, output):
 
 
 def plan_experiments(configs, parameters, value=UNSET, repetitions=None):
+    """Construir o plano: um item por parâmetro, alternativa e cenário.
+
+    Cada item traz a configuração aplicada, ou o estado ``blocked``/``invalid`` com o
+    motivo, e as repetições, sementes e episódios previstos.
+
+    Args:
+        configs (list[dict]): Cenários originais.
+        parameters (list[str]): Fatores a incluir.
+        value (object): Restringe o plano a uma alternativa; ``UNSET`` inclui todas.
+        repetitions (int | None): Repetições por cenário; ``None`` usa as do cenário.
+
+    Returns:
+        list[dict]: Itens com ``parametro``, ``valor``, ``cenario``, ``status``, ``repetitions``,
+            ``seeds``, ``episodes``, ``runs`` e ainda ``config`` e ``runner_options`` (se
+            ``ready``) ou ``reason`` (se não).
+
+    Raises:
+        ValueError: Se nenhuma alternativa corresponder a ``value``.
+    """
     plan = []
     for parameter in parameters:
         for alternative in PARAMETERS[parameter]["alternatives"]:
@@ -318,6 +468,19 @@ def plan_experiments(configs, parameters, value=UNSET, repetitions=None):
 
 
 def report_extras(records):
+    """Somar os indicadores extra de um grupo de relatórios sobre as execuções.
+
+    Execuções expiradas, contagens por motivo final, recusas por autonomia, missões e
+    CFP de rangers e atualizações de reputação.
+
+    Args:
+        records (list[dict]): Ficheiros de relatório, com a chave ``report``.
+
+    Returns:
+        dict: ``expired_runs``, ``reason_<motivo>`` para quatro motivos,
+            ``autonomy_insufficient``, ``ranger_missions_known``, ``ranger_cfp_sent`` e
+            ``reputation_updates``.
+    """
     reports = [record["report"] for record in records]
     reasons = Counter(report["reason"] for report in reports)
     return {"expired_runs": sum(report["incident_status"] == "expired" for report in reports),
@@ -335,6 +498,21 @@ def report_extras(records):
 
 
 async def collect(plan, configs, repetitions, output):
+    """Correr a referência e cada alternativa pronta do plano e gravar os CSV do lote.
+
+    Escreve ``runs.csv``, ``summary.csv`` e as tabelas de calibração, e etiqueta cada
+    relatório individual com o fator.
+
+    Args:
+        plan (list[dict]): Plano de ``plan_experiments``; itens que não estão ``ready`` são
+            saltados.
+        configs (list[dict]): Cenários originais, para as referências.
+        repetitions (int | None): Repetições por cenário; ``None`` usa as do cenário.
+        output (Path): Pasta do lote.
+
+    Returns:
+        int: Número total de execuções (referência e alternativas).
+    """
     runs, summaries, records = [], [], []
     # Uma trajetória de reputação por cenário e configuração; só run_scenario controla
     # os episódios/repetições. Nunca se filtra um episódio no meio da aprendizagem.
@@ -381,6 +559,18 @@ async def collect(plan, configs, repetitions, output):
 
 
 def main(argv=None):
+    """Validar a seleção, correr o self-check e depois as alternativas.
+
+    Depois de gravado o plano e copiado o código, ``manifest.json`` é gravado mesmo em
+    caso de falha. Erros de seleção ou de dados antes de criada a pasta de saída terminam
+    via ``parser.error``.
+
+    Args:
+        argv (list[str] | None): Argumentos da linha de comandos; ``None`` usa ``sys.argv``.
+
+    Returns:
+        int: 0 em sucesso e 1 se a seleção não for executável ou a referência divergir.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--parameter", choices=sorted(PARAMETERS))
     parser.add_argument("--value", help="Uma alternativa em JSON: 1, 0.1, [0,1,0] ou ideal/noisy")

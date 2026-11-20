@@ -21,7 +21,16 @@ OUT = ROOT / "results" / "stress"
 base = load_scenario(ROOT / "config" / "scenarios" / "A.json")
 EVENTS = base["episodes"][0]["events"]
 RES = base["resources"]  # drone com carga 0,5
-def auto(p): return {"drone": {"load": 0.5, "autonomy_percent": p}, "vehicle": {"autonomy_percent": p}}
+def auto(p):
+    """Configurar o drone (carga 0,5) e o veículo, ambos com ``p`` por cento de autonomia.
+
+    Args:
+        p (float): Autonomia inicial do drone e do veículo, em %.
+
+    Returns:
+        dict: Overrides de recursos para o ``scenario`` do ``run_mvp``.
+    """
+    return {"drone": {"load": 0.5, "autonomy_percent": p}, "vehicle": {"autonomy_percent": p}}
 
 GROUPS = {
   "perda": [(f"loss={p}", RES, {"loss": p}, 20) for p in (0.0, 0.1, 0.2, 0.3, 0.5)],
@@ -42,7 +51,17 @@ FIELDS = ["caso", "runs", "alerta", "mobilizou", "confirmou", "closed", "unresol
           "duplas_reservas", "fechos_duplicados", "tempo_real_s"]
 
 def double_bookings(report):
-    """Reserva de um recurso já reservado por outra missão (só entradas móveis, que têm posição)."""
+    """Contar reservas de um recurso já reservado por outra missão.
+
+    Só conta entradas dos móveis (as que têm posição); reservar de novo para a mesma missão
+    não conta.
+
+    Args:
+        report (dict): Relatório de uma execução de ``run_mvp``.
+
+    Returns:
+        int: Número de duplas reservas na ``timeline``.
+    """
     held, count = {}, 0
     for e in report["timeline"]:
         if "position" not in e or e["event"] not in ("reserved", "available"):
@@ -65,10 +84,34 @@ assert double_bookings({"timeline": [
     {"event": "reserved", "resource_id": "drone", "mission_id": "m3", "position": _p}]}) == 1
 
 def mean(values):
+    """Calcular a média dos valores não nulos, a 2 casas; ``None`` se não houver.
+
+    Args:
+        values (Iterable[float | None]): Valores a agregar; ``None`` é ignorado.
+
+    Returns:
+        float | None: Média arredondada a 2 casas, ou ``None`` se não houver valores.
+    """
     values = [v for v in values if v is not None]
     return round(sum(values) / len(values), 2) if values else None
 
 async def case(name, resources, faults, reps, options=None):
+    """Correr ``reps`` execuções de um caso e devolver a linha agregada do CSV.
+
+    Reputação nova por execução e sementes 1000+i; ``options`` sobrepõe-se ao limite de
+    30 s e às condições publicadas do runner (por exemplo, ``retransmit``).
+
+    Args:
+        name (str): Nome do caso, na coluna ``caso``.
+        resources (dict): Overrides dos recursos para o ``scenario``.
+        faults (dict | None): Falhas a injetar (sem ``seed``, que é posta por execução);
+            ``None`` não injeta nenhuma.
+        reps (int): Número de execuções.
+        options (dict | None): Argumentos extra do ``run_mvp``.
+
+    Returns:
+        dict: Linha do CSV com as colunas de ``FIELDS`` e ainda ``reenvios_mean``.
+    """
     s = copy.deepcopy(base["response_settings"])
     rows, rejects, doubles, closes, resent = [], 0, 0, 0, []
     t0 = time.monotonic()
@@ -97,6 +140,11 @@ async def case(name, resources, faults, reps, options=None):
             "reenvios_mean": mean(resent)}
 
 async def go(groups):
+    """Correr os grupos indicados e gravar um CSV por grupo em results/stress/.
+
+    Args:
+        groups (list[str]): Nomes de grupos de ``GROUPS``, pela ordem a correr.
+    """
     OUT.mkdir(parents=True, exist_ok=True)
     for group in groups:
         out = []

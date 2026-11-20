@@ -19,6 +19,17 @@ ROOT = Path(__file__).resolve().parent
 
 
 def required_env(name: str) -> str:
+    """Devolver a variável de ambiente; em falta ou vazia, terminar com SystemExit.
+
+    Args:
+        name (str): Nome da variável de ambiente.
+
+    Returns:
+        str: Valor da variável, não vazio.
+
+    Raises:
+        SystemExit: Se a variável não existir ou estiver vazia.
+    """
     value = os.environ.get(name)
     if not value:
         raise SystemExit(f"Defina a variável de ambiente {name}.")
@@ -26,6 +37,20 @@ def required_env(name: str) -> str:
 
 
 def configurable_float(name: str, default: float) -> float:
+    """Ler do ambiente um número finito e não negativo; sem variável, usar ``default``.
+
+    O valor por omissão passa pela mesma validação.
+
+    Args:
+        name (str): Nome da variável de ambiente.
+        default (float): Valor usado quando a variável não existe.
+
+    Returns:
+        float: Valor lido (ou ``default``), finito e não negativo.
+
+    Raises:
+        SystemExit: Se o valor não for numérico, ou não for finito e não negativo.
+    """
     value = os.environ.get(name)
     try:
         parsed = float(default if value is None else value)
@@ -37,6 +62,20 @@ def configurable_float(name: str, default: float) -> float:
 
 
 def configurable_positive_int(name: str, default: int) -> int:
+    """Ler do ambiente um inteiro positivo; um valor inválido termina com SystemExit.
+
+    Sem variável, devolve ``default`` sem o validar.
+
+    Args:
+        name (str): Nome da variável de ambiente.
+        default (int): Valor devolvido quando a variável não existe.
+
+    Returns:
+        int: Valor lido, positivo, ou ``default``.
+
+    Raises:
+        SystemExit: Se o valor não for um inteiro positivo.
+    """
     value = os.environ.get(name)
     if value is None:
         return default
@@ -50,6 +89,20 @@ def configurable_positive_int(name: str, default: int) -> int:
 
 
 def load_observable_scenario(max_steps: int = 60) -> tuple[Scenario, str, str]:
+    """Carregar config/environment.json e avançar até sensor_01 ter observações.
+
+    Avança 1 segundo simulado de cada vez.
+
+    Args:
+        max_steps (int): Número máximo de avanços de 1 segundo.
+
+    Returns:
+        tuple[Scenario, str, str]: Cenário, id do sensor iniciador e id do informador.
+
+    Raises:
+        ValueError: Se ``max_steps`` não for um inteiro não negativo.
+        RuntimeError: Se sensor_01 ou sensor_02 ficarem sem observações na janela recente.
+    """
     if type(max_steps) is not int or max_steps < 0:
         raise ValueError("max_steps deve ser um inteiro não negativo.")
     scenario = Scenario.from_config(ROOT / "config" / "environment.json")
@@ -75,6 +128,17 @@ def load_observable_scenario(max_steps: int = 60) -> tuple[Scenario, str, str]:
 
 
 async def main():
+    """Correr um pedido de verificação entre dois agentes com observações do simulador.
+
+    Cada agente recebe apenas o seu feed local. O contexto de corroboração vem
+    das fontes elegíveis e das variáveis CORROBORATION_MAX_DISTANCE,
+    CORROBORATION_MAX_TIME_DIFFERENCE e MINIMUM_COMPATIBLE_SOURCES. No fim,
+    param apenas os agentes que chegaram a arrancar.
+
+    Raises:
+        SystemExit: Se faltar uma palavra-passe ou uma variável de corroboração for inválida.
+        RuntimeError: Se os sensores do cenário não tiverem observações.
+    """
     scenario, sensor_id, informant_id = load_observable_scenario()
     sensor_jid = os.environ.get("SENSOR_JID", "sensor@localhost")
     informant_jid = os.environ.get("INFORMANT_JID", "informant@localhost")

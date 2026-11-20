@@ -13,6 +13,18 @@ class EvaluationResult:
     O avaliador associa as observações ao incidente e verifica a proveniência.
     ``refuted`` exige exclusão fundamentada da ameaça no local/intervalo das
     observações; uma patrulha que não encontrou nada não basta.
+
+    Attributes:
+        result_id (str): Identificador do resultado.
+        incident_id (str): Incidente avaliado.
+        observation_ids (tuple[str, ...]): Observações avaliadas (pelo menos uma, sem repetições).
+        outcome (str): ``confirmed``, ``refuted``, ``inconclusive`` ou ``failed``.
+        basis (str): Fundamento: ``ground_truth``, ``independent_mission`` ou ``consensus``.
+        evaluated_at (float): Instante da avaliação, em segundos simulados.
+        evidence_ids (tuple[str, ...]): Mensagens ou registos usados como evidência.
+        evidence_source_ids (tuple[str, ...]): Fontes que produziram a evidência.
+        final (bool): Se o resultado já não pode mudar.
+        sufficient_coverage (bool): Se a evidência cobre o local e o intervalo das observações.
     """
 
     result_id: str
@@ -27,6 +39,14 @@ class EvaluationResult:
     sufficient_coverage: bool = False
 
     def __post_init__(self):
+        """Validar identificadores, referências, resultado, fundamento e instante.
+
+        As referências têm de ser tuplos de IDs únicos e tem de haver pelo menos
+        uma observação avaliada.
+
+        Raises:
+            ValueError: Se algum campo for inválido.
+        """
         for value in (self.result_id, self.incident_id):
             if not isinstance(value, str) or not value.strip():
                 raise ValueError("Resultado e incidente precisam de identificadores.")
@@ -47,6 +67,21 @@ class EvaluationResult:
             raise ValueError("final e sufficient_coverage devem ser booleanos.")
 
     def rejection_reason(self, observation: Observation, incident_id: str) -> str | None:
+        """Devolver o motivo que impede este resultado de atualizar a reputação.
+
+        É aceite um resultado final ``confirmed`` ou ``refuted`` deste incidente e
+        observação, não anterior a ela, com cobertura suficiente e evidência que não
+        seja consenso, nem circular, nem (em missão independente) proveniente da
+        própria fonte avaliada.
+
+        Args:
+            observation (Observation): Observação cuja fonte seria atualizada.
+            incident_id (str): Incidente a que a observação pertence.
+
+        Returns:
+            str | None: Motivo da rejeição (ex.: ``unrelated_result``,
+                ``circular_evidence``), ou ``None`` se o resultado for aceite.
+        """
         if self.incident_id != incident_id or observation.event_id not in self.observation_ids:
             return "unrelated_result"
         if self.evaluated_at < observation.observed_at:
@@ -73,9 +108,24 @@ class ReputationBook:
     Um som real de trovão pode, portanto, ser um alerta de ameaça incorreto.
     ``run_id`` distingue amostras de execuções identificadas pelo avaliador;
     repetir o mesmo âmbito conserva a idempotência, sem presumir independência.
+
+    Attributes:
+        alpha (float): Parâmetro ``alpha`` do prior Beta, comum a todas as fontes.
+        beta (float): Parâmetro ``beta`` do prior Beta, comum a todas as fontes.
+        history (list[dict]): Registos de auditoria de todas as tentativas de atualização.
     """
 
     def __init__(self, alpha: float = 2.0, beta: float = 2.0):
+        """Inicializar o livro com o prior Beta comum a todas as fontes e sem histórico.
+
+        Args:
+            alpha (float): Pseudo-contagem inicial de acertos; finita e positiva.
+            beta (float): Pseudo-contagem inicial de erros; finita e positiva.
+
+        Raises:
+            ValueError: Se ``alpha`` ou ``beta`` não forem finitos e positivos, ou se a
+                sua soma não for finita.
+        """
         if any(not is_finite_number(value) or value <= 0 for value in (alpha, beta)):
             raise ValueError("alpha e beta devem ser finitos e positivos.")
         if not is_finite_number(alpha + beta):
@@ -87,16 +137,53 @@ class ReputationBook:
         self.history: list[dict] = []
 
     def score(self, source_id: str) -> float:
+        """Devolver a média posterior Beta da fonte; sem avaliações, a média do prior.
+
+        Args:
+            source_id (str): Fonte a consultar.
+
+        Returns:
+            float: Reputação em ]0, 1[.
+        """
         correct, incorrect = self._counts.get(source_id, (0, 0))
         return (correct + self.alpha) / (correct + incorrect + self.alpha + self.beta)
 
     def snapshot(self, source_ids) -> dict[str, float]:
+        """Devolver os scores das fontes dadas, sem duplicados e ordenados por identificador.
+
+        Args:
+            source_ids (Iterable[str]): Fontes a incluir; repetições são ignoradas.
+
+        Returns:
+            dict[str, float]: Reputação de cada fonte, por ordem de identificador.
+        """
         return {source_id: self.score(source_id) for source_id in sorted(set(source_ids))}
 
     def update(
         self, observation: Observation, incident_id: str, result: EvaluationResult,
         *, run_id: str | None = None,
     ) -> dict:
+        """Aplicar um resultado à reputação da fonte e devolver o registo de auditoria.
+
+        As contagens só mudam se ``rejection_reason`` for ``None`` e nem o evento
+        nem o par fonte/incidente tiverem já sido avaliados neste ``run_id``. O
+        registo é sempre acrescentado a ``history``.
+
+        Args:
+            observation (Observation): Observação cuja fonte é avaliada.
+            incident_id (str): Incidente a que a observação pertence.
+            result (EvaluationResult): Adjudicação a aplicar.
+            run_id (str | None): Execução de avaliação; ``None`` partilha um único âmbito.
+
+        Returns:
+            dict: Registo de auditoria; ``updated`` e ``reason`` dizem se houve alteração
+                e porquê, e ``before``/``after`` dão o score antes e depois.
+
+        Raises:
+            TypeError: Se ``observation`` não for ``Observation`` ou ``result`` não for
+                ``EvaluationResult``.
+            ValueError: Se ``run_id`` for dado mas estiver vazio.
+        """
         if not isinstance(observation, Observation) or not isinstance(result, EvaluationResult):
             raise TypeError("São necessários Observation e EvaluationResult.")
         if run_id is not None and (not isinstance(run_id, str) or not run_id.strip()):
@@ -133,11 +220,28 @@ def result_from_mission(
     result, observation: Observation, incident_id: str,
     *, max_distance: float, max_delay_seconds: float,
 ) -> EvaluationResult:
-    """Adjudicação automática de um ``MISSION_RESULT`` já validado pelo sensor.
+    """Adjudicar automaticamente um ``MISSION_RESULT`` já validado pelo sensor.
 
     Só ``verify_incident`` confirmado é final. ``not_confirmed`` não exclui a
-    ameaça e fica ``inconclusive``. Há cobertura quando a célula inspecionada
-    e o instante da inspeção estão dentro dos limites experimentais dados.
+    ameaça e fica ``inconclusive``. Há cobertura quando a tarefa é
+    ``verify_incident`` e a célula inspecionada e a conclusão da inspeção (não
+    anterior à observação) estão dentro dos limites experimentais dados.
+
+    Args:
+        result (Message): ``MISSION_RESULT`` recebido do recurso móvel.
+        observation (Observation): Observação a adjudicar.
+        incident_id (str): Incidente a que a observação pertence.
+        max_distance (float): Distância Manhattan máxima, em células, entre a célula
+            inspecionada e a observação.
+        max_delay_seconds (float): Atraso máximo, em segundos simulados, entre a
+            observação e a conclusão da inspeção.
+
+    Returns:
+        EvaluationResult: Adjudicação ``confirmed`` (final) ou ``inconclusive``, com
+            fundamento ``independent_mission``.
+
+    Raises:
+        ValueError: Se um limite de cobertura for negativo ou não finito.
     """
     for value in (max_distance, max_delay_seconds):
         if not is_finite_number(value) or value < 0:

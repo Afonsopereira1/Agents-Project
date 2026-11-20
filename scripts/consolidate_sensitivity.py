@@ -21,10 +21,12 @@ from isia.evaluation.metrics import NUMERIC
 
 
 def _hash(path):
+    """Calcular o SHA-256 (hexadecimal) do conteúdo do ficheiro."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _key(parameter, value, scenario):
+    """Devolver a chave canónica (parâmetro, valor em JSON, cenário) de uma alternativa."""
     # JSON 2 e 2.0 identificam a mesma alternativa; bool nunca equivale a 1.
     for candidate in sensitivity.PARAMETERS.get(parameter, {}).get("alternatives", ()):
         if sensitivity.alternative_matches(value, candidate):
@@ -34,12 +36,25 @@ def _key(parameter, value, scenario):
 
 
 def _group(row):
+    """Devolver a chave de grupo de uma linha CSV; recusa etiquetas incoerentes.
+
+    Raises:
+        ValueError: Se ``cenario`` e ``scenario`` diferirem ou a variante não for ``full``.
+    """
     if row["cenario"] != row["scenario"] or row["variant"] != "full":
         raise ValueError("As etiquetas de cenário/variante do CSV são incoerentes.")
     return _key(row["parametro"], json.loads(row["valor"]), row["cenario"])
 
 
 def _typed(row):
+    """Copiar uma linha CSV com booleanos e métricas numéricas convertidos.
+
+    "N/A" passa a ``None``.
+
+    Raises:
+        ValueError: Para booleanos diferentes de "True"/"False" e para números negativos ou
+            não finitos.
+    """
     result = dict(row)
     for field in ("threat", "alert", "dispatched", "confirmed", "unresolved"):
         if row[field] not in ("True", "False"):
@@ -58,6 +73,19 @@ def load_batches(paths):
 
     As referências ficam separadas por lote. Repetições reduzidas e alternativas
     sobrepostas são recusadas, evitando tratar replays como amostras novas.
+
+    Args:
+        paths (list[str | Path]): Pastas dos lotes, todas diretamente em ``results/sensitivity/``.
+
+    Returns:
+        tuple[list[dict], dict, set[tuple[str, str, str]]]: Os lotes (``batch_id``, ``path``,
+            ``sha256``, ``reports_path``, ``runs``, ``summaries``), a proveniência comum e as
+            chaves (parâmetro, valor em JSON, cenário) das alternativas concluídas.
+
+    Raises:
+        ValueError: Se houver menos de dois lotes, pastas repetidas ou fora do sítio, ou se
+            algum lote estiver incompleto, tiver proveniência incompatível, repetições
+            diferentes de 20, alternativas sobrepostas ou CSV incoerentes com o plano.
     """
     if len(paths) < 2:
         raise ValueError("A consolidação exige pelo menos duas pastas de lotes.")
@@ -157,6 +185,19 @@ def load_batches(paths):
 
 
 def consolidate(paths, run_id=None):
+    """Juntar ``runs.csv`` e ``summary.csv`` dos lotes validados numa pasta nova.
+
+    Cada linha recebe o ``batch_id`` de origem; o manifesto regista os grupos em falta e,
+    depois de criada a pasta, é gravado mesmo que a escrita falhe (lotes inválidos falham
+    antes de criar qualquer pasta).
+
+    Args:
+        paths (list[str | Path]): Pastas dos lotes a juntar (ver ``load_batches``).
+        run_id (str | None): Nome da pasta nova em ``results/sensitivity/``; ``None`` gera um.
+
+    Returns:
+        Path: A pasta de saída, com ``runs.csv``, ``summary.csv`` e ``manifest.json``.
+    """
     batches, provenance, alternatives = load_batches(paths)
     expected = {(parameter, sensitivity.encoded(value), scenario)
                 for parameter, spec in sensitivity.PARAMETERS.items() for value in spec["alternatives"]
@@ -186,6 +227,14 @@ def consolidate(paths, run_id=None):
 
 
 def main(argv=None):
+    """Ler os argumentos e consolidar os lotes; erros de dados terminam via ``parser.error``.
+
+    Args:
+        argv (list[str] | None): Argumentos da linha de comandos; ``None`` usa ``sys.argv``.
+
+    Returns:
+        int: 0 quando a consolidação termina.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("batches", nargs="+", type=Path)
     parser.add_argument("--run-id", help="Nova pasta exclusiva em results/sensitivity/")

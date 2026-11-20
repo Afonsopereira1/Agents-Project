@@ -2,18 +2,38 @@
 
 
 class SimulationClock:
-    """Começa em zero e avança apenas quando o simulador chama advance()."""
+    """Relógio da simulação: começa em zero e só avança quando o simulador chama advance().
+
+    Attributes:
+        now (float): Instante atual, em segundos simulados (só leitura).
+    """
 
     def __init__(self):
+        """Iniciar o relógio em 0.0 segundos simulados."""
         self._now = 0.0
 
     @property
     def now(self) -> float:
-        """Instante para observações, mensagens e prazos da simulação."""
+        """Devolver o instante atual, usado em observações, mensagens e prazos da simulação.
+
+        Returns:
+            float: Segundos simulados desde o início.
+        """
         return self._now
 
     def advance(self, seconds: float = 1.0) -> float:
-        """Avança por uma duração positiva; entradas inválidas preservam o tempo."""
+        """Avançar por uma duração positiva; entradas inválidas não mudam o tempo.
+
+        Args:
+            seconds (float): Duração do avanço, em segundos simulados; finita e positiva.
+
+        Returns:
+            float: Novo instante atual.
+
+        Raises:
+            ValueError: Se ``seconds`` não for finito e positivo (``bool`` incluído) ou se o
+                avanço exceder a capacidade ou a precisão do relógio.
+        """
         if (
             isinstance(seconds, bool)
             or not isinstance(seconds, (int, float))

@@ -7,6 +7,17 @@ from isia.domain.models import MissionStatus, Position, ResourceStatus
 
 
 def nonnegative(value: float, name: str) -> None:
+    """Levantar ValueError se ``value`` não for int ou float finito e não negativo.
+
+    O tipo é comparado de forma exata, por isso ``bool`` também é rejeitado.
+
+    Args:
+        value (float): Valor a validar.
+        name (str): Nome do valor, usado na mensagem de erro.
+
+    Raises:
+        ValueError: Se ``value`` não for ``int``/``float`` finito e não negativo.
+    """
     try:
         valid = type(value) in (int, float) and value >= 0 and isfinite(value)
     except OverflowError:
@@ -16,7 +27,23 @@ def nonnegative(value: float, name: str) -> None:
 
 
 def position_at(origin: Position, target: Position, speed: float, elapsed: float) -> Position:
-    """Células completas percorridas; não ultrapassa o destino nem perde frações."""
+    """Calcular a posição pelas células completas percorridas, primeiro em x e depois em y.
+
+    Não ultrapassa o destino nem perde frações.
+
+    Args:
+        origin (Position): Célula de partida.
+        target (Position): Célula de destino.
+        speed (float): Velocidade, em células por segundo simulado.
+        elapsed (float): Tempo decorrido desde a partida, em segundos simulados.
+
+    Returns:
+        Position: Célula alcançada; ``origin`` se a velocidade ou o tempo forem zero.
+
+    Raises:
+        TypeError: Se ``origin`` ou ``target`` não forem ``Position``.
+        ValueError: Se ``speed`` ou ``elapsed`` não forem finitos e não negativos.
+    """
     if not isinstance(origin, Position) or not isinstance(target, Position):
         raise TypeError("A origem e o destino devem ser Position.")
     nonnegative(speed, "speed")
@@ -35,6 +62,15 @@ def position_at(origin: Position, target: Position, speed: float, elapsed: float
 
 # ponytail: grelha sem obstáculos; usar pesquisa de caminhos quando o mapa os incluir.
 def distance(origin: Position, target: Position) -> int:
+    """Calcular a distância de Manhattan entre duas posições, em células.
+
+    Args:
+        origin (Position): Célula de partida.
+        target (Position): Célula de destino.
+
+    Returns:
+        int: Número de células entre as duas posições.
+    """
     return abs(origin.x - target.x) + abs(origin.y - target.y)
 
 
@@ -43,11 +79,45 @@ class MissionExecution:
 
     O inspetor recebe apenas a célula, o instante e a tarefa. Não se infere
     confirmação a partir da ausência de observações.
+
+    Attributes:
+        mission (Mission): Missão em execução; termina em ``DONE`` ou ``FAILED``.
+        home (Position): Base para onde o recurso regressa.
+        result (dict | None): Resultado (``outcome``, ``reason``, ``completed_at``,
+            ``position``); ``None`` enquanto não houver.
+        finished (bool): ``True`` quando a reserva foi libertada.
+        timeline (list[dict]): Eventos registados, por ordem, com instante, posição e energia.
     """
 
     def __init__(self, reservation, mission, world, *, now, speed=1.0,
                  energy_per_cell=1.0, service_seconds=1.0, minimum_energy=0.0,
                  inspect, home=None):
+        """Inicializar a execução da missão.
+
+        Valida a reserva e põe a missão em RUNNING e o recurso em MOVING. Se a base ou o
+        alvo ficarem fora do mapa, ou a autonomia não cobrir ida, regresso e
+        ``minimum_energy``, não levanta: a execução é interrompida de imediato e a missão
+        fica falhada com esse motivo.
+
+        Args:
+            reservation (LocalResourceReservation): Reserva local do recurso, já confirmada
+                para esta missão.
+            mission (Mission): Missão a executar.
+            world (World): Mundo onde se validam as posições.
+            now (float): Instante de início, em segundos simulados.
+            speed (float): Velocidade, em células por segundo; tem de ser positiva.
+            energy_per_cell (float): Energia gasta por célula, em pontos percentuais.
+            service_seconds (float): Duração da inspeção no alvo, em segundos.
+            minimum_energy (float): Energia, em %, que tem de sobrar depois do regresso.
+            inspect (Callable[[Position, float, str], str]): Inspetor que recebe célula,
+                instante e tarefa e devolve ``confirmed``, ``not_confirmed``,
+                ``inconclusive`` ou ``failed``.
+            home (Position | None): Base de regresso; ``None`` usa a posição de partida.
+
+        Raises:
+            ValueError: Se um valor numérico for negativo ou não finito, a velocidade for
+                nula, ``inspect`` não for invocável ou a reserva não for desta missão.
+        """
         for name, value in (("now", now), ("speed", speed),
                             ("energy_per_cell", energy_per_cell),
                             ("service_seconds", service_seconds),
@@ -84,9 +154,15 @@ class MissionExecution:
 
     @property
     def resource(self):
+        """Ler o estado atual do recurso a partir da reserva.
+
+        Returns:
+            ResourceState: Estado mais recente do recurso.
+        """
         return self.reservation.resource_state
 
     def _record(self, event, at, **details):
+        """Acrescentar à timeline um evento com recurso, missão, posição e energia."""
         self.timeline.append({"time": at, "event": event,
                               "resource_id": self.resource.resource_id,
                               "mission_id": self.mission.mission_id,
@@ -94,11 +170,19 @@ class MissionExecution:
                               "energy": self.resource.autonomy_percent, **details})
 
     def _state(self, state, at, *, release=False):
+        """Atualizar o recurso na reserva e registar o novo estado.
+
+        ``release`` liberta a reserva e marca a execução como terminada.
+        """
         self.reservation.update_execution(self.mission.mission_id, state, release=release)
         self._record(state.status.value, at)
         self.finished = release
 
     def _result(self, outcome, reason, at):
+        """Fixar o resultado e o estado final da missão (FAILED ou DONE).
+
+        Só o primeiro resultado conta; chamadas seguintes não alteram nada.
+        """
         if self.result is None:
             position = self.resource.position
             # A posição inspecionada permite ao avaliador verificar cobertura (Etapa 7).
@@ -109,7 +193,15 @@ class MissionExecution:
             self._record("MISSION_RESULT", at, outcome=outcome, reason=reason)
 
     def free_at(self, returning=False):
-        """Instante simulado previsto em que o recurso fica livre: na base ou, com returning, ao iniciar o regresso."""
+        """Prever o instante simulado em que o recurso fica livre.
+
+        Args:
+            returning (bool): Se ``True``, devolve o início do regresso em vez da chegada
+                à base.
+
+        Returns:
+            float: Instante previsto, em segundos simulados.
+        """
         state = self.resource
         if state.status is ResourceStatus.RETURNING:
             return self.phase_at if returning else self.phase_at + distance(self.origin, self.home) / self.speed
@@ -123,7 +215,14 @@ class MissionExecution:
             self._state(self.resource.change_status(ResourceStatus.AVAILABLE), self.now, release=True)
 
     def interrupt(self, reason="mission_interrupted"):
-        """Interromper no último instante avançado; regressar ou imobilizar."""
+        """Interromper no último instante avançado; regressar ou imobilizar.
+
+        Sem energia para chegar à base, o recurso fica UNAVAILABLE. Não faz nada se a
+        execução já terminou.
+
+        Args:
+            reason (str): Motivo registado no resultado da missão falhada.
+        """
         if self.finished:
             return
         self._result("failed", reason, self.now)
@@ -139,6 +238,19 @@ class MissionExecution:
         self.advance(self.now)
 
     def advance(self, now):
+        """Avançar a execução até ``now``: deslocação, inspeção no alvo e regresso.
+
+        A inspeção termina ``service_seconds`` depois da chegada; uma exceção ou
+        um resultado inválido do inspetor conta como falha e o recurso regressa na
+        mesma. Sem energia para o troço, o recurso fica UNAVAILABLE e a execução
+        termina, com energy_exhausted se a missão ainda não tinha resultado.
+
+        Args:
+            now (float): Instante até onde avançar, em segundos simulados.
+
+        Raises:
+            ValueError: Se ``now`` for inválido ou anterior ao último avanço.
+        """
         nonnegative(now, "now")
         if now < self.now:
             raise ValueError("O relógio da missão não pode recuar.")

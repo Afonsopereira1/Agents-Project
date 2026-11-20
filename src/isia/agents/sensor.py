@@ -1,4 +1,10 @@
-"""Agente sensor que inicia uma verificação e aguarda a resposta."""
+"""Agente sensor que inicia uma verificação e aguarda a resposta.
+
+Por onde começar:
+
+- `SensorAgent.VerificationBehaviour.run`: envia VERIFY_REQUEST, junta as respostas e decide.
+- `response_matches_request`: o que torna uma resposta válida para o pedido.
+"""
 
 from __future__ import annotations
 
@@ -47,7 +53,19 @@ def response_matches_request(
     *,
     current_time: float,
 ) -> bool:
-    """Valida intenção, correlação e emissão até ao instante simulado do recetor."""
+    """Validar intenção, correlação e emissão da resposta até ao instante simulado do recetor.
+
+    Args:
+        incoming (Any): Mensagem SPADE recebida; dá o remetente e os metadados de transporte.
+        response (Message): Corpo de ``incoming`` já interpretado.
+        request (Message): VERIFY_REQUEST a que a resposta deve corresponder.
+        expected_sender (str): JID do informador a quem o pedido foi enviado.
+        current_time (float): Instante simulado do recetor; a resposta não pode ser posterior.
+
+    Returns:
+        bool: True se a resposta for um VERIFY_RESPONSE ``inform`` do informador esperado, da
+            mesma conversa e incidente, ao mesmo pedido e emitida entre o pedido e ``current_time``.
+    """
     sender = bare_jid(getattr(incoming, "sender", ""))
     expected = bare_jid(expected_sender)
     return (
@@ -65,9 +83,43 @@ def response_matches_request(
 
 
 class SensorAgent(Agent):
-    """Agente sensor com dados de exemplo, sem dependência da Etapa 2."""
+    """Agente sensor com dados de exemplo, sem dependência da Etapa 2.
+
+    Attributes:
+        informant_jid (str): JID do informador a quem é pedida a verificação.
+        observation_feed (ObservationFeed | None): Feed local de leituras; None até ser configurado.
+        created_at (float | None): Instante simulado local, usado na emissão do pedido.
+        conversation_id (str | None): Conversa da última verificação pedida.
+        response (Message | None): Última VERIFY_RESPONSE válida recebida.
+        initial_observation (Observation | None): Leitura local que originou o pedido.
+        aggregate_summary (dict[str, object] | None): Agregação das observações da resposta;
+            None se não houve resposta válida.
+        evaluation_summary (dict[str, object] | None): Avaliação da corroboração.
+        decision (dict[str, object] | None): Decisão tomada; sem resposta válida, ``observe``
+            ou, com política de resposta, a decisão pela evidência local.
+        eligible_source_ids (tuple[str, ...]): Fontes cujas observações contam para a corroboração.
+        max_distance (float | None): Distância máxima, em células, entre observações compatíveis.
+        max_time_difference (float | None): Diferença temporal máxima, em segundos simulados.
+        minimum_compatible_sources (int | None): Fontes compatíveis necessárias para patrulhar.
+        response_policy (ResponsePolicy | None): Política de resposta; sem ela, usa a decisão
+            preliminar.
+        reputation_scores (dict[str, float]): Reputação histórica por fonte, entre 0 e 1.
+        source_profiles (dict[str, dict[str, str]]): ``modality`` e ``correlation_group`` por fonte.
+        severity (float): Gravidade da ocorrência, entre 0 e 1.
+        default_reputation (float): Reputação de uma fonte sem histórico, entre 0 e 1.
+        verification_history (dict[str, dict[str, dict[str, object]]]): Registo de cada pedido,
+            por conversa e por ``message_id`` do pedido.
+        behaviour (VerificationBehaviour): Comportamento registado em ``setup``.
+    """
 
     def __init__(self, jid: str, password: str, informant_jid: str):
+        """Inicializar o sensor sem feed nem contexto; reputação e gravidade a 0.5.
+
+        Args:
+            jid (str): JID XMPP do sensor.
+            password (str): Palavra-passe XMPP.
+            informant_jid (str): JID do informador a quem pedir a verificação.
+        """
         super().__init__(jid, password)
         self.informant_jid = informant_jid
         self.observation_feed = None
@@ -94,7 +146,12 @@ class SensorAgent(Agent):
         self.verification_history: dict[str, dict[str, dict[str, object]]] = {}
 
     def set_local_observation_feed(self, observation_feed, created_at: float) -> None:
-        """Give the agent only its local feed and simulation emission time."""
+        """Dar ao agente só o seu feed local e o instante de emissão na simulação.
+
+        Args:
+            observation_feed (ObservationFeed): Feed com as leituras recentes deste sensor.
+            created_at (float): Instante simulado local, em segundos.
+        """
         self.observation_feed = observation_feed
         self.created_at = created_at
 
@@ -107,7 +164,18 @@ class SensorAgent(Agent):
         incompatibility_rules=None,
         compatibility_rules=None,
     ) -> None:
-        """Give the agent only the metadata and limits needed for evaluation."""
+        """Dar ao agente só os metadados e limites de que precisa para avaliar a corroboração.
+
+        Args:
+            eligible_source_ids (Iterable[str]): Fontes cujas observações podem corroborar.
+            max_distance (float): Distância máxima, em células, entre observações compatíveis.
+            max_time_difference (float): Diferença temporal máxima, em segundos simulados.
+            minimum_compatible_sources (int): Fontes compatíveis necessárias para pedir patrulha.
+            incompatibility_rules (Mapping[str, object] | None): Por tipo de evento, os tipos que
+                o contradizem; None: nenhum.
+            compatibility_rules (Mapping[str, object] | None): Por tipo de evento, os tipos que
+                também o confirmam; None: só o próprio tipo.
+        """
         self.eligible_source_ids = tuple(eligible_source_ids)
         self.max_distance = max_distance
         self.max_time_difference = max_time_difference
@@ -119,7 +187,21 @@ class SensorAgent(Agent):
         self, policy: ResponsePolicy, reputation_scores, source_profiles,
         *, severity: float = 0.5, default_reputation: float = 0.5,
     ) -> None:
-        """Receber apenas pesos históricos; o sensor não recebe resultados de referência."""
+        """Receber apenas pesos históricos; o sensor não recebe resultados de referência.
+
+        Args:
+            policy (ResponsePolicy): Limiares e mínimos de evidência da decisão de resposta.
+            reputation_scores (Mapping[str, float]): Reputação histórica por fonte, entre 0 e 1.
+            source_profiles (Mapping[str, Mapping[str, str]]): ``modality`` e
+                ``correlation_group`` de cada fonte.
+            severity (float): Gravidade da ocorrência, entre 0 e 1.
+            default_reputation (float): Reputação de uma fonte sem histórico, entre 0 e 1.
+
+        Raises:
+            TypeError: Se ``policy`` não for ``ResponsePolicy``.
+            ValueError: Se a gravidade ou alguma reputação não estiver entre 0 e 1, ou se um
+                perfil de fonte for inválido.
+        """
         if not isinstance(policy, ResponsePolicy):
             raise TypeError("policy deve ser ResponsePolicy.")
         for value in (severity, default_reputation, *reputation_scores.values()):
@@ -133,7 +215,17 @@ class SensorAgent(Agent):
         self.default_reputation = default_reputation
 
     class VerificationBehaviour(OneShotBehaviour):
+        """Enviar um VERIFY_REQUEST ao informador e decidir com a resposta."""
         async def run(self):
+            """Pedir verificação ao informador e guardar a decisão no agente.
+
+            Respostas inválidas ou mal correlacionadas são rejeitadas e a espera
+            continua. Sem resposta válida até ao prazo, fica a decisão de
+            ``_record_safe_observe``.
+
+            Overrides:
+                spade.behaviour.OneShotBehaviour.run
+            """
             agent: SensorAgent = self.agent  # type: ignore[assignment]
             conversation_id = f"conversation-{uuid.uuid4().hex}"
             agent.conversation_id = conversation_id
@@ -300,6 +392,11 @@ class SensorAgent(Agent):
             )
 
     async def setup(self):
+        """Registar o comportamento para respostas ``inform`` de verificação.
+
+        Overrides:
+            spade.agent.Agent.setup
+        """
         template = Template(
             metadata={
                 "performative": PERFORMATIVE_INFORM,
@@ -312,7 +409,7 @@ class SensorAgent(Agent):
 
 
 def _recent_observations(observation_feed) -> tuple:
-    """Read a local feed without accepting arbitrary agent state."""
+    """Ler o feed local sem aceitar estado arbitrário do agente."""
     recent = getattr(observation_feed, "recent", None)
     if not callable(recent):
         return ()
@@ -323,7 +420,7 @@ def _recent_observations(observation_feed) -> tuple:
 
 
 def _rejected_response_reason(incoming: Any, request: Message) -> str:
-    """Distinguish a malformed body from a valid body in another conversation."""
+    """Distinguir um corpo malformado de um corpo válido de outra conversa."""
     try:
         candidate = Message.from_json(incoming.body)
     except (AttributeError, TypeError, ValueError):
@@ -345,6 +442,10 @@ def _record_response_wait_diagnostics(
     *,
     timed_out: bool,
 ) -> None:
+    """Anexar ao registo do pedido as respostas rejeitadas e se a espera expirou.
+
+    O registo do pedido já tem de existir em ``verification_history``.
+    """
     record = agent.verification_history[request.conversation_id][request.message_id]
     record["rejected_responses"] = tuple(rejected_responses)
     record["response_wait_timed_out"] = timed_out
@@ -400,7 +501,7 @@ def _record_verification_history(
     *,
     classification: str | None = None,
 ) -> None:
-    """Store the minimal explainability record for one completed request."""
+    """Guardar o registo mínimo que explica a decisão de um pedido concluído."""
     history = getattr(agent, "verification_history", None)
     if not isinstance(history, dict):
         history = {}
@@ -435,6 +536,7 @@ def _record_verification_history(
 
 
 def _evaluate_response_policy(agent, observation, aggregate, incident_id):
+    """Avaliar a corroboração com reputações e devolver ``(avaliação, decisão)``."""
     evaluation = evaluate_reputation_corroboration(
         observation, aggregate, agent.eligible_source_ids,
         agent.reputation_scores, agent.source_profiles,
@@ -449,6 +551,7 @@ def _evaluate_response_policy(agent, observation, aggregate, incident_id):
 
 
 def _log_corroboration_result(observation, aggregate, evaluation, decision) -> None:
+    """Escrever no log o resumo da corroboração e da decisão tomada."""
     if "suspicion_score" in decision:
         logger.info("Política de resposta | fatores=%s", decision)
     logger.info(

@@ -1,7 +1,14 @@
 """Critérios locais e configuráveis para corroborar observações.
 
-The compatibility check deliberately uses only the two observations and the
-configured limits. It does not inspect simulator ground truth or real events.
+Por onde começar:
+
+- `select_eligible_sources`: a quem pedir verificação.
+- `aggregate_verification_responses`: juntar e classificar as respostas.
+- `evaluate_reputation_corroboration`: score de suspeita ponderado pela reputação.
+- `decide_preliminary_verification`: observar ou pedir patrulha.
+
+A verificação de compatibilidade usa só as duas observações e os limites
+configurados; nunca consulta a verdade do simulador nem os eventos reais.
 """
 
 from collections.abc import Mapping
@@ -20,6 +27,13 @@ def capability_supports_signal(capability: object, event_type: object) -> bool:
     Esta regra verifica a adequação *do tipo* de fonte, não prova que cada
     deteção individual tenha sensibilidade perfeita nem consulta ground_truth.
     Sinais desconhecidos não justificam ausência informativa por omissão.
+
+    Args:
+        capability (object): Modalidade declarada pela fonte (ex.: ``acoustic``).
+        event_type (object): Tipo de sinal da hipótese.
+
+    Returns:
+        bool: ``True`` se o simulador associar essa modalidade a esse sinal.
     """
     return (
         isinstance(capability, str)
@@ -34,23 +48,22 @@ def are_observations_compatible(
     max_distance: float,
     max_time_difference: float,
 ) -> bool:
-    """Return whether two observations can refer to the same occurrence.
+    """Dizer se duas observações podem referir-se à mesma ocorrência.
 
     Args:
-        first: The first sensor observation.
-        second: The second sensor observation.
-        max_distance: Inclusive maximum Euclidean distance between positions.
-        max_time_difference: Inclusive maximum absolute difference between
-            observation instants, in the same simulated time unit as
-            ``Observation.observed_at``.
+        first (Observation): Primeira observação.
+        second (Observation): Segunda observação.
+        max_distance (float): Distância euclidiana máxima entre as posições (inclusiva).
+        max_time_difference (float): Diferença máxima entre os instantes de observação
+            (inclusiva), na mesma unidade de ``Observation.observed_at``.
 
     Returns:
-        ``True`` when the observations have different ``event_id`` values and
-        both configured limits are satisfied; otherwise ``False``.
+        bool: ``True`` se os ``event_id`` forem diferentes e os dois limites forem
+            cumpridos; senão ``False``.
 
     Raises:
-        TypeError: If either observation or a limit has an invalid type.
-        ValueError: If a limit is negative or not finite.
+        TypeError: Se uma observação ou um limite tiver um tipo inválido.
+        ValueError: Se um limite for negativo ou não finito.
     """
     _validate_observation(first, "first")
     _validate_observation(second, "second")
@@ -68,7 +81,21 @@ def are_observations_compatible(
 
 
 def positions_within_distance(first: Position, second: Position, max_distance: float) -> bool:
-    """Comparar posições sem deixar escapar overflow na conversão de inteiros."""
+    """Comparar posições sem deixar escapar overflow na conversão de inteiros.
+
+    Args:
+        first (Position): Primeira posição.
+        second (Position): Segunda posição.
+        max_distance (float): Distância euclidiana máxima (inclusiva).
+
+    Returns:
+        bool: ``True`` se a distância entre as posições não exceder ``max_distance``.
+
+    Raises:
+        TypeError: Se ``max_distance`` não for numérico.
+        ValueError: Se ``max_distance`` for negativo ou não finito, ou se a distância
+            exceder o intervalo numérico suportado.
+    """
     _validate_limit(max_distance, "max_distance")
     try:
         distance = hypot(first.x - second.x, first.y - second.y)
@@ -82,18 +109,32 @@ def select_eligible_sources(
     sensor_positions: Mapping[str, Position],
     source_profiles: Mapping[str, Source],
 ) -> tuple[str, ...]:
-    """Return sensor IDs that can independently help verify an observation.
+    """Devolver os sensores que podem ajudar a verificar a observação de forma independente.
 
-    A source is eligible when it has a known position and ``Source`` profile,
-    is not the source of ``observation``, and the observation position is at
-    most its configured detection range away. The distance comparison is
-    inclusive. Source modalities are deliberately not compared with the
-    observation type, so acoustic, visual and human sources may complement
-    one another.
+    Uma fonte é elegível se:
 
-    Only the supplied sensor metadata is used: this function does not inspect
-    simulator events, ground truth or another source's observation history.
-    Identifiers are returned once, in lexicographic order.
+    - tem posição e perfil ``Source`` conhecidos;
+    - não é a fonte de ``observation``;
+    - a observação está dentro do seu alcance de deteção (inclusive).
+
+    A modalidade da fonte não é comparada com o tipo da observação, de
+    propósito: fontes acústicas, visuais e humanas complementam-se.
+
+    Usa só os metadados dos sensores; não consulta eventos do simulador, a
+    verdade nem o histórico de outras fontes.
+
+    Args:
+        observation (Observation): Observação a verificar.
+        sensor_positions (Mapping[str, Position]): Posição de cada sensor, por ID.
+        source_profiles (Mapping[str, Source]): Perfil de cada fonte, com o alcance de
+            deteção.
+
+    Returns:
+        tuple[str, ...]: IDs das fontes elegíveis, cada um uma vez, por ordem alfabética.
+
+    Raises:
+        TypeError: Se ``observation`` não for ``Observation``, se um dos mapas não for
+            ``Mapping``, ou se uma posição ou perfil tiver o tipo errado.
     """
     if not isinstance(observation, Observation):
         raise TypeError("observation must be an Observation.")
@@ -129,19 +170,44 @@ def classify_verification_response(
     incompatibility_rules: Mapping[str, object] | None = None,
     compatibility_rules: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
-    """Classify evidence in a validated ``VERIFY_RESPONSE``.
+    """Classificar a evidência de um ``VERIFY_RESPONSE`` já validado.
 
-    The returned dictionary contains ``classification`` and the unique
-    ``observation_ids`` used for that classification. Contradiction requires
-    an echoed, validated hypothesis and a caller-supplied incompatibility
-    rule. Different event types require a caller-supplied compatibility rule.
-    Informative absence requires an explicit, validated non-detection and
-    coverage declaration; an empty response or timeout is never enough.
+    Cada classificação exige:
 
-    A compatible result requires an observation with a different ``event_id``
-    and a different ``source_id`` from the initial observation, and satisfying
-    :func:`are_observations_compatible`. Repeated ``event_id`` values are
-    evaluated only once. No simulator state or ground truth is consulted.
+    - **compatível:** uma observação com ``event_id`` e ``source_id``
+      diferentes dos da inicial e que cumpra :func:`are_observations_compatible`;
+    - **contradição:** a resposta declara ``evidence_relation == "contradictory"``,
+      a hipótese devolvida corresponde à inicial e há uma regra de
+      incompatibilidade dada pelo chamador; se a declaração vier com hipótese
+      não correlacionada, nenhuma observação conta como compatível;
+    - **tipos de evento diferentes:** uma regra de compatibilidade dada pelo chamador;
+    - **ausência informativa:** uma declaração explícita e validada de não
+      deteção e cobertura. Uma resposta vazia ou um timeout nunca bastam.
+
+    Cada ``event_id`` é avaliado uma só vez. Não consulta o estado do
+    simulador nem a verdade.
+
+    Args:
+        initial_observation (Observation): Observação que originou o pedido.
+        response (Message): ``VERIFY_RESPONSE`` a classificar.
+        max_distance (float): Distância máxima para observações compatíveis (inclusiva).
+        max_time_difference (float): Diferença temporal máxima (inclusiva).
+        incompatibility_rules (Mapping[str, object] | None): Tipos de evento que
+            contradizem cada tipo; ``None`` desativa contradições.
+        compatibility_rules (Mapping[str, object] | None): Tipos de evento, além do
+            próprio, compatíveis com cada tipo.
+
+    Returns:
+        dict[str, object]: ``classification`` (``compatible``, ``contradictory``,
+            ``informative_absence``, ``inconclusive`` ou ``no_data``) e os
+            ``observation_ids`` usados para a obter, sem repetições; em evidência mista,
+            também ``compatible_observation_ids`` e ``contradictory_observation_ids``.
+
+    Raises:
+        TypeError: Se ``initial_observation`` ou ``response`` tiverem o tipo errado, ou
+            se um limite ou as regras forem de tipo inválido.
+        ValueError: Se um limite for negativo ou não finito, se a resposta for inválida
+            ou se as regras contiverem strings vazias.
     """
     _validate_observation(initial_observation, "initial_observation")
     _validate_limit(max_distance, "max_distance")
@@ -257,18 +323,42 @@ def aggregate_verification_responses(
     compatibility_rules: Mapping[str, object] | None = None,
     expected_incident_id: str | None = None,
 ) -> dict[str, object]:
-    """Aggregate several responses for one verification request.
+    """Juntar as várias respostas a um pedido de verificação.
 
-    Responses are accepted only when they are ``VERIFY_RESPONSE`` messages in
-    the expected conversation and refer to the expected request. A message is
-    processed once by ``message_id`` and an observation is counted once by
-    ``event_id``. Source diversity is derived from the observations themselves,
-    never from the transport sender or the response ``source_id``.
+    Só aceita mensagens ``VERIFY_RESPONSE`` da conversa esperada e que se
+    refiram ao pedido esperado. Cada mensagem é processada uma vez (por
+    ``message_id``) e cada observação contada uma vez (por ``event_id``). As
+    ``source_ids`` e as fontes compatíveis vêm das próprias observações, nunca
+    do remetente nem do ``source_id`` da resposta; só a ausência informativa
+    (e, por isso, ``coverage_source_ids``) usa o ``source_id`` da resposta.
+    Várias observações da mesma fonte contam como uma só fonte compatível.
 
-    The result contains ``classification``, unique independent
-    ``observation_ids``, distinct observation ``source_ids`` and
-    ``compatible_source_ids``/``compatible_source_count``. Multiple
-    observations from one source count as one compatible source.
+    Args:
+        initial_observation (Observation): Observação que originou o pedido.
+        responses (Iterable[Message]): ``VERIFY_RESPONSE`` recebidas.
+        conversation_id (str): Conversa do pedido de verificação.
+        request_message_id (str): ID do ``VERIFY_REQUEST`` a que as respostas respondem.
+        max_distance (float): Distância máxima para observações compatíveis (inclusiva).
+        max_time_difference (float): Diferença temporal máxima (inclusiva).
+        incompatibility_rules (Mapping[str, object] | None): Tipos de evento que
+            contradizem cada tipo.
+        compatibility_rules (Mapping[str, object] | None): Tipos de evento, além do
+            próprio, compatíveis com cada tipo.
+        expected_incident_id (str | None): Incidente esperado; ``None`` não o verifica.
+
+    Returns:
+        dict[str, object]: ``classification``, as ``observations`` e
+            ``observation_ids`` independentes, os IDs compatíveis, contraditórios e em
+            conflito, os ``source_ids`` distintos, ``compatible_source_ids``,
+            ``compatible_source_count``, ``informative_absence_source_ids`` e
+            ``coverage_source_ids``.
+
+    Raises:
+        TypeError: Se ``initial_observation`` não for ``Observation``, se alguma resposta
+            não for ``Message``, ou se um limite ou as regras tiverem o tipo errado.
+        ValueError: Se um identificador estiver vazio, um limite for negativo ou não
+            finito, ou se uma resposta for inválida ou pertencer a outra conversa,
+            pedido ou incidente.
     """
     _validate_observation(initial_observation, "initial_observation")
     _validate_reference(conversation_id, "conversation_id")
@@ -415,6 +505,15 @@ def aggregate_verification_responses(
 
 
 def validate_source_profiles(source_profiles: Mapping[str, Mapping[str, str]]) -> None:
+    """Exigir exatamente ``modality`` e ``correlation_group`` em cada perfil.
+
+    Args:
+        source_profiles (Mapping[str, Mapping[str, str]]): Perfil de cada fonte, por ID.
+
+    Raises:
+        ValueError: Se um ID ou valor não for uma string não vazia, ou se um perfil não
+            tiver exatamente as duas chaves.
+    """
     for source_id, profile in source_profiles.items():
         _validate_reference(source_id, "source_id")
         if set(profile) != {"modality", "correlation_group"}:
@@ -434,12 +533,41 @@ def evaluate_reputation_corroboration(
     *,
     default_reputation: float = 0.5,
 ) -> dict[str, object]:
-    """Score heurístico de suspeita, nunca probabilidade calibrada.
+    """Calcular o score heurístico de suspeita, ponderado pela reputação.
 
+    O score nunca é uma probabilidade calibrada.
     Peso = reputação × confiança declarada × proximidade temporal × espacial.
     Cada grupo de fontes correlacionadas contribui no máximo uma vez por sinal
     (positivo/negativo). Metadados desconhecidos partilham um grupo conservador.
     Ausência informativa reduz apoio; timeout/no_data não o reduz.
+
+    Args:
+        initial_observation (Observation): Observação que originou o pedido.
+        aggregate_summary (Mapping[str, object]): Resultado de
+            :func:`aggregate_verification_responses`.
+        eligible_source_ids (Iterable[str]): Fontes elegíveis, de
+            :func:`select_eligible_sources`.
+        reputation_scores (Mapping[str, float]): Reputação de cada fonte, entre 0 e 1.
+        source_profiles (Mapping[str, Mapping[str, str]]): ``modality`` e
+            ``correlation_group`` de cada fonte.
+        max_distance (float): Distância máxima para evidência compatível (inclusiva).
+        max_time_difference (float): Diferença temporal máxima (inclusiva).
+        default_reputation (float): Reputação das fontes sem score, entre 0 e 1.
+
+    Returns:
+        dict[str, object]: Indicadores de
+            :func:`evaluate_preliminary_corroboration` acrescidos de
+            ``suspicion_score`` (entre 0 e 1), ``support``, ``opposition``,
+            ``diversity_factor``, ``supporting_group_count``, ``modalities``,
+            ``conflicting_evidence`` e os ``factors`` de cada evidência.
+
+    Raises:
+        TypeError: Se ``initial_observation`` não for ``Observation``, se
+            ``aggregate_summary`` não for ``Mapping``, se um limite tiver o tipo errado
+            ou se ``eligible_source_ids`` não for iterável.
+        ValueError: Se um limite for negativo ou não finito, uma reputação estiver fora
+            de [0, 1], se os perfis ou os IDs elegíveis forem inválidos, ou se uma
+            observação do resumo for inválida.
     """
     _validate_observation(initial_observation, "initial_observation")
     _validate_limit(max_distance, "max_distance")
@@ -457,6 +585,11 @@ def evaluate_reputation_corroboration(
     groups = {}
 
     def add(source_id, event_id, relation, confidence, temporal, spatial):
+        """Registar um fator de evidência e atualizar o grupo de correlação da fonte.
+
+        Cada grupo guarda apenas o maior peso por relação. A modalidade só conta
+        para a diversidade com apoio positivo, peso não nulo e modalidade conhecida.
+        """
         profile = source_profiles.get(source_id, {})
         group = profile.get("correlation_group", "unknown")
         modality = profile.get("modality", "unknown")
@@ -518,7 +651,7 @@ def evaluate_reputation_corroboration(
 
 
 def _observation_sort_key(observation: Observation) -> tuple:
-    """Return a deterministic key for equivalent-event audit retention."""
+    """Devolver uma chave determinística para escolher a variante canónica de cada ``event_id``."""
     return (
         observation.source_id,
         observation.event_type,
@@ -535,17 +668,34 @@ def evaluate_preliminary_corroboration(
     aggregate_summary: Mapping[str, object],
     eligible_source_ids,
 ) -> dict[str, object]:
-    """Calculate descriptive coverage indicators from an aggregate summary.
+    """Calcular os indicadores de cobertura a partir do resumo agregado.
 
-    ``eligible_source_ids`` must come from :func:`select_eligible_sources`.
-    Only deduplicated source identifiers already present in the aggregate
-    summary are considered. The preliminary score is
-    ``compatible eligible sources / eligible sources`` and information
-    coverage is ``eligible sources with observations / eligible sources``.
+    ``eligible_source_ids`` tem de vir de :func:`select_eligible_sources`. Só
+    conta as fontes, sem repetições, que já estão no resumo:
 
-    These indicators are descriptive, not calibrated probabilities. Different
-    sources may share hardware, location, software or environmental blind
-    spots and therefore are not necessarily statistically independent.
+    - **score preliminar** = fontes elegíveis compatíveis / fontes elegíveis;
+    - **cobertura de informação** = fontes elegíveis com observações ou ausência
+      informativa válida / fontes elegíveis.
+
+    São indicadores descritivos, não probabilidades calibradas: fontes
+    diferentes podem partilhar hardware, local, software ou pontos cegos, por
+    isso não são necessariamente independentes.
+
+    Args:
+        aggregate_summary (Mapping[str, object]): Resultado de
+            :func:`aggregate_verification_responses`.
+        eligible_source_ids (Iterable[str]): Fontes elegíveis para a observação.
+
+    Returns:
+        dict[str, object]: ``classification``, ``compatible_observation_ids``,
+            ``eligible_source_count``, IDs e contagens das fontes compatíveis e
+            observadas, ``preliminary_score`` e ``information_coverage`` (ambos
+            ``None`` se não houver fontes elegíveis).
+
+    Raises:
+        TypeError: Se ``aggregate_summary`` não for ``Mapping`` ou um conjunto de IDs
+            não for iterável.
+        ValueError: Se algum ID não for uma string não vazia.
     """
     if not isinstance(aggregate_summary, Mapping):
         raise TypeError("aggregate_summary must be a mapping.")
@@ -592,17 +742,32 @@ def decide_preliminary_verification(
     evaluation_summary: Mapping[str, object],
     minimum_compatible_sources: int,
 ) -> dict[str, object]:
-    """Choose between observing and requesting mobile verification.
+    """Escolher entre continuar a observar e pedir verificação por patrulha.
 
-    This is an explicit operational rule: request mobile verification when
-    the deduplicated summary reaches ``minimum_compatible_sources`` distinct
-    compatible sources; otherwise continue observing. The threshold is a
-    caller-supplied engineering parameter, not a scientifically validated
-    estimate of poaching probability.
+    Regra operacional explícita: pede verificação quando o resumo atinge
+    ``minimum_compatible_sources`` fontes compatíveis distintas e há fontes
+    elegíveis; senão continua a observar. O limiar é um parâmetro de engenharia dado pelo chamador, não
+    uma estimativa validada da probabilidade de caça furtiva.
 
-    No messages or observations are processed here. The caller must provide
-    the result of :func:`evaluate_preliminary_corroboration`, which already
-    applies the response and observation deduplication rules.
+    Não processa mensagens nem observações: recebe o resultado de
+    :func:`evaluate_preliminary_corroboration`, que já tirou as repetições.
+
+    Args:
+        evaluation_summary (Mapping[str, object]): Resultado de
+            :func:`evaluate_preliminary_corroboration`.
+        minimum_compatible_sources (int): Fontes compatíveis distintas necessárias para
+            pedir patrulha; inteiro positivo.
+
+    Returns:
+        dict[str, object]: ``decision`` (``observe`` ou ``request_mobile_verification``),
+            ``reason`` e os indicadores do resumo usados na decisão.
+
+    Raises:
+        TypeError: Se ``evaluation_summary`` não for ``Mapping``, se
+            ``minimum_compatible_sources`` não for inteiro, ou se um conjunto de IDs não
+            for iterável.
+        ValueError: Se ``minimum_compatible_sources`` não for positivo, se uma contagem
+            não for um inteiro não negativo, ou se algum ID for inválido.
     """
     if not isinstance(evaluation_summary, Mapping):
         raise TypeError("evaluation_summary must be a mapping.")
@@ -663,6 +828,15 @@ def decide_preliminary_verification(
 
 
 def _observations_from_response(response: Message) -> tuple[tuple[Observation, ...], str]:
+    """Validar um ``VERIFY_RESPONSE`` e devolver as suas observações e o ``status``.
+
+    Raises:
+        TypeError: Se ``response`` não for ``Message``.
+        ValueError: Se o tipo, o payload, o estado ou alguma observação forem inválidos,
+            se o estado não for coerente com a lista de observações, ou se uma
+            observação ou o fim do intervalo de ausência forem posteriores à emissão
+            da resposta.
+    """
     if not isinstance(response, Message):
         raise TypeError("response must be a Message.")
     if response.message_type is not MessageType.VERIFY_RESPONSE:
@@ -708,7 +882,18 @@ def _observations_from_response(response: Message) -> tuple[tuple[Observation, .
 
 
 def build_observation_hypothesis(observation: Observation) -> dict[str, object]:
-    """Build the optional, backwards-compatible hypothesis contract."""
+    """Construir a hipótese opcional enviada no pedido (compatível com o contrato anterior).
+
+    Args:
+        observation (Observation): Observação que define a hipótese.
+
+    Returns:
+        dict[str, object]: ``hypothesis_id``, ``event_type``, ``position`` e o intervalo
+            ``valid_from``/``valid_until`` (ambos no instante da observação).
+
+    Raises:
+        TypeError: Se ``observation`` não for ``Observation``.
+    """
     _validate_observation(observation, "observation")
     return {
         "hypothesis_id": f"hypothesis-{observation.event_id}",
@@ -720,7 +905,15 @@ def build_observation_hypothesis(observation: Observation) -> dict[str, object]:
 
 
 def _configured_types(event_type: str, rules: Mapping[str, object] | None, name: str) -> set[str]:
-    """Tipos que as regras do chamador associam a ``event_type``; ``name`` só entra nas mensagens de erro."""
+    """Devolver os tipos que as regras do chamador associam a ``event_type``.
+
+    ``name`` só entra nas mensagens de erro.
+
+    Raises:
+        TypeError: Se ``rules`` não for ``Mapping`` ou a regra de ``event_type`` não for
+            iterável.
+        ValueError: Se a regra contiver valores que não sejam strings não vazias.
+    """
     if rules is None:
         return set()
     if not isinstance(rules, Mapping):
@@ -741,6 +934,12 @@ def _hypothesis_is_correlated(
     initial_observation: Observation,
     response: Message,
 ) -> bool:
+    """Verificar se a hipótese ecoada na resposta corresponde à observação inicial.
+
+    Exige ID não vazio, o mesmo tipo de evento, a mesma posição e um intervalo
+    de validade finito que contenha o instante da observação. Hipótese ausente
+    ou malformada devolve ``False`` em vez de levantar erro.
+    """
     hypothesis = response.payload.get("hypothesis")
     if not isinstance(hypothesis, Mapping):
         return False
@@ -768,6 +967,13 @@ def _informative_absence_is_valid(
     initial_observation: Observation,
     response: Message,
 ) -> bool:
+    """Verificar se uma ausência declarada conta como evidência negativa.
+
+    Exige fonte identificada, hipótese correlacionada e referida pela ausência,
+    não-deteção explícita, capacidade adequada ao sinal e validada, oportunidade
+    confirmada, intervalo de observação que cubra o da hipótese e posição da
+    hipótese dentro do raio de cobertura. Campos em falta devolvem ``False``.
+    """
     hypothesis = response.payload.get("hypothesis")
     absence = response.payload.get("absence")
     if not isinstance(hypothesis, Mapping) or not isinstance(absence, Mapping):
@@ -814,11 +1020,22 @@ def _informative_absence_is_valid(
 
 
 def _validate_reference(value: str, name: str) -> None:
+    """Exigir que ``value`` seja uma string não vazia.
+
+    Raises:
+        ValueError: Se ``value`` não for uma string não vazia.
+    """
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} must be a non-empty string.")
 
 
 def _unique_identifiers(values, name: str) -> tuple[str, ...]:
+    """Devolver os identificadores sem duplicados, por ordem lexicográfica.
+
+    Raises:
+        TypeError: Se ``values`` não for iterável.
+        ValueError: Se algum elemento não for uma string não vazia.
+    """
     try:
         identifiers = tuple(values)
     except TypeError as error:
@@ -829,23 +1046,45 @@ def _unique_identifiers(values, name: str) -> tuple[str, ...]:
 
 
 def _summary_identifiers(summary: Mapping[str, object], name: str) -> set[str]:
+    """Ler ``name`` do sumário como conjunto de IDs validados; vazio se faltar.
+
+    Raises:
+        TypeError: Se o valor não for iterável.
+        ValueError: Se algum ID não for uma string não vazia.
+    """
     values = summary.get(name, ())
     identifiers = _unique_identifiers(values, name)
     return set(identifiers)
 
 
 def _nonnegative_count(value: object, name: str) -> int:
+    """Devolver ``value`` se for inteiro não negativo.
+
+    Raises:
+        ValueError: Se ``value`` não for um inteiro não negativo (``bool`` não conta).
+    """
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(f"{name} must be a non-negative integer.")
     return value
 
 
 def _validate_observation(observation: Observation, name: str) -> None:
+    """Exigir que ``observation`` seja uma ``Observation``.
+
+    Raises:
+        TypeError: Se ``observation`` não for ``Observation``.
+    """
     if not isinstance(observation, Observation):
         raise TypeError(f"{name} must be an Observation.")
 
 
 def _validate_limit(value: float, name: str) -> None:
+    """Exigir número finito e não negativo.
+
+    Raises:
+        TypeError: Se ``value`` não for ``int`` ou ``float`` (``bool`` não conta).
+        ValueError: Se ``value`` for negativo ou não finito.
+    """
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise TypeError(f"{name} must be a finite non-negative number.")
     if not is_finite_number(value) or value < 0:

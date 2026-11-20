@@ -9,6 +9,22 @@ from isia.reasoning.allocation import RANGER_DECISION
 
 @dataclass(frozen=True)
 class ResponsePolicy:
+    """Limiares e mínimos de evidência que regem a escolha da resposta.
+
+    Os limiares de patrulha e de rangers comparam-se com o score heurístico de
+    suspeita; ``severe_threshold`` compara-se com a gravidade e, quando é
+    atingido, a patrulha usa o limiar mais baixo ``severe_patrol_threshold``.
+    Pedir rangers exige ainda mínimos de grupos de apoio e de modalidades
+    distintas.
+
+    Attributes:
+        patrol_threshold (float): Score mínimo, em ]0, 1], para pedir patrulha.
+        ranger_threshold (float): Score mínimo, em ]0, 1], para pedir rangers.
+        severe_threshold (float): Gravidade a partir da qual o evento é tratado como grave.
+        severe_patrol_threshold (float): Score mínimo para pedir patrulha em eventos graves.
+        ranger_min_groups (int): Grupos de correlação de apoio exigidos para rangers (>= 2).
+        ranger_min_modalities (int): Modalidades conhecidas distintas exigidas para rangers (>= 2).
+    """
     patrol_threshold: float = 0.25
     ranger_threshold: float = 0.65
     severe_threshold: float = 0.8
@@ -17,6 +33,12 @@ class ResponsePolicy:
     ranger_min_modalities: int = 2
 
     def __post_init__(self):
+        """Validar os limiares, a sua ordem e os mínimos.
+
+        Raises:
+            ValueError: Se um limiar estiver fora de ]0, 1], se não se cumprir
+                ``severe_patrol <= patrol <= ranger``, ou se um mínimo não for um inteiro >= 2.
+        """
         for name in ("patrol_threshold", "ranger_threshold", "severe_threshold", "severe_patrol_threshold"):
             value = getattr(self, name)
             if not is_finite_number(value) or not 0 < value <= 1:
@@ -41,6 +63,27 @@ def decide_response(
 
     A verdade de referência nunca entra na decisão operacional. ``severity``
     é gravidade configurada para a hipótese, não intensidade medida do sinal.
+
+    Args:
+        evaluation (dict): Resultado de ``evaluate_reputation_corroboration``; usa
+            ``suspicion_score``, ``supporting_group_count``, ``modalities`` e
+            ``conflicting_evidence``.
+        policy (ResponsePolicy): Limiares e mínimos a aplicar.
+        severity (float): Gravidade configurada da hipótese, entre 0 e 1.
+        initial_observation (Observation): Observação que abriu a ocorrência.
+        incident_id (str): Identificador da ocorrência.
+
+    Returns:
+        dict: ``evaluation`` acrescida de ``incident_id``, ``decision`` (``observe``,
+            ``request_mobile_verification`` ou ``request_rangers``), ``reason``,
+            ``severity``, ``policy`` e ``effective_patrol_threshold``.
+
+    Raises:
+        TypeError: Se ``policy`` não for ``ResponsePolicy`` ou ``initial_observation``
+            não for ``Observation``.
+        ValueError: Se ``incident_id`` estiver vazio, se o score ou a gravidade estiverem
+            fora de [0, 1], ou se os restantes campos de ``evaluation`` forem inválidos.
+        KeyError: Se faltar algum dos campos usados de ``evaluation``.
     """
     if not isinstance(policy, ResponsePolicy) or not isinstance(initial_observation, Observation):
         raise TypeError("São necessários ResponsePolicy e Observation.")

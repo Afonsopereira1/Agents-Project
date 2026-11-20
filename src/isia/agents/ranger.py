@@ -4,4 +4,4 @@ from isia.agents.mobile import MobileResourceAgent
 
 
 class RangerAgent(MobileResourceAgent):
-    """Configurar a capacidade incident_response para receber intervenções."""
+    """Guarda que recebe intervenções; o runner dá-lhe a capacidade ``incident_response``."""

@@ -126,6 +126,7 @@ hello_agent.py, main.py, verification_demo.py    demonstrações com servidor XM
 | Falhas injetadas (perda, atraso, duplicação, indisponibilidade) | [faults.md](docs/faults.md) |
 | Reputação e política de resposta | [reputation-policy.md](docs/reputation-policy.md) |
 | Efeito de cada parâmetro | [sensitivity.md](docs/sensitivity.md) |
+| Documentação do código (HTML gerado com `pdoc`; começa pelo mapa «onde encontrar cada coisa») | [api/isia.html](docs/api/isia.html) |
 | Formato das mensagens | [protocols.md](docs/protocols.md); o contrato anterior está em [message-contract.md](docs/message-contract.md) |
 | Apresentação: ordem, tempos e fala de cada diapositivo | [presentation/roteiro.md](docs/presentation/roteiro.md) |
 | Valores dos parâmetros e quem os aprovou | [approvals.md](docs/approvals.md) |

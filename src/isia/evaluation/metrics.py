@@ -23,11 +23,27 @@ NUMERIC = ("verification_time", "response_time", "energy_used", "messages_sent",
 
 
 def ratio(numerator, denominator):
+    """Dividir numerador por denominador; denominador zero devolve None (N/A).
+
+    Args:
+        numerator (int | float): Numerador.
+        denominator (int | float): Denominador.
+
+    Returns:
+        float | None: O quociente, ou ``None`` se o denominador for zero.
+    """
     return None if denominator == 0 else numerator / denominator
 
 
 def confusion(pairs):
-    """``pairs`` = iterável de (real, previsto) booleanos."""
+    """Contar a matriz de confusão.
+
+    Args:
+        pairs (Iterable[tuple[bool, bool]]): Pares (real, previsto) de cada execução.
+
+    Returns:
+        dict[str, int]: Contagens com as chaves ``TP``, ``FP``, ``TN`` e ``FN``.
+    """
     counts = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
     for truth, predicted in pairs:
         counts[("T" if truth == predicted else "F") + ("P" if predicted else "N")] += 1
@@ -35,12 +51,36 @@ def confusion(pairs):
 
 
 def rates(counts):
+    """Calcular precision, recall, fpr e accuracy; denominador zero dá None.
+
+    Args:
+        counts (dict[str, int]): Matriz de confusão, como a devolvida por ``confusion``.
+
+    Returns:
+        dict[str, float | None]: ``precision``, ``recall``, ``fpr`` e ``accuracy``, em [0, 1].
+    """
     tp, fp, tn, fn = (counts[key] for key in ("TP", "FP", "TN", "FN"))
     return {"precision": ratio(tp, tp + fp), "recall": ratio(tp, tp + fn),
             "fpr": ratio(fp, fp + tn), "accuracy": ratio(tp + tn, tp + fp + tn + fn)}
 
 
 def run_metrics(report):
+    """Extrair as métricas de uma execução a partir do relatório de run_mvp.
+
+    ``threat`` vem apenas de ground_truth e ``dispatched`` da decisão no topo
+    do relatório. Os tempos são o menor ``completed_at`` de cada tarefa, ou
+    None se não houve resultado. ``energy_used`` é None quando alguma
+    autonomia é desconhecida. Com ``extra_initiators``, acrescenta as
+    contagens de incidentes de todos os iniciadores.
+
+    Args:
+        report (dict[str, Any]): Relatório de uma execução de ``run_mvp``.
+
+    Returns:
+        dict[str, Any]: Métricas da execução (classificação, tempos em segundos simulados,
+            energia em pontos percentuais, mensagens, missões e, com vários iniciadores,
+            contagens de incidentes).
+    """
     truth = any(event["is_threat"] for event in report["ground_truth"]["events"])
     decision = (report["decision"] or {}).get("decision")
     results = [result["payload"] for result in report["results"]]
@@ -90,6 +130,17 @@ def run_metrics(report):
 
 
 def describe(values):
+    """Devolver n, média, mediana e desvio-padrão amostral, ignorando os None.
+
+    Sem valores, as estatísticas são None com n = 0; com um só valor, o
+    desvio-padrão é None.
+
+    Args:
+        values (Iterable[float | None]): Valores de uma métrica, um por execução.
+
+    Returns:
+        dict[str, float | int | None]: ``n``, ``mean``, ``median`` e ``stdev``.
+    """
     values = [value for value in values if value is not None]
     if not values:
         return {"n": 0, "mean": None, "median": None, "stdev": None}
@@ -98,7 +149,21 @@ def describe(values):
 
 
 def summarize(rows):
-    """Agrega linhas de run_metrics de um mesmo cenário/variante."""
+    """Agregar as linhas de run_metrics de um mesmo cenário e variante.
+
+    Com vários iniciadores, as métricas de classificação ficam a None e somam-se as
+    contagens de incidentes.
+
+    Args:
+        rows (list[dict[str, Any]]): Resultados de ``run_metrics``, um por execução (repetição × episódio).
+
+    Returns:
+        dict[str, Any]: Número de execuções, classificação, contagens e estatísticas de
+            ``describe`` para cada métrica numérica.
+
+    Raises:
+        ValueError: Se umas linhas tiverem contagens de incidentes e outras não.
+    """
     multiple = ["incidents" in row for row in rows]
     if any(multiple) and not all(multiple):
         raise ValueError("Não é possível agregar unidades de avaliação diferentes.")

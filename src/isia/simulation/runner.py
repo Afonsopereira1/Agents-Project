@@ -1,4 +1,7 @@
-"""Executar o MVP: transporte local de teste ou agentes ligados a XMPP."""
+"""Executar o MVP: transporte local de teste ou agentes ligados a XMPP.
+
+Por onde começar: `run_mvp`, que monta o mundo, cria os agentes, injeta falhas
+(`fault_settings`) e devolve o relatório com a timeline."""
 
 import argparse
 import asyncio
@@ -36,7 +39,20 @@ FAULT_DEFAULTS = {"seed": 0, "loss": 0.0, "delay": {}, "drop": [], "duplicate": 
 
 
 def fault_settings(faults):
-    """Validar a injeção de falhas do transporte local (Etapa 8)."""
+    """Validar a injeção de falhas do transporte local (Etapa 8).
+
+    Args:
+        faults (dict | None): Chaves de ``FAULT_DEFAULTS`` a alterar (``seed``, ``loss``,
+            ``delay``, ``drop``, ``duplicate``, ``unavailable_agents``,
+            ``occupied_after_proposal``, ``flood``); None desliga as falhas.
+
+    Returns:
+        dict | None: Cópia independente com as omissões preenchidas, ou None sem falhas.
+
+    Raises:
+        ValueError: Se houver chaves desconhecidas, valores fora do intervalo ou nomes de
+            mensagens, agentes ou recursos que não existem no MVP.
+    """
     if faults is None:
         return None
     if not isinstance(faults, dict) or set(faults) - set(FAULT_DEFAULTS):
@@ -80,6 +96,24 @@ def validate_experimental_settings(*, xmpp=False, corroboration_settings=None,
 
     A janela de corroboração usa tempo simulado. ``receive_timeout`` é o prazo
     base em tempo real e não o teto dinâmico opcional do Bloco F.
+
+    Args:
+        xmpp (bool): Transporte XMPP; muda o prazo por omissão de 0.5 s para 2.0 s.
+        corroboration_settings (dict[str, float] | None): ``max_distance`` (células) e
+            ``max_time_difference`` (s simulados); None usa ``CORROBORATION_DEFAULTS``.
+        receive_timeout (float | None): Prazo base, em segundos reais; None usa a omissão
+            do transporte.
+        minimum_autonomy_percent (float): Reserva mínima de energia, em % de 0 a 100.
+        selection_weights (dict[str, float] | None): Pesos e escalas de seleção de
+            propostas; None mantém as omissões do iniciador.
+
+    Returns:
+        tuple[dict[str, float], float, float]: Parâmetros de corroboração, prazo base e
+            reserva mínima efetivos.
+
+    Raises:
+        ValueError: Se houver chaves desconhecidas, valores negativos ou não finitos, prazo
+            não positivo, reserva fora de [0, 100], escala nula ou todos os pesos a zero.
     """
     if corroboration_settings is not None and (
             not isinstance(corroboration_settings, dict)
@@ -109,7 +143,23 @@ def validate_experimental_settings(*, xmpp=False, corroboration_settings=None,
 
 
 def scenario_settings(scenario):
-    """Fontes, eventos e recursos de um cenário da Etapa 9 sobre o mundo 8x8 do MVP."""
+    """Montar fontes, eventos e recursos de um cenário da Etapa 9.
+
+    O mapa não é criado aqui: vem de ``map_size`` em ``run_mvp`` (8x8 por omissão).
+
+    Args:
+        scenario (dict | None): Cenário com ``run_id``, ``seed``, ``sources``, ``events`` e
+            ``resources``; None usa o cenário base do MVP (uma ameaça fixa em (3, 2)).
+
+    Returns:
+        tuple: Semente, fontes (``dict[str, Source]``), eventos (``tuple[Event, ...]``),
+            opções por recurso (``dict``) e prefixo dos identificadores das observações.
+
+    Raises:
+        ValueError: Se faltarem ou sobrarem chaves, o ``run_id`` estiver vazio, a semente
+            não for inteira, fontes, eventos ou recursos forem inválidos, ou algum evento
+            não começar em t=0.
+    """
     if scenario is None:
         return (SCENARIO_SEED, {key: Source("acoustic", 5) for key in ("sensor-1", "sensor-2")},
                 (Event("event-mvp", "threat", Position(3, 2), 0, 1000),), {}, "obs")
@@ -144,58 +194,104 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                   extra_rangers=None, extra_informants=None, map_size=(8, 8), sensor_positions=None,
                   expire_unseen=False, queue_until_free=False, chain_missions=False, retransmit=0,
                   alert_distance=None):
-    """O runner só fornece ambiente, relógio e transporte; agentes decidem.
+    """Correr uma execução do MVP e devolver o relatório.
 
-    inspection_outcomes e interrupt_resource permitem testes determinísticos.
-    O transporte local executa os mesmos comportamentos e contratos SPADE,
-    mas não demonstra entrega pela rede XMPP.
-    response_settings ativa a Etapa 7. reputation contém apenas aprendizagem
-    previamente validada pelo avaliador; o sensor recebe uma cópia dos pesos.
-    Com ``response_settings["adjudication"]``, o avaliador atualiza ``reputation``
-    após a execução a partir dos MISSION_RESULT com cobertura suficiente.
-    faults injeta perda, atraso, duplicação e indisponibilidade só no transporte
-    local; não altera nem valida o servidor XMPP.
-    scenario (Etapa 9) substitui semente, fontes, eventos e recursos do MVP.
-    corroborate=False ignora a resposta do par; selection_weights
-    passa pesos a select_best_proposal, ex. só ETA para "mais próximo".
-    Sem max_seconds, o limite global cobre a verificação e as tentativas das
-    duas fases de missão. Um limite explícito mantém o watchdog do chamador.
-    A identidade de scenario é também o âmbito da adjudicação. run_id opcional
-    tem de coincidir com essa identidade quando ambos são fornecidos.
-    Sem cenário, repetir a mesma semente é replay para aprendizagem; uma nova
-    amostra exige run_id explícito, que não prova independência estatística.
-    extra_initiators (Bloco F2) associa fontes do cenário a posições: cada uma
-    ganha um sensor no mapa e um IncidentSensorAgent próprio, que só trata o que
-    a sua fonte deteta. O runner não escolhe quem trata cada ameaça. Os campos
-    de topo do relatório continuam a ser os do sensor-mvp.
-    max_receive_timeout é o teto do prazo dinâmico do iniciador (ver configure_mvp), queue_rounds
-    a fila do iniciador e silent_invalid faz os recursos ignorarem um ACCEPT incoerente em vez de
-    responderem reservation_failed. As três opções estão ligadas por omissão desde 18-11-2026;
-    PUBLISHED_CONDITIONS desliga-as, como nos resultados recolhidos. Um receive_timeout acima
-    do teto exige um max_receive_timeout maior (ou None).
-    queue_priority ordena a fila em cada recurso: primeiro a ocorrência mais grave e,
-    em caso de empate, a que espera há mais tempo. A gravidade de cada iniciador vem de
-    response_settings["severity"] ou, por fonte, de response_settings["severity_by_source"].
-    extra_patrols (C4 mínimo) associa novos IDs de patrulha a posições base; são
-    drones com 100 % de autonomia. cfp_limit=K (C1) faz cada iniciador enviar o
-    CFP só às K patrulhas com base mais próxima do alvo.
-    corroboration_settings configura max_distance e max_time_difference, com
-    omissões 3.0 células e 2.0 s simulados. receive_timeout substitui o prazo
-    base (0.5 s local, 2.0 s XMPP); não liga o prazo dinâmico do Bloco F.
-    minimum_autonomy_percent é a reserva mínima de todas as patrulhas e do guarda.
-    map_size e sensor_positions (C4 completo) substituem o mapa 8x8 e as posições de
-    sensor-1 e sensor-2. extra_rangers associa novos IDs de guarda a posições base.
-    extra_informants associa fontes do cenário a posições: cada uma ganha um InformantAgent,
-    e cada iniciador adicional passa a corroborar com o informador mais próximo (sensor-2
-    incluído); um dicionário vazio liga a corroboração só com o sensor-2. Sem ele, os
-    iniciadores adicionais não corroboram, como antes.
-    expire_unseen, queue_until_free (ver configure_mvp) e chain_missions (o recurso aceita a
-    missão seguinte durante o regresso à base) são mitigações da espera na fila, desligadas.
-    retransmit=N (desligado: 0) faz o iniciador reenviar até N vezes o mesmo VERIFY_REQUEST, CFP
-    ou ACCEPT quando a resposta não chega, e os recursos repetirem a resposta já dada.
-    alert_distance=D (desligado: None) liga o aviso entre iniciadores com cobertura sobreposta:
-    cada um envia um ALERT aos vizinhos e, se dois leram a mesma ameaça (até D células), só o
-    que leu primeiro a trata; o outro fecha como duplicate_alert. O runner só diz quem é vizinho.
+    O runner só fornece ambiente, relógio e transporte; os agentes decidem. O transporte
+    local executa os mesmos comportamentos e contratos SPADE, mas não demonstra entrega
+    pela rede XMPP. ``max_receive_timeout``, ``queue_rounds`` e ``silent_invalid`` estão
+    ligados por omissão desde 18-11-2026; ``PUBLISHED_CONDITIONS`` desliga-os, como nos
+    resultados recolhidos.
+
+    Args:
+        xmpp (bool): Ligar os agentes a um servidor XMPP em localhost em vez do transporte
+            local.
+        password (str): Palavra-passe das contas dos agentes.
+        inspection_outcomes (dict[str, str] | None): Resultado fixo da inspeção por
+            ``resource_id``, para testes determinísticos; os outros recursos usam
+            ``Scenario.inspect``.
+        interrupt_resource (str | None): ``resource_id`` cuja missão é interrompida uma vez,
+            quando o recurso estiver fora da base; para testes determinísticos.
+        max_seconds (float | None): Limite global, em segundos reais. None calcula um que
+            cobre a verificação e as tentativas das duas fases de missão; um limite
+            explícito mantém o watchdog do chamador.
+        response_settings (dict | None): Ativa a Etapa 7 (``reputation``, ``policy``,
+            ``sources``, ``severity`` e, opcionais, ``severity_by_source``,
+            ``compatibility_rules`` e ``adjudication``). Com ``adjudication``, o avaliador
+            atualiza ``reputation`` após a execução a partir dos MISSION_RESULT com
+            cobertura suficiente.
+        reputation (ReputationBook | None): Apenas aprendizagem previamente validada pelo
+            avaliador; o sensor recebe uma cópia dos pesos. None cria uma nova a partir de
+            ``response_settings["reputation"]``.
+        faults (dict | None): Perda, atraso, duplicação e indisponibilidade só no transporte
+            local (ver ``fault_settings``); não altera nem valida o servidor XMPP.
+        scenario (dict | None): Cenário da Etapa 9, que substitui semente, fontes, eventos e
+            recursos do MVP (ver ``scenario_settings``). A sua identidade (``run_id``) é
+            também o âmbito da adjudicação.
+        corroborate (bool): False ignora a resposta do par.
+        selection_weights (dict[str, float] | None): Pesos passados a
+            ``select_best_proposal``, ex. só ETA para "mais próximo".
+        run_id (str | None): Identidade da execução; tem de coincidir com a do cenário quando
+            ambos são fornecidos. None usa a do cenário ou ``mvp-seed-<seed>``. Sem cenário,
+            repetir a mesma semente é replay para aprendizagem; uma nova amostra exige
+            ``run_id`` explícito, que não prova independência estatística.
+        extra_initiators (dict[str, Position] | None): Bloco F2: associa fontes do cenário a
+            posições; cada uma ganha um sensor no mapa e um IncidentSensorAgent próprio, que
+            só trata o que a sua fonte deteta. O runner não escolhe quem trata cada ameaça;
+            os campos de topo do relatório continuam a ser os do sensor-mvp.
+        extra_patrols (dict[str, Position] | None): C4 mínimo: associa novos IDs de patrulha
+            a posições base; são drones com 100 % de autonomia.
+        cfp_limit (int | None): K de C1: cada iniciador envia o CFP só aos K recursos com
+            base mais próxima do alvo (K × ronda nas rondas seguintes). None envia a todos.
+        max_receive_timeout (float | None): Teto do prazo dinâmico do iniciador, em segundos
+            reais (ver ``configure_mvp``). Um ``receive_timeout`` acima do teto exige um
+            teto maior (ou None).
+        queue_rounds (int): Rondas da fila do iniciador quando os recursos estão ocupados.
+        silent_invalid (bool): Os recursos ignoram um ACCEPT incoerente em vez de
+            responderem ``reservation_failed``.
+        queue_priority (bool): Ordenar a fila em cada recurso: primeiro a ocorrência mais
+            grave e, em caso de empate, a que espera há mais tempo. A gravidade de cada
+            iniciador vem de ``response_settings["severity"]`` ou, por fonte, de
+            ``response_settings["severity_by_source"]``.
+        corroboration_settings (dict[str, float] | None): ``max_distance`` e
+            ``max_time_difference``, com omissões 3.0 células e 2.0 s simulados.
+        receive_timeout (float | None): Prazo base, em segundos reais; None usa 0.5 s local
+            ou 2.0 s XMPP. Não liga o prazo dinâmico do Bloco F.
+        minimum_autonomy_percent (float): Reserva mínima de energia, em %, de todas as
+            patrulhas e do guarda.
+        extra_rangers (dict[str, Position] | None): Associa novos IDs de guarda a posições
+            base.
+        extra_informants (dict[str, Position] | None): Associa fontes do cenário a posições:
+            cada uma ganha um InformantAgent, e cada iniciador adicional passa a corroborar
+            com o informador mais próximo (sensor-2 incluído). Um dicionário vazio liga a
+            corroboração só com o sensor-2; None: os iniciadores adicionais não corroboram.
+        map_size (tuple[int, int]): Largura e altura do mapa (C4 completo), em células.
+        sensor_positions (dict[str, Position] | None): Posições que substituem as de
+            sensor-1 e/ou sensor-2 (C4 completo).
+        expire_unseen (bool): Prazo de validade do iniciador (ver ``configure_mvp``);
+            mitigação da espera na fila, desligada por omissão.
+        queue_until_free (bool): A fila espera até ao ``busy_until`` da recusa (ver
+            ``configure_mvp``); mitigação desligada por omissão.
+        chain_missions (bool): O recurso aceita a missão seguinte durante o regresso à base;
+            mitigação desligada por omissão.
+        retransmit (int): N: o iniciador reenvia até N vezes o mesmo VERIFY_REQUEST, CFP ou
+            ACCEPT quando a resposta não chega, e os recursos repetem a resposta já dada.
+            0 desliga.
+        alert_distance (float | None): D: liga o aviso entre iniciadores com cobertura
+            sobreposta. Cada um envia um ALERT aos vizinhos e, se dois leram a mesma ameaça
+            (até D células), só o que leu primeiro a trata; o outro fecha como
+            ``duplicate_alert``. O runner só diz quem é vizinho. None desliga.
+
+    Returns:
+        dict: Relatório da execução: configuração efetiva, ``ground_truth``, decisão, estado
+            e motivo do incidente, resultados, missões, recursos, falhas aplicadas,
+            atualizações de reputação, ``timeline`` e mensagens trocadas.
+
+    Raises:
+        ValueError: Se as definições forem inválidas, se ``faults``, iniciadores,
+            informadores ou recursos adicionais forem pedidos com XMPP, se ``run_id`` for
+            vazio ou diferente do do cenário, ou se houver IDs repetidos ou não suportados.
+        TimeoutError: Se a execução não terminar em ``max_seconds``.
+        Exception: A exceção de uma tarefa (comportamento ou relógio) que falhou, relançada.
     """
     corroboration, receive_timeout, minimum_autonomy_percent = validate_experimental_settings(
         xmpp=xmpp, corroboration_settings=corroboration_settings, receive_timeout=receive_timeout,
@@ -318,6 +414,12 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
     by_resource = {agent.resource.resource_id: agent for agent in mobiles}
 
     async def clock_loop():
+        """Avançar o cenário 1 s simulado por ciclo enquanto houver missão em execução.
+
+        Propaga a nova hora a iniciadores, informadores e recursos móveis e
+        interrompe, uma única vez, a missão de ``interrupt_resource`` quando este
+        está fora da base.
+        """
         interrupted = False
         while True:
             await asyncio.sleep(0.01)
@@ -339,6 +441,7 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                         interrupted = True
 
     async def local_behaviour(behaviour):
+        """Repetir ``run`` do comportamento; um OneShotBehaviour corre uma só vez."""
         while True:
             await behaviour.run()
             if isinstance(behaviour, OneShotBehaviour):
@@ -359,12 +462,14 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                     behaviour._local_inbox = inbox
 
                     async def receive(timeout=None, queue=inbox):
+                        """Ler da caixa local; devolve None se o prazo expirar."""
                         try:
                             return await asyncio.wait_for(queue.get(), timeout)
                         except TimeoutError:
                             return None
 
                     async def deliver(message, delay=0.0):
+                        """Entregar a mensagem, após o atraso, a quem tiver um template compatível."""
                         if delay:
                             await asyncio.sleep(delay)
                         for target in routes.get(str(message.to), ()):
@@ -372,6 +477,13 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
                                 await target._local_inbox.put(message)
 
                     async def send(message, sender=str(agent.jid)):
+                        """Registar no transcript e entregar com as falhas configuradas.
+
+                        Sem ``faults`` a entrega é direta. Com falhas, pode gerar
+                        lixo (flood), perder a mensagem, ocupar o recurso depois
+                        de um PROPOSAL, duplicar ou atrasar; cada falha aplicada
+                        fica em ``fault_log``.
+                        """
                         message.sender = sender
                         body = json.loads(message.body)
                         transcript.append({"sender": sender, "to": str(message.to), "body": body})
@@ -482,6 +594,12 @@ async def run_mvp(*, xmpp=False, password="local-demo", inspection_outcomes=None
 
 
 def main():
+    """Ler os argumentos, correr run_mvp e imprimir o relatório em JSON.
+
+    Raises:
+        SystemExit: Via ``parser.error``, se ``--faults`` for usado com ``--xmpp`` ou se
+            ``--xmpp`` for pedido sem a variável XMPP_PASSWORD.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--xmpp", action="store_true", help="Usar servidor XMPP em localhost")
     parser.add_argument("--policy", metavar="JSON", help="Ativar a política da Etapa 7 com esta configuração")
@@ -501,6 +619,7 @@ def main():
     if args.xmpp and "XMPP_PASSWORD" not in os.environ:
         parser.error("Defina XMPP_PASSWORD para as cinco contas locais do MVP.")
     async def demo():
+        """Correr run_mvp com os argumentos recebidos e imprimir o relatório."""
         print(json.dumps(await run_mvp(xmpp=args.xmpp, password=password,
                                       response_settings=settings, faults=faults, run_id=args.run_id),
                          ensure_ascii=False, indent=2))
