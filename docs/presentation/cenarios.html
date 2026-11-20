@@ -1,0 +1,490 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Cenários A–E do ISIA</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: barra de separadores fixa; por cenário, mapa com replay à esquerda e fichas de parâmetros à direita. */
+:root {
+  --bg: #edf1ee; --surface: #ffffff; --map: #f7faf8; --ink: #15201b; --muted: #58675f; --line: #cdd6d0;
+  --sensor: #1b5ea6; --res: #1a7551; --threat: #c42b2b; --benign: #6b6f76;
+  --chg-bg: #ffe2ad; --chg-ink: #5c3600;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1512; --surface: #171f1b; --map: #131a17; --ink: #e5ece8; --muted: #93a29a; --line: #2b3730;
+  --sensor: #6fb1f7; --res: #57c897; --threat: #ff6f66; --benign: #a3a8b0;
+  --chg-bg: #5a3c08; --chg-ink: #ffdfa6; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f1512; --surface: #171f1b; --map: #131a17; --ink: #e5ece8; --muted: #93a29a; --line: #2b3730;
+  --sensor: #6fb1f7; --res: #57c897; --threat: #ff6f66; --benign: #a3a8b0;
+  --chg-bg: #5a3c08; --chg-ink: #ffdfa6; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--sans) }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface) }
+.wrap { max-width: 1320px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+:focus-visible { outline: 2px solid var(--sensor); outline-offset: 2px }
+
+header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line) }
+header .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 24px; padding-block: 8px }
+h1 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: .02em }
+nav { display: flex; gap: 4px; overflow-x: auto; min-width: 0 }
+nav a { display: flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 6px; color: var(--muted); text-decoration: none; white-space: nowrap; font-size: 14px }
+nav a b { font: 600 16px var(--mono); color: var(--ink) }
+nav a:hover { background: var(--bg) }
+nav a[aria-current] { background: var(--ink); color: var(--surface) }
+nav a[aria-current] b { color: var(--surface) }
+.score { margin-left: auto; font: 600 14px var(--mono); white-space: nowrap }
+.score small { font: 400 12px var(--sans); color: var(--muted); margin-left: 12px }
+
+main.wrap { padding-block: 24px 48px; display: grid; gap: 24px }
+.intro { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 24px; align-items: center }
+.letter { font: 600 88px/1 var(--mono); grid-row: span 2 }
+h2 { margin: 0; font-size: 34px; line-height: 1.15; font-weight: 600; text-wrap: balance; align-self: end }
+.intro p { margin: 0; max-width: 75ch; color: var(--muted); align-self: start }
+
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin: 0; border-block: 1px solid var(--line) }
+.facts div { padding: 12px 16px 12px 0 }
+.facts dt, h3, .hud dt { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted) }
+.facts dd { margin: 0; font: 600 26px/1.25 var(--mono) }
+.facts small { display: block; font: 400 13px/1.35 var(--sans); color: var(--muted) }
+
+.cols { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 32px; align-items: start }
+@media (max-width: 900px) { .cols { grid-template-columns: minmax(0, 1fr) } .letter { font-size: 56px } h2 { font-size: 26px } .score small { display: none } }
+.left, .right { display: grid; gap: 24px; min-width: 0 }
+section { display: grid; gap: 8px; min-width: 0 }
+.scroll { overflow-x: auto }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.note { margin: 0; font-size: 13px; color: var(--muted) }
+button { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; cursor: pointer; text-align: left }
+button:hover:not(:disabled) { border-color: var(--ink) }
+button:disabled { cursor: default }
+.btn { background: var(--ink); border-color: var(--ink); color: var(--surface); font-weight: 600 }
+
+
+/* Mapa e replay */
+.mapbox { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px }
+svg.map { display: block; width: 100%; height: auto }
+svg text { font-family: var(--mono) }
+.mk.res { transition: transform var(--step, 0ms) linear }
+.pop .in { animation: pop .35s cubic-bezier(.2, 1.4, .4, 1) both; animation-delay: calc(var(--i) * 18ms); transform-box: fill-box; transform-origin: center }
+@keyframes pop { from { opacity: 0; transform: scale(.2) } }
+.ring { fill: none; stroke-width: 2.5 }
+.ring.live { stroke: var(--threat); animation: pulse 1s ease-in-out infinite }
+.ring.ok { stroke: var(--res) }
+.ring.off { stroke: var(--benign); stroke-dasharray: 4 4 }
+.ring.bad { stroke: var(--threat); stroke-dasharray: 4 4 }
+@keyframes pulse { 50% { opacity: .3 } }
+.legend, .chips, .log { margin: 0; padding: 0; list-style: none }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--muted) }
+.legend li { display: flex; align-items: center; gap: 6px }
+.legend svg { width: 18px; height: 18px; flex: none }
+label.row { font-size: 14px; color: var(--muted); cursor: pointer }
+.player input[type=range] { flex: 1 1 140px; min-width: 0 }
+.player output { font: 600 16px var(--mono); min-width: 9ch; text-align: right }
+.hud { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 }
+.hud dd { margin: 0; font: 600 20px var(--mono) }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; font-size: 12px }
+.chips li { padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); white-space: nowrap }
+.chips .live { border-color: var(--threat); color: var(--threat) }
+.chips .ok { background: var(--res); border-color: var(--res); color: var(--surface) }
+.chips .off, .chips .idle { color: var(--muted); border-style: dashed }
+.chips .bad { border-color: var(--threat); color: var(--threat); border-style: dashed; font-weight: 600 }
+.log { font: 13px/1.5 var(--mono); min-height: 7.5em; border-left: 2px solid var(--line); padding-left: 12px; color: var(--muted) }
+.log li:last-child { color: var(--ink) }
+.log b { display: inline-block; min-width: 5ch }
+.eps button code { display: block; font: 600 14px var(--mono) }
+.eps button span { font-size: 13px; color: var(--muted) }
+.eps button[aria-pressed="true"], .game button[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink) }
+
+/* Despachante */
+.game .picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px }
+.game .picks button { display: flex; gap: 8px; align-items: center; font-size: 14px }
+.game .n { font: 600 14px var(--mono); width: 24px; height: 24px; border-radius: 50%; border: 1px dashed var(--line); display: grid; place-items: center; flex: none }
+.game [aria-pressed="true"] .n { background: var(--ink); color: var(--surface); border-style: solid; border-color: var(--ink) }
+.game ol { margin: 0; padding-left: 24px; font-size: 14px }
+.game li.hit { font-weight: 600 }
+.game li.hit::after { content: " ✓ acertou"; color: var(--res) }
+
+/* Fichas */
+table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums }
+th { text-align: right; font-size: 12px; font-weight: 500; color: var(--muted); padding: 4px 8px; vertical-align: bottom; line-height: 1.25 }
+td { text-align: right; padding: 8px; border-top: 1px solid var(--line); font-family: var(--mono); white-space: nowrap }
+th:first-child, td:first-child { text-align: left; padding-left: 0; font-family: var(--sans) }
+td svg { width: 18px; height: 18px; vertical-align: -4px; margin-right: 6px }
+td small { color: var(--muted) }
+mark { background: var(--chg-bg); color: var(--chg-ink); font-weight: 600; padding: 1px 5px; border-radius: 3px; animation: flash .9s ease-out }
+@keyframes flash { from { box-shadow: 0 0 0 6px var(--chg-bg) } to { box-shadow: 0 0 0 0 transparent } }
+.kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; margin: 0; font-size: 14px }
+.kv dt, .kv dd { margin: 0; padding: 7px 0; border-top: 1px solid var(--line) }
+.kv dd { text-align: right; font-family: var(--mono); padding-left: 16px }
+.pill { display: inline-block; font: 600 12px var(--mono); padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted) }
+.pill.on { background: var(--ink); border-color: var(--ink); color: var(--surface) }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important } }
+</style>
+
+<header><div class="wrap">
+  <h1>ISIA · Cenários de avaliação</h1>
+  <nav id="tabs" aria-label="Cenários"></nav>
+  <span class="score"><span id="score"></span><small>← → mudam de cenário</small></span>
+</div></header>
+<main class="wrap" id="app"></main>
+
+<script type="application/json" id="data">{"A":{"scenario_id":"A","description":"Operação normal: fontes pouco ruidosas, recursos suficientes, sem falhas.","repetitions":20,"base_seed":1000,"episodes":[{"label":"threat","events":[{"event_id":"threat-01","kind":"threat","position":{"x":3,"y":2},"starts_at":0.0,"duration":1000.0}]},{"label":"empty","events":[]}],"sources":{"sensor-1":{"kind":"acoustic","detection_range":5.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-2":{"kind":"visual","detection_range":5.0,"sensitivity":0.9,"false_positive_rate":0.05,"false_negative_rate":0.1,"confidence":0.8}},"resources":{"drone":{"load":0.5}},"faults":null,"response_settings":{"reputation":{"alpha":2.0,"beta":2.0},"policy":{"patrol_threshold":0.25,"ranger_threshold":0.65,"severe_threshold":0.8,"severe_patrol_threshold":0.08,"ranger_min_groups":2,"ranger_min_modalities":2},"severity":0.5,"sources":{"sensor-1":{"modality":"acoustic","correlation_group":"local_acoustic"},"sensor-2":{"modality":"visual","correlation_group":"camera_trap"}},"adjudication":{"max_distance":1,"max_delay_seconds":30.0},"compatibility_rules":{"gunshot_like_sound":["suspicious_movement"]}},"replay":{"run":"A-full-000-threat","ep":0,"note":"Caso típico: corroborada, o veículo verifica e o guarda fecha aos 12 s.","tmax":17.0,"res":{"drone":[[0.0,0,2,100.0]],"vehicle":[[0.0,0,0,100.0],[1.0,1,0,99.0],[2.0,2,0,98.0],[3.0,3,0,97.0],[4.0,3,1,96.0],[5.0,3,2,95.0],[7.0,2,2,94.0],[8.0,1,2,93.0],[9.0,0,2,92.0],[10.0,0,1,91.0],[11.0,0,0,90.0]],"ranger":[[0.0,5,5,100.0],[7.0,4,5,99.0],[8.0,3,5,98.0],[9.0,3,4,97.0],[10.0,3,3,96.0],[11.0,3,2,95.0],[13.0,4,2,94.0],[14.0,5,2,93.0],[15.0,5,3,92.0],[16.0,5,4,91.0],[17.0,5,5,90.0]]},"inc":[{"id":"sensor-1","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[0.0,"responding"],[6.0,"allocating"],[6.0,"responding"],[12.0,"closed"]],"target":{"x":3,"y":2},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.5}],"log":[[0.0,"sensor-1 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-1 pede verificação por patrulha"],[0.0,"sensor-1 entrega a vehicle a missão de verificar"],[6.0,"sensor-1 entrega a ranger a missão de intervir"],[6.0,"vehicle inspeciona (3, 2) e confirma a ameaça"],[12.0,"ranger inspeciona (3, 2) e confirma a ameaça"],[12.0,"sensor-1 termina a ocorrência: ameaça confirmada, guarda no local"]],"msgs":[[0.0,9],[6.0,14],[12.0,15]]}},"B":{"scenario_id":"B","description":"Ruído e falsos positivos: trovão e turistas no mesmo local, sensores menos fiáveis e erro de posição.","repetitions":20,"base_seed":1000,"episodes":[{"label":"threat","events":[{"event_id":"threat-01","kind":"threat","position":{"x":3,"y":2},"starts_at":0.0,"duration":1000.0}]},{"label":"thunder","events":[{"event_id":"thunder-01","kind":"thunder","position":{"x":3,"y":2},"starts_at":0.0,"duration":1000.0}]},{"label":"thunder+tourist","events":[{"event_id":"thunder-01","kind":"thunder","position":{"x":3,"y":2},"starts_at":0.0,"duration":1000.0},{"event_id":"tourist-01","kind":"tourist","position":{"x":3,"y":2},"starts_at":0.0,"duration":1000.0}]}],"sources":{"sensor-1":{"kind":"acoustic","detection_range":5.0,"sensitivity":0.9,"false_positive_rate":0.6,"false_negative_rate":0.2,"position_error":1,"confidence":0.7},"sensor-2":{"kind":"visual","detection_range":5.0,"sensitivity":0.85,"false_positive_rate":0.5,"false_negative_rate":0.25,"position_error":1,"confidence":0.7}},"resources":{"drone":{"load":0.5}},"faults":null,"response_settings":{"reputation":{"alpha":2.0,"beta":2.0},"policy":{"patrol_threshold":0.25,"ranger_threshold":0.65,"severe_threshold":0.8,"severe_patrol_threshold":0.08,"ranger_min_groups":2,"ranger_min_modalities":2},"severity":0.5,"sources":{"sensor-1":{"modality":"acoustic","correlation_group":"local_acoustic"},"sensor-2":{"modality":"visual","correlation_group":"camera_trap"}},"adjudication":{"max_distance":1,"max_delay_seconds":30.0},"compatibility_rules":{"gunshot_like_sound":["suspicious_movement"]}},"replay":{"run":"B-full-002-thunder+tourist","ep":2,"note":"Falso alarme: trovão e turista geram dois sinais compatíveis e a patrulha não encontra nada.","tmax":9.0,"res":{"drone":[[0.0,0,2,100.0]],"vehicle":[[0.0,0,0,100.0],[1.0,1,0,99.0],[2.0,2,0,98.0],[3.0,3,0,97.0],[4.0,3,1,96.0],[6.0,2,1,95.0],[7.0,1,1,94.0],[8.0,0,1,93.0],[9.0,0,0,92.0]],"ranger":[[0.0,5,5,100.0]]},"inc":[{"id":"sensor-1","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[0.0,"responding"],[5.0,"closed"]],"target":{"x":3,"y":1},"reason":"not_confirmed","why":"nada encontrado no local","dur":1000.0,"sev":0.5}],"log":[[0.0,"sensor-1 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-1 pede verificação por patrulha"],[0.0,"sensor-1 entrega a vehicle a missão de verificar"],[5.0,"vehicle inspeciona (3, 1) e não encontra nada"],[5.0,"sensor-1 termina a ocorrência: nada encontrado no local"]],"msgs":[[0.0,9],[5.0,10]]}},"C":{"scenario_id":"C","description":"Falhas e escassez: perda/atraso/duplicação de mensagens e drone com pouca autonomia.","repetitions":20,"base_seed":1000,"episodes":[{"label":"threat","events":[{"event_id":"threat-01","kind":"threat","position":{"x":3,"y":2},"starts_at":0.0,"duration":1000.0}]},{"label":"empty","events":[]}],"sources":{"sensor-1":{"kind":"acoustic","detection_range":5.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-2":{"kind":"visual","detection_range":5.0,"sensitivity":0.9,"false_positive_rate":0.05,"false_negative_rate":0.1,"confidence":0.8}},"resources":{"drone":{"autonomy_percent":15.0}},"faults":{"loss":0.1,"delay":{"PROPOSAL":0.05,"MISSION_RESULT":0.05},"duplicate":["MISSION_RESULT"]},"response_settings":{"reputation":{"alpha":2.0,"beta":2.0},"policy":{"patrol_threshold":0.25,"ranger_threshold":0.65,"severe_threshold":0.8,"severe_patrol_threshold":0.08,"ranger_min_groups":2,"ranger_min_modalities":2},"severity":0.5,"sources":{"sensor-1":{"modality":"acoustic","correlation_group":"local_acoustic"},"sensor-2":{"modality":"visual","correlation_group":"camera_trap"}},"adjudication":{"max_distance":1,"max_delay_seconds":30.0},"compatibility_rules":{"gunshot_like_sound":["suspicious_movement"]}},"replay":{"run":"C-full-007-threat","ep":0,"note":"Uma mensagem perdida: o guarda intervém, mas o resultado nunca chega ao sensor.","tmax":22.0,"res":{"drone":[[0.0,0,2,15.0]],"vehicle":[[0.0,0,0,100.0],[1.0,1,0,99.0],[2.0,2,0,98.0],[3.0,3,0,97.0],[4.0,3,1,96.0],[5.0,3,2,95.0],[7.0,2,2,94.0],[8.0,1,2,93.0],[9.0,0,2,92.0],[10.0,0,1,91.0],[11.0,0,0,90.0]],"ranger":[[0.0,5,5,100.0],[12.0,4,5,99.0],[13.0,3,5,98.0],[14.0,3,4,97.0],[15.0,3,3,96.0],[16.0,3,2,95.0],[18.0,4,2,94.0],[19.0,5,2,93.0],[20.0,5,3,92.0],[21.0,5,4,91.0],[22.0,5,5,90.0]]},"inc":[{"id":"sensor-1","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[0.0,"responding"],[10.0,"allocating"],[11.0,"responding"],[22.0,"allocating"],[22.0,"unresolved"]],"target":{"x":3,"y":2},"reason":"mission_result_unknown","why":"o resultado da missão nunca chegou","dur":1000.0,"sev":0.5}],"log":[[0.0,"sensor-1 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-1 pede verificação por patrulha"],[0.0,"sensor-1 entrega a vehicle a missão de verificar"],[6.0,"vehicle inspeciona (3, 2) e confirma a ameaça"],[11.0,"sensor-1 entrega a ranger a missão de intervir"],[17.0,"ranger inspeciona (3, 2) e confirma a ameaça"],[17.0,"PERDIDA: MISSION_RESULT de ranger para sensor-1"],[22.0,"sensor-1 termina a ocorrência: o resultado da missão nunca chegou"]],"msgs":[[0.0,8],[6.0,9],[10.0,11],[11.0,13],[17.0,14]]}},"D":{"scenario_id":"D","description":"Dia movimentado: seis ameaças ao mesmo tempo (2 graves, 2 médias, 2 leves; uma dura só 15 s), seis sensores iniciadores com um informador cada, quatro patrulhas e dois guardas num mapa 12x8, com prazo dinâmico, fila ordenada por gravidade e as mitigações da espera ligados.","repetitions":10,"base_seed":1000,"episodes":[{"label":"busy","events":[{"event_id":"threat-01","kind":"threat","position":{"x":3,"y":2},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-02","kind":"threat","position":{"x":9,"y":2},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-03","kind":"threat","position":{"x":3,"y":6},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-04","kind":"threat","position":{"x":9,"y":6},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-05","kind":"threat","position":{"x":6,"y":4},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-06","kind":"threat","position":{"x":6,"y":0},"starts_at":0.0,"duration":15.0}]}],"sources":{"sensor-1":{"kind":"acoustic","detection_range":1.5,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-3":{"kind":"acoustic","detection_range":1.5,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-4":{"kind":"acoustic","detection_range":1.5,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-5":{"kind":"acoustic","detection_range":1.5,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-6":{"kind":"acoustic","detection_range":1.5,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-11":{"kind":"acoustic","detection_range":1.5,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-2":{"kind":"visual","detection_range":1.5,"sensitivity":0.9,"false_positive_rate":0.05,"false_negative_rate":0.1,"confidence":0.8},"sensor-7":{"kind":"visual","detection_range":1.5,"sensitivity":0.9,"false_positive_rate":0.05,"false_negative_rate":0.1,"confidence":0.8},"sensor-8":{"kind":"visual","detection_range":1.5,"sensitivity":0.9,"false_positive_rate":0.05,"false_negative_rate":0.1,"confidence":0.8},"sensor-9":{"kind":"visual","detection_range":1.5,"sensitivity":0.9,"false_positive_rate":0.05,"false_negative_rate":0.1,"confidence":0.8},"sensor-10":{"kind":"visual","detection_range":1.5,"sensitivity":0.9,"false_positive_rate":0.05,"false_negative_rate":0.1,"confidence":0.8},"sensor-12":{"kind":"visual","detection_range":1.5,"sensitivity":0.9,"false_positive_rate":0.05,"false_negative_rate":0.1,"confidence":0.8}},"resources":{"drone":{"load":0.5}},"faults":null,"response_settings":{"reputation":{"alpha":2.0,"beta":2.0},"policy":{"patrol_threshold":0.25,"ranger_threshold":0.65,"severe_threshold":0.8,"severe_patrol_threshold":0.08,"ranger_min_groups":2,"ranger_min_modalities":2},"severity":0.5,"sources":{"sensor-1":{"modality":"acoustic","correlation_group":"local_sensor-1"},"sensor-3":{"modality":"acoustic","correlation_group":"local_sensor-3"},"sensor-4":{"modality":"acoustic","correlation_group":"local_sensor-4"},"sensor-5":{"modality":"acoustic","correlation_group":"local_sensor-5"},"sensor-6":{"modality":"acoustic","correlation_group":"local_sensor-6"},"sensor-11":{"modality":"acoustic","correlation_group":"local_sensor-11"},"sensor-2":{"modality":"visual","correlation_group":"camera_sensor-2"},"sensor-7":{"modality":"visual","correlation_group":"camera_sensor-7"},"sensor-8":{"modality":"visual","correlation_group":"camera_sensor-8"},"sensor-9":{"modality":"visual","correlation_group":"camera_sensor-9"},"sensor-10":{"modality":"visual","correlation_group":"camera_sensor-10"},"sensor-12":{"modality":"visual","correlation_group":"camera_sensor-12"}},"adjudication":{"max_distance":1,"max_delay_seconds":30.0},"compatibility_rules":{"gunshot_like_sound":["suspicious_movement"]},"severity_by_source":{"sensor-1":0.5,"sensor-3":0.9,"sensor-4":0.2,"sensor-5":0.9,"sensor-6":0.5,"sensor-11":0.2}},"world":{"width":12,"height":8,"sensors":{"sensor-1":{"x":2,"y":2},"sensor-2":{"x":4,"y":2}},"initiators":{"sensor-3":{"x":8,"y":2},"sensor-4":{"x":2,"y":6},"sensor-5":{"x":8,"y":6},"sensor-6":{"x":5,"y":4},"sensor-11":{"x":5,"y":0}},"informants":{"sensor-7":{"x":10,"y":2},"sensor-8":{"x":4,"y":6},"sensor-9":{"x":10,"y":6},"sensor-10":{"x":7,"y":4},"sensor-12":{"x":7,"y":0}},"patrols":{"drone-2":{"x":11,"y":2},"drone-3":{"x":11,"y":6}},"rangers":{"ranger-2":{"x":10,"y":4}}},"options":{"max_receive_timeout":2.0,"queue_rounds":60,"queue_priority":true,"silent_invalid":true,"expire_unseen":true,"queue_until_free":true,"chain_missions":true},"replay":{"run":"D-full-003-busy","ep":0,"note":"Seis ocorrências em paralelo; a ameaça de 15 s expira antes de ser atendida.","tmax":43.0,"res":{"drone":[[0.0,0,2,100.0]],"vehicle":[[0.0,0,0,100.0],[12.0,1,0,99.0],[13.0,2,0,98.0],[14.0,3,0,97.0],[15.0,3,1,96.0],[16.0,3,2,95.0],[18.0,2,2,94.0],[19.0,1,2,93.0],[20.0,0,2,92.0],[21.0,0,1,91.0],[22.0,0,0,90.0]],"ranger":[[0.0,5,5,100.0],[18.0,4,5,99.0],[19.0,3,5,98.0],[20.0,3,4,97.0],[21.0,3,3,96.0],[22.0,3,2,95.0],[24.0,4,2,94.0],[25.0,5,2,93.0],[26.0,5,3,92.0],[27.0,5,4,91.0],[28.0,5,5,90.0],[36.0,4,5,89.0],[37.0,3,5,88.0],[38.0,3,6,87.0],[40.0,4,6,86.0],[41.0,5,6,85.0],[42.0,5,5,84.0]],"drone-2":[[0.0,11,2,100.0],[1.0,10,2,99.0],[2.0,9,2,98.0],[4.0,10,2,97.0],[5.0,11,2,96.0]],"drone-3":[[0.0,11,6,100.0],[7.0,10,6,99.0],[8.0,9,6,98.0],[10.0,10,6,97.0],[11.0,11,6,96.0],[12.0,10,6,95.0],[13.0,9,6,94.0],[14.0,8,6,93.0],[15.0,7,6,92.0],[16.0,6,6,91.0],[17.0,6,5,90.0],[18.0,6,4,89.0],[20.0,7,4,88.0],[21.0,8,4,87.0],[22.0,9,4,86.0],[23.0,10,4,85.0],[24.0,11,4,84.0],[25.0,11,5,83.0],[26.0,10,5,82.0],[27.0,9,5,81.0],[28.0,8,5,80.0],[29.0,7,5,79.0],[30.0,6,5,78.0],[31.0,5,5,77.0],[32.0,4,5,76.0],[33.0,3,5,75.0],[34.0,3,6,74.0],[36.0,4,6,73.0],[37.0,5,6,72.0],[38.0,6,6,71.0],[39.0,7,6,70.0],[40.0,8,6,69.0],[41.0,9,6,68.0],[42.0,10,6,67.0],[43.0,11,6,66.0]],"ranger-2":[[0.0,10,4,100.0],[4.0,9,4,99.0],[5.0,9,3,98.0],[6.0,9,2,97.0],[8.0,10,2,96.0],[9.0,10,3,95.0],[10.0,9,3,94.0],[11.0,9,4,93.0],[12.0,9,5,92.0],[13.0,9,6,91.0],[15.0,10,6,90.0],[16.0,10,5,89.0],[17.0,10,4,88.0],[20.0,9,4,87.0],[21.0,8,4,86.0],[22.0,7,4,85.0],[23.0,6,4,84.0],[25.0,7,4,83.0],[26.0,8,4,82.0],[27.0,9,4,81.0],[28.0,10,4,80.0]]},"inc":[{"id":"sensor-1","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[11.0,"responding"],[17.0,"allocating"],[17.0,"responding"],[23.0,"closed"]],"target":{"x":3,"y":2},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.5},{"id":"sensor-3","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[0.0,"responding"],[3.0,"allocating"],[3.0,"responding"],[7.0,"closed"]],"target":{"x":9,"y":2},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.9},{"id":"sensor-4","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[25.0,"responding"],[35.0,"allocating"],[35.0,"responding"],[39.0,"closed"]],"target":{"x":3,"y":6},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.2},{"id":"sensor-5","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[6.0,"responding"],[9.0,"allocating"],[9.0,"responding"],[14.0,"closed"]],"target":{"x":9,"y":6},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.9},{"id":"sensor-6","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[11.0,"responding"],[19.0,"allocating"],[19.0,"responding"],[24.0,"closed"]],"target":{"x":6,"y":4},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.5},{"id":"sensor-11","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[25.0,"expired"]],"target":{"x":6,"y":0},"reason":"threat_expired","why":"passou o prazo de validade","dur":15.0,"sev":0.2}],"log":[[0.0,"sensor-1 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-1 pede verificação por patrulha"],[0.0,"sensor-1 entrega a vehicle a missão de verificar"],[0.0,"sensor-3 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-3 pede verificação por patrulha"],[0.0,"sensor-3 entrega a drone-2 a missão de verificar"],[0.0,"sensor-4 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-4 pede verificação por patrulha"],[0.0,"sensor-5 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-5 pede verificação por patrulha"],[0.0,"sensor-6 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-6 pede verificação por patrulha"],[0.0,"sensor-11 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-11 pede verificação por patrulha"],[3.0,"sensor-3 entrega a ranger-2 a missão de intervir"],[3.0,"drone-2 inspeciona (9, 2) e confirma a ameaça"],[5.0,"sensor-5 entrega a drone-3 a missão de verificar"],[7.0,"ranger-2 inspeciona (9, 2) e confirma a ameaça"],[7.0,"sensor-3 termina a ocorrência: ameaça confirmada, guarda no local"],[9.0,"sensor-5 entrega a ranger-2 a missão de intervir"],[9.0,"drone-3 inspeciona (9, 6) e confirma a ameaça"],[10.0,"sensor-1 entrega a vehicle a missão de verificar"],[10.0,"sensor-6 entrega a drone-3 a missão de verificar"],[14.0,"ranger-2 inspeciona (9, 6) e confirma a ameaça"],[14.0,"sensor-5 termina a ocorrência: ameaça confirmada, guarda no local"],[17.0,"sensor-1 entrega a ranger a missão de intervir"],[17.0,"vehicle inspeciona (3, 2) e confirma a ameaça"],[19.0,"sensor-6 entrega a ranger-2 a missão de intervir"],[19.0,"drone-3 inspeciona (6, 4) e confirma a ameaça"],[23.0,"ranger inspeciona (3, 2) e confirma a ameaça"],[23.0,"sensor-1 termina a ocorrência: ameaça confirmada, guarda no local"],[24.0,"ranger-2 inspeciona (6, 4) e confirma a ameaça"],[24.0,"sensor-6 termina a ocorrência: ameaça confirmada, guarda no local"],[25.0,"sensor-4 entrega a drone-3 a missão de verificar"],[25.0,"sensor-11 termina a ocorrência: passou o prazo de validade"],[35.0,"sensor-4 entrega a ranger a missão de intervir"],[35.0,"drone-3 inspeciona (3, 6) e confirma a ameaça"],[39.0,"ranger inspeciona (3, 6) e confirma a ameaça"],[39.0,"sensor-4 termina a ocorrência: ameaça confirmada, guarda no local"]],"msgs":[[0.0,70],[3.0,78],[5.0,122],[6.0,123],[7.0,124],[9.0,132],[10.0,168],[11.0,170],[14.0,171],[15.0,187],[17.0,211],[19.0,226],[20.0,234],[23.0,235],[24.0,236],[25.0,249],[35.0,257],[39.0,258]]}},"E":{"scenario_id":"E","description":"Reserva alargada: 16 ameaças ao mesmo tempo num mapa 16x12, 20 fontes (16 sensores acústicos iniciadores, 2 câmaras e 2 informadores humanos), 4 patrulhas e 2 guardas. Em dois quadrantes quem corrobora é uma câmara; nos outros dois, um informador humano, que falha 25 % das vezes, erra a posição em 1 célula e declara confiança 0,6. Fila por gravidade, mitigações da espera, reenvio e aviso entre iniciadores ligados.","repetitions":10,"base_seed":1000,"episodes":[{"label":"wide","events":[{"event_id":"threat-01","kind":"threat","position":{"x":1,"y":1},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-02","kind":"threat","position":{"x":6,"y":1},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-03","kind":"threat","position":{"x":1,"y":4},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-04","kind":"threat","position":{"x":6,"y":4},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-05","kind":"threat","position":{"x":9,"y":1},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-06","kind":"threat","position":{"x":14,"y":1},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-07","kind":"threat","position":{"x":9,"y":4},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-08","kind":"threat","position":{"x":14,"y":4},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-09","kind":"threat","position":{"x":1,"y":7},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-10","kind":"threat","position":{"x":6,"y":7},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-11","kind":"threat","position":{"x":1,"y":10},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-12","kind":"threat","position":{"x":6,"y":10},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-13","kind":"threat","position":{"x":9,"y":7},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-14","kind":"threat","position":{"x":14,"y":7},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-15","kind":"threat","position":{"x":9,"y":10},"starts_at":0.0,"duration":1000.0},{"event_id":"threat-16","kind":"threat","position":{"x":14,"y":10},"starts_at":0.0,"duration":1000.0}]}],"sources":{"sensor-1":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-3":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-4":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-5":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-6":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-7":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-8":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-9":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-10":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-11":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-12":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-13":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-14":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-15":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-16":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-17":{"kind":"acoustic","detection_range":1.0,"sensitivity":0.95,"false_positive_rate":0.05,"false_negative_rate":0.05,"confidence":0.8},"sensor-2":{"kind":"visual","detection_range":5.5,"sensitivity":0.9,"false_positive_rate":0.05,"false_negative_rate":0.1,"confidence":0.8},"sensor-18":{"kind":"visual","detection_range":5.5,"sensitivity":0.9,"false_positive_rate":0.05,"false_negative_rate":0.1,"confidence":0.8},"sensor-19":{"kind":"human","detection_range":5.5,"sensitivity":0.9,"false_positive_rate":0.2,"false_negative_rate":0.25,"position_error":1,"confidence":0.6},"sensor-20":{"kind":"human","detection_range":5.5,"sensitivity":0.9,"false_positive_rate":0.2,"false_negative_rate":0.25,"position_error":1,"confidence":0.6}},"resources":{"drone":{"load":0.5,"position":{"x":0,"y":6}},"vehicle":{"position":{"x":15,"y":6}},"ranger":{"position":{"x":5,"y":6}}},"faults":null,"response_settings":{"reputation":{"alpha":2.0,"beta":2.0},"policy":{"patrol_threshold":0.25,"ranger_threshold":0.65,"severe_threshold":0.8,"severe_patrol_threshold":0.08,"ranger_min_groups":2,"ranger_min_modalities":2},"severity":0.5,"adjudication":{"max_distance":1,"max_delay_seconds":30.0},"sources":{"sensor-1":{"modality":"acoustic","correlation_group":"local_sensor-1"},"sensor-3":{"modality":"acoustic","correlation_group":"local_sensor-3"},"sensor-4":{"modality":"acoustic","correlation_group":"local_sensor-4"},"sensor-5":{"modality":"acoustic","correlation_group":"local_sensor-5"},"sensor-6":{"modality":"acoustic","correlation_group":"local_sensor-6"},"sensor-7":{"modality":"acoustic","correlation_group":"local_sensor-7"},"sensor-8":{"modality":"acoustic","correlation_group":"local_sensor-8"},"sensor-9":{"modality":"acoustic","correlation_group":"local_sensor-9"},"sensor-10":{"modality":"acoustic","correlation_group":"local_sensor-10"},"sensor-11":{"modality":"acoustic","correlation_group":"local_sensor-11"},"sensor-12":{"modality":"acoustic","correlation_group":"local_sensor-12"},"sensor-13":{"modality":"acoustic","correlation_group":"local_sensor-13"},"sensor-14":{"modality":"acoustic","correlation_group":"local_sensor-14"},"sensor-15":{"modality":"acoustic","correlation_group":"local_sensor-15"},"sensor-16":{"modality":"acoustic","correlation_group":"local_sensor-16"},"sensor-17":{"modality":"acoustic","correlation_group":"local_sensor-17"},"sensor-2":{"modality":"visual","correlation_group":"camera_sensor-2"},"sensor-18":{"modality":"visual","correlation_group":"camera_sensor-18"},"sensor-19":{"modality":"human","correlation_group":"informant_sensor-19"},"sensor-20":{"modality":"human","correlation_group":"informant_sensor-20"}},"compatibility_rules":{"gunshot_like_sound":["suspicious_movement","suspicious_activity_report"]},"severity_by_source":{"sensor-1":0.9,"sensor-3":0.5,"sensor-4":0.5,"sensor-5":0.2,"sensor-6":0.9,"sensor-7":0.5,"sensor-8":0.5,"sensor-9":0.2,"sensor-10":0.9,"sensor-11":0.5,"sensor-12":0.5,"sensor-13":0.2,"sensor-14":0.9,"sensor-15":0.5,"sensor-16":0.5,"sensor-17":0.2}},"world":{"width":16,"height":12,"sensors":{"sensor-1":{"x":1,"y":1},"sensor-2":{"x":4,"y":3}},"initiators":{"sensor-3":{"x":6,"y":1},"sensor-4":{"x":1,"y":4},"sensor-5":{"x":6,"y":4},"sensor-6":{"x":9,"y":1},"sensor-7":{"x":14,"y":1},"sensor-8":{"x":9,"y":4},"sensor-9":{"x":14,"y":4},"sensor-10":{"x":1,"y":7},"sensor-11":{"x":6,"y":7},"sensor-12":{"x":1,"y":10},"sensor-13":{"x":6,"y":10},"sensor-14":{"x":9,"y":7},"sensor-15":{"x":14,"y":7},"sensor-16":{"x":9,"y":10},"sensor-17":{"x":14,"y":10}},"informants":{"sensor-18":{"x":12,"y":3},"sensor-19":{"x":4,"y":9},"sensor-20":{"x":12,"y":9}},"patrols":{"drone-2":{"x":8,"y":0},"drone-3":{"x":8,"y":11}},"rangers":{"ranger-2":{"x":10,"y":6}}},"options":{"max_receive_timeout":2.0,"queue_rounds":60,"queue_priority":true,"silent_invalid":true,"expire_unseen":true,"queue_until_free":true,"chain_missions":true,"retransmit":1,"alert_distance":1.0},"replay":{"run":"E-full-005-wide","ep":0,"note":"Dezasseis ocorrências para seis recursos; duas leves ficam sem guarda com autonomia.","tmax":131.0,"res":{"drone":[[0.0,0,6,100.0],[18.0,1,6,99.0],[19.0,2,6,98.0],[20.0,3,6,97.0],[21.0,4,6,96.0],[22.0,5,6,95.0],[23.0,6,6,94.0],[24.0,7,6,93.0],[25.0,8,6,92.0],[26.0,9,6,91.0],[27.0,9,5,90.0],[28.0,9,4,89.0],[29.0,9,3,88.0],[30.0,9,2,87.0],[31.0,9,1,86.0],[33.0,8,1,85.0],[34.0,7,1,84.0],[35.0,6,1,83.0],[36.0,5,1,82.0],[37.0,4,1,81.0],[38.0,3,1,80.0],[39.0,2,1,79.0],[40.0,1,1,78.0],[41.0,0,1,77.0],[42.0,0,2,76.0],[43.0,0,3,75.0],[44.0,0,4,74.0],[45.0,0,5,73.0],[46.0,0,6,72.0],[67.0,1,6,71.0],[68.0,2,6,70.0],[69.0,3,6,69.0],[70.0,4,6,68.0],[71.0,5,6,67.0],[72.0,6,6,66.0],[73.0,6,5,65.0],[74.0,6,4,64.0],[76.0,7,4,63.0],[77.0,8,4,62.0],[78.0,9,4,61.0],[79.0,10,4,60.0],[80.0,11,4,59.0],[81.0,12,4,58.0],[82.0,13,4,57.0],[83.0,14,4,56.0],[84.0,14,5,55.0],[85.0,14,6,54.0],[86.0,14,7,53.0],[87.0,14,8,52.0],[88.0,14,9,51.0],[89.0,14,10,50.0],[91.0,13,10,49.0],[92.0,12,10,48.0],[93.0,11,10,47.0],[94.0,10,10,46.0],[95.0,9,10,45.0],[96.0,8,10,44.0],[97.0,7,10,43.0],[98.0,6,10,42.0],[99.0,5,10,41.0],[100.0,4,10,40.0],[101.0,3,10,39.0],[102.0,2,10,38.0],[103.0,1,10,37.0],[104.0,0,10,36.0],[105.0,0,9,35.0],[106.0,0,8,34.0],[107.0,0,7,33.0],[108.0,0,6,32.0]],"vehicle":[[0.0,15,6,100.0],[6.0,14,6,99.0],[7.0,13,6,98.0],[8.0,12,6,97.0],[9.0,11,6,96.0],[10.0,10,6,95.0],[11.0,9,6,94.0],[12.0,9,7,93.0],[14.0,10,7,92.0],[15.0,11,7,91.0],[16.0,12,7,90.0],[17.0,13,7,89.0],[18.0,14,7,88.0],[19.0,15,7,87.0],[20.0,15,6,86.0],[33.0,14,6,85.0],[34.0,14,7,84.0],[36.0,15,7,83.0],[37.0,15,6,82.0],[43.0,14,6,81.0],[44.0,14,5,80.0],[45.0,14,4,79.0],[46.0,14,3,78.0],[47.0,14,2,77.0],[48.0,14,1,76.0],[50.0,15,1,75.0],[51.0,15,2,74.0],[52.0,15,3,73.0],[53.0,15,4,72.0],[54.0,15,5,71.0],[55.0,15,6,70.0],[56.0,14,6,69.0],[57.0,13,6,68.0],[58.0,12,6,67.0],[59.0,11,6,66.0],[60.0,10,6,65.0],[61.0,9,6,64.0],[62.0,9,7,63.0],[63.0,9,8,62.0],[64.0,9,9,61.0],[65.0,9,10,60.0],[67.0,10,10,59.0],[68.0,11,10,58.0],[69.0,12,10,57.0],[70.0,13,10,56.0],[71.0,14,10,55.0],[72.0,15,10,54.0],[73.0,15,9,53.0],[74.0,15,8,52.0],[75.0,15,7,51.0],[76.0,15,6,50.0],[91.0,14,6,49.0],[92.0,14,5,48.0],[93.0,14,4,47.0],[95.0,15,4,46.0],[96.0,15,5,45.0],[97.0,15,6,44.0]],"ranger":[[0.0,5,6,100.0],[13.0,4,6,99.0],[14.0,3,6,98.0],[15.0,2,6,97.0],[16.0,1,6,96.0],[17.0,1,7,95.0],[19.0,2,7,94.0],[20.0,3,7,93.0],[21.0,4,7,92.0],[22.0,5,7,91.0],[23.0,5,6,90.0],[33.0,6,6,89.0],[34.0,7,6,88.0],[35.0,8,6,87.0],[36.0,9,6,86.0],[37.0,9,5,85.0],[38.0,9,4,84.0],[39.0,9,3,83.0],[40.0,9,2,82.0],[41.0,9,1,81.0],[43.0,8,1,80.0],[44.0,7,1,79.0],[45.0,6,1,78.0],[46.0,5,1,77.0],[47.0,5,2,76.0],[48.0,5,3,75.0],[49.0,5,4,74.0],[50.0,5,5,73.0],[51.0,5,6,72.0],[53.0,6,6,71.0],[54.0,6,5,70.0],[55.0,6,4,69.0],[56.0,6,3,68.0],[57.0,6,2,67.0],[58.0,6,1,66.0],[60.0,7,1,65.0],[61.0,8,1,64.0],[62.0,9,1,63.0],[63.0,10,1,62.0],[64.0,11,1,61.0],[65.0,12,1,60.0],[66.0,13,1,59.0],[67.0,14,1,58.0],[69.0,13,1,57.0],[70.0,12,1,56.0],[71.0,11,1,55.0],[72.0,10,1,54.0],[73.0,9,1,53.0],[74.0,8,1,52.0],[75.0,7,1,51.0],[76.0,6,1,50.0],[77.0,5,1,49.0],[78.0,4,1,48.0],[79.0,3,1,47.0],[80.0,2,1,46.0],[81.0,1,1,45.0],[82.0,1,2,44.0],[83.0,1,3,43.0],[84.0,1,4,42.0],[86.0,2,4,41.0],[87.0,3,4,40.0],[88.0,4,4,39.0],[89.0,5,4,38.0],[90.0,5,5,37.0],[91.0,5,6,36.0],[100.0,6,6,35.0],[101.0,7,6,34.0],[102.0,8,6,33.0],[103.0,9,6,32.0],[104.0,9,5,31.0],[105.0,9,4,30.0],[107.0,8,4,29.0],[108.0,7,4,28.0],[109.0,6,4,27.0],[110.0,5,4,26.0],[111.0,5,5,25.0],[112.0,5,6,24.0]],"drone-2":[[0.0,8,0,100.0],[13.0,7,0,99.0],[14.0,6,0,98.0],[15.0,5,0,97.0],[16.0,4,0,96.0],[17.0,3,0,95.0],[18.0,2,0,94.0],[19.0,1,0,93.0],[20.0,1,1,92.0],[22.0,2,1,91.0],[23.0,3,1,90.0],[24.0,4,1,89.0],[25.0,5,1,88.0],[26.0,6,1,87.0],[27.0,7,1,86.0],[28.0,8,1,85.0],[29.0,8,0,84.0],[38.0,7,0,83.0],[39.0,6,0,82.0],[40.0,6,1,81.0],[42.0,7,1,80.0],[43.0,8,1,79.0],[44.0,8,0,78.0],[56.0,9,0,77.0],[57.0,9,1,76.0],[58.0,9,2,75.0],[59.0,9,3,74.0],[60.0,9,4,73.0],[62.0,8,4,72.0],[63.0,8,3,71.0],[64.0,8,2,70.0],[65.0,7,2,69.0],[66.0,6,2,68.0],[67.0,5,2,67.0],[68.0,4,2,66.0],[69.0,3,2,65.0],[70.0,2,2,64.0],[71.0,1,2,63.0],[72.0,1,3,62.0],[73.0,1,4,61.0],[74.0,1,5,60.0],[75.0,1,6,59.0],[76.0,1,7,58.0],[77.0,1,8,57.0],[78.0,1,9,56.0],[79.0,1,10,55.0],[81.0,2,10,54.0],[82.0,3,10,53.0],[83.0,4,10,52.0],[84.0,5,10,51.0],[85.0,6,10,50.0],[86.0,7,10,49.0],[87.0,8,10,48.0],[88.0,8,9,47.0],[89.0,8,8,46.0],[90.0,8,7,45.0],[91.0,8,6,44.0],[92.0,8,5,43.0],[93.0,8,4,42.0],[94.0,8,3,41.0],[95.0,8,2,40.0],[96.0,8,1,39.0],[97.0,8,0,38.0]],"drone-3":[[0.0,8,11,100.0],[1.0,7,11,99.0],[2.0,6,11,98.0],[3.0,5,11,97.0],[4.0,4,11,96.0],[5.0,3,11,95.0],[6.0,2,11,94.0],[7.0,1,11,93.0],[8.0,1,10,92.0],[9.0,1,9,91.0],[10.0,1,8,90.0],[11.0,1,7,89.0],[13.0,2,7,88.0],[14.0,3,7,87.0],[15.0,4,7,86.0],[16.0,5,7,85.0],[17.0,6,7,84.0],[18.0,7,7,83.0],[19.0,8,7,82.0],[20.0,8,8,81.0],[21.0,8,9,80.0],[22.0,8,10,79.0],[23.0,8,11,78.0],[41.0,7,11,77.0],[42.0,6,11,76.0],[43.0,5,11,75.0],[44.0,4,11,74.0],[45.0,3,11,73.0],[46.0,2,11,72.0],[47.0,1,11,71.0],[48.0,1,10,70.0],[49.0,1,9,69.0],[50.0,1,8,68.0],[51.0,1,7,67.0],[52.0,1,6,66.0],[53.0,1,5,65.0],[54.0,1,4,64.0],[56.0,2,4,63.0],[57.0,3,4,62.0],[58.0,4,4,61.0],[59.0,5,4,60.0],[60.0,6,4,59.0],[61.0,6,5,58.0],[62.0,6,6,57.0],[63.0,6,7,56.0],[65.0,7,7,55.0],[66.0,8,7,54.0],[67.0,8,8,53.0],[68.0,8,9,52.0],[69.0,8,10,51.0],[70.0,8,11,50.0]],"ranger-2":[[0.0,10,6,100.0],[14.0,9,6,99.0],[15.0,9,7,98.0],[17.0,10,7,97.0],[18.0,10,6,96.0],[22.0,9,6,95.0],[23.0,8,6,94.0],[24.0,7,6,93.0],[25.0,6,6,92.0],[26.0,5,6,91.0],[27.0,4,6,90.0],[28.0,3,6,89.0],[29.0,2,6,88.0],[30.0,1,6,87.0],[31.0,1,5,86.0],[32.0,1,4,85.0],[33.0,1,3,84.0],[34.0,1,2,83.0],[35.0,1,1,82.0],[37.0,2,1,81.0],[38.0,3,1,80.0],[39.0,4,1,79.0],[40.0,5,1,78.0],[41.0,6,1,77.0],[42.0,7,1,76.0],[43.0,8,1,75.0],[44.0,9,1,74.0],[45.0,10,1,73.0],[46.0,10,2,72.0],[47.0,10,3,71.0],[48.0,11,3,70.0],[49.0,12,3,69.0],[50.0,13,3,68.0],[51.0,14,3,67.0],[52.0,14,4,66.0],[53.0,14,5,65.0],[54.0,14,6,64.0],[55.0,14,7,63.0],[57.0,13,7,62.0],[58.0,12,7,61.0],[59.0,11,7,60.0],[60.0,10,7,59.0],[61.0,10,6,58.0],[86.0,9,6,57.0],[87.0,8,6,56.0],[88.0,7,6,55.0],[89.0,6,6,54.0],[90.0,5,6,53.0],[91.0,4,6,52.0],[92.0,3,6,51.0],[93.0,2,6,50.0],[94.0,1,6,49.0],[95.0,1,7,48.0],[96.0,1,8,47.0],[97.0,1,9,46.0],[98.0,1,10,45.0],[100.0,2,10,44.0],[101.0,3,10,43.0],[102.0,4,10,42.0],[103.0,5,10,41.0],[104.0,6,10,40.0],[105.0,6,9,39.0],[106.0,6,8,38.0],[107.0,6,7,37.0],[109.0,7,7,36.0],[110.0,8,7,35.0],[111.0,9,7,34.0],[112.0,9,8,33.0],[113.0,9,9,32.0],[114.0,9,10,31.0],[116.0,8,10,30.0],[117.0,7,10,29.0],[118.0,6,10,28.0],[119.0,6,9,27.0],[120.0,6,8,26.0],[121.0,6,7,25.0],[122.0,6,6,24.0],[123.0,6,5,23.0],[124.0,6,4,22.0],[126.0,7,4,21.0],[127.0,8,4,20.0],[128.0,9,4,19.0],[129.0,10,4,18.0],[130.0,10,5,17.0],[131.0,10,6,16.0]]},"inc":[{"id":"sensor-1","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[13.0,"responding"],[21.0,"allocating"],[21.0,"responding"],[36.0,"closed"]],"target":{"x":1,"y":1},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.9},{"id":"sensor-3","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[37.0,"responding"],[41.0,"allocating"],[52.0,"responding"],[59.0,"closed"]],"target":{"x":6,"y":1},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.5},{"id":"sensor-4","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[41.0,"responding"],[55.0,"allocating"],[68.0,"responding"],[85.0,"closed"]],"target":{"x":1,"y":4},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.5},{"id":"sensor-5","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[66.0,"responding"],[75.0,"allocating"],[115.0,"responding"],[125.0,"closed"]],"target":{"x":6,"y":4},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.2},{"id":"sensor-6","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[17.0,"responding"],[32.0,"allocating"],[32.0,"responding"],[42.0,"closed"]],"target":{"x":9,"y":1},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.9},{"id":"sensor-7","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[42.0,"responding"],[49.0,"allocating"],[59.0,"responding"],[68.0,"closed"]],"target":{"x":14,"y":1},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.5},{"id":"sensor-8","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[55.0,"responding"],[61.0,"allocating"],[99.0,"responding"],[106.0,"closed"]],"target":{"x":9,"y":4},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.5},{"id":"sensor-9","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[90.0,"responding"],[94.0,"allocating"],[125.0,"unresolved"]],"target":{"x":14,"y":4},"reason":"no_eligible_proposals","why":"nenhum recurso elegível","dur":1000.0,"sev":0.2},{"id":"sensor-10","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[1.0,"responding"],[12.0,"allocating"],[12.0,"responding"],[18.0,"closed"]],"target":{"x":1,"y":7},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.9},{"id":"sensor-11","st":[[42.0,"verifying"],[42.0,"assessing"],[42.0,"allocating"],[55.0,"responding"],[64.0,"allocating"],[104.0,"responding"],[108.0,"closed"]],"target":{"x":6,"y":7},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.5},{"id":"sensor-12","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[64.0,"responding"],[80.0,"allocating"],[85.0,"responding"],[99.0,"closed"]],"target":{"x":1,"y":10},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.5},{"id":"sensor-13","st":[],"target":{"x":6,"y":10},"dur":1000.0,"sev":0.2,"reason":"no_alert","why":"o sensor não deu alerta"},{"id":"sensor-14","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[6.0,"responding"],[13.0,"allocating"],[13.0,"responding"],[16.0,"closed"]],"target":{"x":9,"y":7},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.9},{"id":"sensor-15","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[32.0,"responding"],[35.0,"allocating"],[47.0,"responding"],[56.0,"closed"]],"target":{"x":14,"y":7},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.5},{"id":"sensor-16","st":[[42.0,"verifying"],[43.0,"assessing"],[43.0,"allocating"],[55.0,"responding"],[66.0,"allocating"],[108.0,"responding"],[115.0,"closed"]],"target":{"x":9,"y":10},"reason":"confirmed","why":"ameaça confirmada, guarda no local","dur":1000.0,"sev":0.5},{"id":"sensor-17","st":[[0.0,"verifying"],[0.0,"assessing"],[0.0,"allocating"],[75.0,"responding"],[90.0,"allocating"],[125.0,"unresolved"]],"target":{"x":14,"y":10},"reason":"no_eligible_proposals","why":"nenhum recurso elegível","dur":1000.0,"sev":0.2}],"log":[[0.0,"sensor-1 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-1 pede verificação por patrulha"],[0.0,"sensor-3 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-3 pede verificação por patrulha"],[0.0,"sensor-4 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-4 pede verificação por patrulha"],[0.0,"sensor-5 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-5 pede verificação por patrulha"],[0.0,"sensor-6 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-6 pede verificação por patrulha"],[0.0,"sensor-7 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-7 pede verificação por patrulha"],[0.0,"sensor-8 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-8 pede verificação por patrulha"],[0.0,"sensor-9 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-9 pede verificação por patrulha"],[0.0,"sensor-10 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-10 pede verificação por patrulha"],[0.0,"sensor-10 entrega a drone-3 a missão de verificar"],[0.0,"sensor-11 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-12 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-12 pede verificação por patrulha"],[0.0,"sensor-12 entrega a drone-3 a missão de verificar"],[0.0,"sensor-14 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-14 pede verificação por patrulha"],[0.0,"sensor-15 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-15 pede verificação por patrulha"],[0.0,"sensor-16 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-17 deteta um sinal e abre uma ocorrência"],[0.0,"sensor-17 pede verificação por patrulha"],[5.0,"sensor-14 entrega a vehicle a missão de verificar"],[12.0,"sensor-1 entrega a drone-2 a missão de verificar"],[12.0,"sensor-10 entrega a ranger a missão de intervir"],[12.0,"drone-3 inspeciona (1, 7) e confirma a ameaça"],[13.0,"sensor-14 entrega a ranger-2 a missão de intervir"],[13.0,"vehicle inspeciona (9, 7) e confirma a ameaça"],[16.0,"ranger-2 inspeciona (9, 7) e confirma a ameaça"],[16.0,"sensor-14 termina a ocorrência: ameaça confirmada, guarda no local"],[17.0,"sensor-6 entrega a drone a missão de verificar"],[18.0,"ranger inspeciona (1, 7) e confirma a ameaça"],[18.0,"sensor-10 termina a ocorrência: ameaça confirmada, guarda no local"],[21.0,"sensor-1 entrega a ranger-2 a missão de intervir"],[21.0,"drone-2 inspeciona (1, 1) e confirma a ameaça"],[32.0,"sensor-6 entrega a ranger a missão de intervir"],[32.0,"sensor-15 entrega a vehicle a missão de verificar"],[32.0,"sensor-17 entrega a vehicle a missão de verificar"],[32.0,"drone inspeciona (9, 1) e confirma a ameaça"],[35.0,"vehicle inspeciona (14, 7) e confirma a ameaça"],[36.0,"ranger-2 inspeciona (1, 1) e confirma a ameaça"],[36.0,"sensor-1 termina a ocorrência: ameaça confirmada, guarda no local"],[37.0,"sensor-3 entrega a drone-2 a missão de verificar"],[40.0,"sensor-4 entrega a drone-3 a missão de verificar"],[41.0,"sensor-7 entrega a vehicle a missão de verificar"],[41.0,"drone-2 inspeciona (6, 1) e confirma a ameaça"],[42.0,"sensor-11 pede verificação por patrulha"],[42.0,"ranger inspeciona (9, 1) e confirma a ameaça"],[42.0,"sensor-6 termina a ocorrência: ameaça confirmada, guarda no local"],[43.0,"sensor-16 pede verificação por patrulha"],[47.0,"sensor-15 entrega a ranger-2 a missão de intervir"],[49.0,"vehicle inspeciona (14, 1) e confirma a ameaça"],[52.0,"sensor-3 entrega a ranger a missão de intervir"],[55.0,"sensor-8 entrega a drone-2 a missão de verificar"],[55.0,"sensor-11 entrega a drone-3 a missão de verificar"],[55.0,"sensor-16 entrega a vehicle a missão de verificar"],[55.0,"drone-3 inspeciona (1, 4) e confirma a ameaça"],[56.0,"ranger-2 inspeciona (14, 7) e confirma a ameaça"],[56.0,"sensor-15 termina a ocorrência: ameaça confirmada, guarda no local"],[59.0,"sensor-7 entrega a ranger a missão de intervir"],[59.0,"ranger inspeciona (6, 1) e confirma a ameaça"],[59.0,"sensor-3 termina a ocorrência: ameaça confirmada, guarda no local"],[61.0,"drone-2 inspeciona (9, 4) e confirma a ameaça"],[64.0,"sensor-12 entrega a drone-2 a missão de verificar"],[64.0,"drone-3 inspeciona (6, 7) e confirma a ameaça"],[66.0,"sensor-5 entrega a drone a missão de verificar"],[66.0,"vehicle inspeciona (9, 10) e confirma a ameaça"],[68.0,"sensor-4 entrega a ranger a missão de intervir"],[68.0,"ranger inspeciona (14, 1) e confirma a ameaça"],[68.0,"sensor-7 termina a ocorrência: ameaça confirmada, guarda no local"],[75.0,"sensor-17 entrega a drone a missão de verificar"],[75.0,"drone inspeciona (6, 4) e confirma a ameaça"],[80.0,"drone-2 inspeciona (1, 10) e confirma a ameaça"],[85.0,"sensor-12 entrega a ranger-2 a missão de intervir"],[85.0,"ranger inspeciona (1, 4) e confirma a ameaça"],[85.0,"sensor-4 termina a ocorrência: ameaça confirmada, guarda no local"],[90.0,"sensor-9 entrega a vehicle a missão de verificar"],[90.0,"drone inspeciona (14, 10) e confirma a ameaça"],[94.0,"vehicle inspeciona (14, 4) e confirma a ameaça"],[99.0,"sensor-8 entrega a ranger a missão de intervir"],[99.0,"ranger-2 inspeciona (1, 10) e confirma a ameaça"],[99.0,"sensor-12 termina a ocorrência: ameaça confirmada, guarda no local"],[104.0,"sensor-11 entrega a ranger-2 a missão de intervir"],[106.0,"ranger inspeciona (9, 4) e confirma a ameaça"],[106.0,"sensor-8 termina a ocorrência: ameaça confirmada, guarda no local"],[108.0,"sensor-16 entrega a ranger-2 a missão de intervir"],[108.0,"ranger-2 inspeciona (6, 7) e confirma a ameaça"],[108.0,"sensor-11 termina a ocorrência: ameaça confirmada, guarda no local"],[115.0,"sensor-5 entrega a ranger-2 a missão de intervir"],[115.0,"ranger-2 inspeciona (9, 10) e confirma a ameaça"],[115.0,"sensor-16 termina a ocorrência: ameaça confirmada, guarda no local"],[125.0,"ranger-2 inspeciona (6, 4) e confirma a ameaça"],[125.0,"sensor-5 termina a ocorrência: ameaça confirmada, guarda no local"],[125.0,"sensor-9 termina a ocorrência: nenhum recurso elegível"],[125.0,"sensor-17 termina a ocorrência: nenhum recurso elegível"]],"msgs":[[0.0,170],[5.0,262],[6.0,270],[12.0,369],[13.0,408],[16.0,409],[17.0,459],[18.0,460],[21.0,539],[32.0,628],[35.0,673],[36.0,678],[37.0,707],[40.0,751],[41.0,802],[42.0,831],[43.0,840],[47.0,851],[49.0,880],[52.0,886],[55.0,959],[56.0,968],[59.0,979],[60.0,987],[61.0,1000],[64.0,1044],[66.0,1075],[68.0,1094],[73.0,1106],[75.0,1129],[80.0,1142],[85.0,1165],[90.0,1199],[94.0,1204],[99.0,1232],[104.0,1254],[106.0,1271],[108.0,1290],[113.0,1302],[115.0,1317],[120.0,1325],[125.0,1334]]}}}</script>
+<script>
+const D = JSON.parse(document.getElementById('data').textContent);   // gerado por scripts/cenarios_html.py
+const IDS = Object.keys(D);
+const el = id => document.getElementById(id);
+// Mundo do MVP, usado quando o cenário não traz "world" (runner.py: MVP_RESOURCES e base_sensors).
+const MVP = { sensors: { 'sensor-1': { x: 2, y: 2 }, 'sensor-2': { x: 4, y: 2 } },
+              res: { drone: { x: 0, y: 2 }, vehicle: { x: 0, y: 0 }, ranger: { x: 5, y: 5 } } };
+const KIND = { acoustic: 'Sensor acústico', visual: 'Câmara', human: 'Informador humano' };
+const EVENT = { threat: ['ameaça', 'ameaças'], thunder: ['trovão', 'trovões'], tourist: ['turista', 'turistas'] };
+const RES = { drone: ['D', 'patrulha (drone)'], vehicle: ['V', 'patrulha (veículo)'], ranger: ['G', 'guarda'] };
+const SIGNAL = { suspicious_movement: 'movimento suspeito (câmara)', suspicious_activity_report: 'relato de informador' };
+const DEF = { sensitivity: 1, false_positive_rate: 0, false_negative_rate: 0, position_error: 0, confidence: 0.8 };
+const POLICY = [['patrol_threshold', 'Limiar para enviar patrulha'], ['ranger_threshold', 'Limiar para chamar o guarda'],
+  ['severe_threshold', 'Gravidade a partir da qual é grave'], ['severe_patrol_threshold', 'Limiar de patrulha em ocorrência grave'],
+  ['ranger_min_groups', 'Grupos independentes para o guarda'], ['ranger_min_modalities', 'Modalidades diferentes para o guarda']];
+const OPTIONS = [['max_receive_timeout', 'Prazo dinâmico', v => `teto ${num(v)} s`], ['queue_rounds', 'Fila de espera', v => `${v} rondas`],
+  ['silent_invalid', 'Silêncio perante ACCEPT incoerente'], ['queue_priority', 'Fila por gravidade'],
+  ['expire_unseen', 'Prazo de validade da ameaça'], ['queue_until_free', 'Recurso diz quando fica livre'],
+  ['chain_missions', 'Encadear missões'], ['retransmit', 'Reenvio de mensagens', v => `${v}×`],
+  ['alert_distance', 'Aviso entre iniciadores', v => `${num(v)} célula`], ['cfp_limit', 'CFP só aos K mais próximos', v => `K = ${v}`]];
+// Estado de uma ocorrência no replay: [classe visual, texto].
+const STATE = { verifying: ['live', 'a corroborar'], assessing: ['live', 'a avaliar'], allocating: ['live', 'à espera de recurso'],
+  responding: ['live', 'recurso a caminho'], expired: ['off', 'expirada'], unresolved: ['bad', 'por resolver'] };
+
+const num = (v, d = 2) => Number(v).toLocaleString('pt-PT', { maximumFractionDigits: d });
+const pct = v => num(v * 100, 1) + ' %';
+const pos = p => `(${p.x}, ${p.y})`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const mk = (html, changed) => changed ? `<mark title="Difere do cenário A">${html}</mark>` : html;
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const plural = (n, [one, many]) => `${n} ${n === 1 ? one : many}`;
+const sevName = (v, rs) => v >= rs.policy.severe_threshold ? ['grave', 'graves'] : v >= rs.severity ? ['média', 'médias'] : ['leve', 'leves'];
+const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function model(c) {
+  const w = c.world || {}, sp = { ...MVP.sensors, ...w.sensors }, sensors = [];
+  const add = (id, p, starts) => sensors.push({ id, p, starts, ...DEF, ...c.sources[id] });
+  add('sensor-1', sp['sensor-1'], true); add('sensor-2', sp['sensor-2'], false);
+  for (const [id, p] of Object.entries(w.initiators || {})) add(id, p, true);
+  for (const [id, p] of Object.entries(w.informants || {})) add(id, p, false);
+  console.assert(sensors.length === Object.keys(c.sources).length, 'fontes sem posição em ' + c.scenario_id);
+  const res = Object.entries(MVP.res).map(([type, p]) => {
+    const o = c.resources[type] || {};
+    return { id: type, type, p: o.position || p, autonomy: o.autonomy_percent ?? 100, load: o.load ?? 0 };
+  });
+  for (const [id, p] of Object.entries(w.patrols || {})) res.push({ id, type: 'drone', p, autonomy: 100, load: 0, extra: true });
+  for (const [id, p] of Object.entries(w.rangers || {})) res.push({ id, type: 'ranger', p, autonomy: 100, load: 0, extra: true });
+  // O replay tem de partir das mesmas bases que a configuração.
+  for (const r of res) { const s = c.replay.res[r.id][0]; console.assert(s[1] === r.p.x && s[2] === r.p.y && s[3] === r.autonomy, 'replay difere da configuração: ' + c.scenario_id + ' ' + r.id); }
+  return { w: w.width || 8, h: w.height || 8, sensors, res };
+}
+const M = Object.fromEntries(IDS.map(id => [id, model(D[id])]));
+const A = D.A, MA = M.A;
+
+// Marcadores: forma = tipo, preenchimento = papel (cheio inicia, vazio corrobora).
+const glyph = {
+  acoustic: s => `<circle r="7" fill="${s.starts ? 'var(--sensor)' : 'var(--map)'}" stroke="var(--sensor)" stroke-width="2.2"/>`,
+  visual: s => `<rect x="-6.5" y="-6.5" width="13" height="13" rx="1.5" fill="${s.starts ? 'var(--sensor)' : 'var(--map)'}" stroke="var(--sensor)" stroke-width="2.2"/>`,
+  human: s => `<path d="M0-8L7.5 6H-7.5Z" fill="${s.starts ? 'var(--sensor)' : 'var(--map)'}" stroke="var(--sensor)" stroke-width="2.2" stroke-linejoin="round"/>`,
+  res: r => `<rect x="-8" y="-8" width="16" height="16" rx="4" fill="var(--res)"/><text y="3.6" text-anchor="middle" font-size="10" font-weight="600" fill="var(--map)">${RES[r.type][0]}</text>`,
+  threat: () => `<path d="M-6-6L6 6M6-6L-6 6" fill="none" stroke="var(--threat)" stroke-width="3.2" stroke-linecap="round"/>`,
+  thunder: () => `<path d="M2-8L-5 1H0L-2 8L5-1H0Z" fill="var(--benign)"/>`,
+  tourist: () => `<path d="M0-7.5L7.5 0L0 7.5L-7.5 0Z" fill="none" stroke="var(--benign)" stroke-width="2.4"/>`,
+};
+const icon = g => `<svg viewBox="-11 -11 22 22" aria-hidden="true">${g}</svg>`;
+const geo = m => { const C = 44, L = 26, T = 8, B = 22;   // y cresce para cima, como na documentação
+  return { C, L, T, W: L + m.w * C + 8, H: T + m.h * C + B, cx: x => L + x * C + C / 2, cy: y => T + (m.h - 1 - y) * C + C / 2 }; };
+const at = (track, t) => track.reduce((last, p) => p[0] <= t ? p : last, track[0]);
+
+function mapSvg(m, events, range, pop) {
+  const { C, L, T, W, H, cx, cy } = geo(m);
+  const longest = Math.max(0, ...events.map(e => e.duration));
+  const cells = new Map();
+  const put = (p, svg, tip, attr = '') => { const k = p.x + ',' + p.y; (cells.get(k) || cells.set(k, { p, items: [] }).get(k)).items.push([svg + `<title>${esc(tip)}</title>`, attr]); };
+  for (const s of m.sensors) put(s.p, glyph[s.kind](s), `${s.id} · ${KIND[s.kind]} · ${s.starts ? 'inicia a ocorrência' : 'corrobora'} · ${pos(s.p)} · alcance ${num(s.detection_range)}`);
+  for (const e of events) {
+    const short = e.duration < longest;
+    put(e.position, glyph[e.kind]() + (short ? `<circle r="11" fill="none" stroke="var(--threat)" stroke-width="1.4" stroke-dasharray="3 3"/><text y="-14" text-anchor="middle" font-size="9" fill="var(--threat)">${num(e.duration)} s</text>` : ''),
+      `${e.event_id} · ${EVENT[e.kind][0]} · ${pos(e.position)} · começa em t = ${num(e.starts_at)} s · dura ${num(e.duration)} s`);
+  }
+  for (const r of m.res) put(r.p, glyph.res(r), `${r.id} · ${RES[r.type][1]} · base ${pos(r.p)} · autonomia ${num(r.autonomy)} % · carga ${num(r.load)}`, ` data-res="${esc(r.id)}"`);
+  let s = `<svg class="map${pop ? ' pop' : ''}" viewBox="0 0 ${W} ${H}" style="min-width:${m.w * 24}px" role="img" aria-label="Mapa ${m.w} por ${m.h} com fontes, recursos e eventos">`
+    + `<clipPath id="clip"><rect x="${L}" y="${T}" width="${m.w * C}" height="${m.h * C}"/></clipPath>`
+    + `<rect x="${L}" y="${T}" width="${m.w * C}" height="${m.h * C}" fill="var(--map)" stroke="var(--line)"/>`;
+  for (let x = 1; x < m.w; x++) s += `<line x1="${L + x * C}" y1="${T}" x2="${L + x * C}" y2="${T + m.h * C}" stroke="var(--line)"/>`;
+  for (let y = 1; y < m.h; y++) s += `<line x1="${L}" y1="${T + y * C}" x2="${L + m.w * C}" y2="${T + y * C}" stroke="var(--line)"/>`;
+  for (let x = 0; x < m.w; x++) s += `<text x="${cx(x)}" y="${H - 6}" text-anchor="middle" font-size="10" fill="var(--muted)">${x}</text>`;
+  for (let y = 0; y < m.h; y++) s += `<text x="${L - 8}" y="${cy(y) + 3.5}" text-anchor="end" font-size="10" fill="var(--muted)">${y}</text>`;
+  if (range) s += `<g clip-path="url(#clip)">` + m.sensors.map(o => `<circle cx="${cx(o.p.x)}" cy="${cy(o.p.y)}" r="${o.detection_range * C}" fill="var(--sensor)" fill-opacity=".05" stroke="var(--sensor)" stroke-opacity=".45" stroke-dasharray="${o.starts ? '' : '4 4'}"/>`).join('') + `</g>`;
+  s += `<g id="rings"></g>`;
+  let i = 0, late = '';
+  for (const { p, items } of cells.values())
+    items.forEach(([g, attr], k) => {
+      const tf = `translate(${cx(p.x) + (k - (items.length - 1) / 2) * 20}px,${cy(p.y)}px)`;
+      const node = `<g class="mk${attr ? ' res' : ''}"${attr} data-home="${tf}" style="transform:${tf}"><g class="in" style="--i:${i++}">${g}</g></g>`;
+      if (attr) late += node; else s += node;   // recursos por cima de tudo
+    });
+  return s + late + '</svg>';
+}
+
+function sourcesTable(id, m) {
+  const groups = new Map();
+  for (const s of m.sensors) {
+    const key = [s.kind, s.starts, s.detection_range, s.sensitivity, s.false_positive_rate, s.false_negative_rate, s.position_error, s.confidence].join('|');
+    (groups.get(key) || groups.set(key, { ...s, count: 0 }).get(key)).count++;
+  }
+  const hit = s => s.sensitivity * (1 - s.false_negative_rate);
+  const rows = [...groups.values()].map(g => {
+    const ref = MA.sensors.find(s => s.kind === g.kind), d = (v, r) => id !== 'A' && ref && v !== r;
+    const cell = (f, fmt) => `<td>${mk(fmt(g[f]), d(g[f], ref && ref[f]))}</td>`;
+    return `<tr><td>${icon(glyph[g.kind](g))}${mk(KIND[g.kind], id !== 'A' && !ref)} <small>${g.starts ? 'inicia' : 'corrobora'}</small></td><td>${g.count}</td>`
+      + cell('detection_range', num) + cell('sensitivity', num) + cell('false_positive_rate', pct) + cell('false_negative_rate', pct)
+      + cell('position_error', v => v ? '±' + v : '0') + cell('confidence', num)
+      + `<td>${mk(num(hit(g)), d(hit(g), ref && hit(ref)))}</td></tr>`;
+  });
+  return `<div class="scroll"><table><thead><tr><th>Fonte</th><th>N.º</th><th>Alcance<br>(células)</th><th>Sensibi-<br>lidade</th><th>Falsos<br>positivos</th><th>Falsos<br>negativos</th><th>Erro de<br>posição</th><th>Confiança<br>declarada</th><th>P(detetar<br>ameaça)</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+}
+
+function resourcesTable(id, m) {
+  const rows = m.res.map(r => {
+    const ref = MA.res.find(a => a.id === r.id), d = f => id !== 'A' && ref && !same(r[f], ref[f]);
+    return `<tr><td>${icon(glyph.res(r))}${mk(esc(r.id), id !== 'A' && !ref)} <small>${RES[r.type][1]}</small></td>`
+      + `<td>${mk(pos(r.p), d('p'))}</td><td>${mk(num(r.autonomy) + ' %', d('autonomy'))}</td><td>${mk(num(r.load), d('load'))}</td></tr>`;
+  });
+  return `<div class="scroll"><table><thead><tr><th>Recurso</th><th>Base (x, y)</th><th>Autonomia</th><th>Carga</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+}
+
+function faults(f) {
+  if (!f) return `<p class="note">Sem falhas injetadas no transporte.</p>`;
+  const label = { loss: 'Perda de mensagens', delay: 'Atraso na entrega', duplicate: 'Mensagens duplicadas' };
+  const fmt = { loss: pct, delay: v => Object.entries(v).map(([k, s]) => `${k} ${num(s)} s`).join(' · '), duplicate: v => v.join(' · ') };
+  return `<dl class="kv">${Object.entries(f).map(([k, v]) => `<dt>${label[k] || esc(k)}</dt><dd>${mk(esc(fmt[k] ? fmt[k](v) : JSON.stringify(v)), true)}</dd>`).join('')}</dl>`;
+}
+
+function severity(rs) {
+  const by = rs.severity_by_source;
+  if (!by) return `${num(rs.severity)} em todas`;
+  const count = {};
+  for (const v of Object.values(by)) count[v] = (count[v] || 0) + 1;
+  return Object.keys(count).sort((a, b) => b - a).map(v => `${plural(count[v], sevName(+v, rs))} (${num(v)})`).join(' · ');
+}
+
+function policy(id, rs) {
+  const ra = A.response_settings, row = (k, v, changed) => `<dt>${k}</dt><dd>${mk(v, id !== 'A' && changed)}</dd>`;
+  return `<dl class="kv">`
+    + POLICY.map(([k, label]) => row(label, num(rs.policy[k]), rs.policy[k] !== ra.policy[k])).join('')
+    + row('Gravidade da ocorrência, por iniciador', severity(rs), !same([rs.severity, rs.severity_by_source], [ra.severity, ra.severity_by_source]))
+    + row('Corrobora um som de tiro', rs.compatibility_rules.gunshot_like_sound.map(s => SIGNAL[s] || esc(s)).join(' · '), !same(rs.compatibility_rules, ra.compatibility_rules))
+    + row('Prior da reputação', `α = ${num(rs.reputation.alpha)} · β = ${num(rs.reputation.beta)}`, !same(rs.reputation, ra.reputation))
+    + row('Adjudicação: distância e atraso máximos', `${num(rs.adjudication.max_distance)} célula · ${num(rs.adjudication.max_delay_seconds)} s`, !same(rs.adjudication, ra.adjudication))
+    + `</dl>`;
+}
+
+function options(o) {
+  return `<dl class="kv">${OPTIONS.map(([k, label, fmt]) => {
+    const v = o && o[k], on = v !== undefined && v !== null && v !== false && v !== 0;
+    return `<dt>${label}</dt><dd><span class="pill ${on ? 'on' : ''}">${on ? 'ligado' + (fmt ? ' · ' + fmt(v) : '') : 'desligado'}</span></dd>`;
+  }).join('')}</dl>`;
+}
+
+const epSummary = ep => {
+  const count = {};
+  for (const e of ep.events) count[e.kind] = (count[e.kind] || 0) + 1;
+  return Object.entries(count).map(([k, n]) => plural(n, EVENT[k])).join(' + ') || 'sem eventos';
+};
+
+// ---------- Estado da página ----------
+let cur, ep = 0, range = false, pick = [];
+const rp = { t: 0, on: false, timer: null };          // replay: tempo simulado, visível?, temporizador
+const score = { game: 0 };
+const prev = {};                                      // últimos valores das fichas, para a contagem animada
+
+// ---------- Replay ----------
+function incState(i, t) {
+  let s = null;
+  for (const x of i.st) if (x[0] <= t) s = x;
+  if (!s) return ['off', i.st.length ? 'ainda sem alerta' : 'sem alerta'];
+  if (s[1] === 'closed') return i.reason === 'confirmed' ? ['ok', 'confirmada'] : ['off', 'nada confirmado'];
+  return STATE[s[1]];
+}
+const endOf = i => i.st.length ? i.st[i.st.length - 1][0] : 0;
+
+function drawReplay() {
+  const r = D[cur].replay, g = geo(M[cur]), t = rp.t;
+  document.querySelectorAll('#map [data-res]').forEach(n => {
+    const p = at(r.res[n.dataset.res], t), home = r.res[n.dataset.res][0];
+    n.style.transform = !rp.on || (p[1] === home[1] && p[2] === home[2]) ? n.dataset.home : `translate(${g.cx(p[1])}px,${g.cy(p[2])}px)`;
+  });
+  el('rings').innerHTML = !rp.on ? '' : r.inc.map(i => {
+    const [cls] = incState(i, t);
+    return `<g style="transform:translate(${g.cx(i.target.x)}px,${g.cy(i.target.y)}px)"><circle r="17" class="ring ${cls}"/>${cls === 'ok' ? '<path d="M9-17l4 4 7-9" fill="none" stroke="var(--res)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' : ''}</g>`;
+  }).join('');
+  const used = Object.values(r.res).reduce((sum, track) => sum + track[0][3] - at(track, t)[3], 0);
+  const done = r.inc.filter(i => incState(i, t)[0] === 'ok').length;
+  el('seek').value = t;
+  el('clock').textContent = `t = ${num(t)} s`;
+  el('play').textContent = rp.timer ? '❚❚ Pausar' : t >= r.tmax ? '↺ Repetir' : '▶ Reproduzir';
+  el('h-msg').textContent = rp.on ? r.msgs.reduce((n, m) => m[0] <= t ? m[1] : n, 0) : 0;
+  el('h-en').textContent = num(rp.on ? used : 0, 1) + ' p.p.';
+  el('h-ok').textContent = `${rp.on ? done : 0} / ${r.inc.length}`;
+  const rs = D[cur].response_settings;
+  el('incs').innerHTML = r.inc.map(i => {
+    const [cls, txt] = rp.on ? incState(i, t) : ['idle', 'por começar'];
+    const ended = rp.on && t >= endOf(i) && i.why && cls !== 'live';
+    return `<li class="${cls}" title="${esc(ended ? i.why : '')}">${esc(i.id)}${rs.severity_by_source ? ' · ' + sevName(i.sev, rs)[0] : ''} · ${txt}</li>`;
+  }).join('');
+  const lines = rp.on ? r.log.filter(l => l[0] <= t).slice(-5) : [];
+  el('log').innerHTML = lines.map(l => `<li><b>${num(l[0])} s</b> ${esc(l[1])}</li>`).join('') || '<li>Carregue em Reproduzir para ver a execução passo a passo.</li>';
+}
+function stop() { clearInterval(rp.timer); rp.timer = null; }
+function play() {
+  const r = D[cur].replay;
+  if (rp.timer) { stop(); return drawReplay(); }
+  if (ep !== r.ep) { ep = r.ep; drawMap(); }
+  if (rp.t >= r.tmax) rp.t = 0;
+  rp.on = true;
+  const step = Math.max(120, Math.min(600, 18000 / r.tmax));   // a execução inteira cabe em cerca de 18 s
+  el('map').style.setProperty('--step', step + 'ms');
+  rp.timer = setInterval(() => { rp.t = Math.min(r.tmax, rp.t + 1); if (rp.t >= r.tmax) stop(); drawReplay(); }, step);
+  drawReplay();
+}
+
+// ---------- Mapa ----------
+function drawMap(pop) {
+  const c = D[cur], evs = c.episodes[ep].events;
+  el('map').innerHTML = mapSvg(M[cur], evs, range, pop && !still);
+  const groups = {};
+  for (const e of evs) { const k = `${EVENT[e.kind][0]} · começa em t = ${num(e.starts_at)} s · dura ${num(e.duration)} s`; groups[k] = (groups[k] || 0) + 1; }
+  el('epnote').textContent = Object.entries(groups).map(([k, n]) => `${n} × ${k}`).join('; ') || 'Episódio vazio: nenhum evento, nunca gera sinal.';
+  document.querySelectorAll('.eps button').forEach((b, i) => b.setAttribute('aria-pressed', i === ep));
+  drawReplay();
+}
+
+function drawScore() {
+  const games = IDS.filter(id => gameList(id)).reduce((n, id) => n + D[id].replay.inc.length, 0);
+  el('score').textContent = `Pontos ${score.game} / ${games}`;
+}
+
+// ---------- Despachante ----------
+// Só faz sentido com várias ocorrências de gravidades diferentes e poucas o bastante para ordenar à mão.
+function gameList(id) { const r = D[id].replay; return D[id].response_settings.severity_by_source && r.inc.length >= 3 && r.inc.length <= 8 ? r.inc : null; }
+function drawGame() {
+  const list = gameList(cur);
+  if (!list) return void (el('game').innerHTML = '');
+  const c = D[cur], rs = c.response_settings, m = M[cur], rangers = m.res.filter(r => r.type === 'ranger').length;
+  const label = i => `${esc(i.id)} em ${pos(i.target)} · ${sevName(i.sev, rs)[0]}${i.dur < 1000 ? ` · dura só ${num(i.dur)} s` : ''}`;
+  const rank = i => i.reason === 'confirmed' ? endOf(i) : 1e9;
+  const sys = [...list].sort((a, b) => rank(a) - rank(b));
+  const done = pick.length === list.length, hits = sys.filter((i, k) => pick[k] === i.id).length;
+  if (done) score.game = Math.max(score.game, hits);
+  el('game').innerHTML = `<h3>Seja o despachante</h3>
+    <p class="note">${plural(list.length, ['ameaça', 'ameaças'])} ao mesmo tempo, ${plural(m.res.length - rangers, ['patrulha', 'patrulhas'])} e ${plural(rangers, ['guarda', 'guardas'])}. Clique nas ocorrências pela ordem em que as atenderia.</p>
+    <div class="picks">${list.map(i => `<button type="button" data-pick="${esc(i.id)}" aria-pressed="${pick.includes(i.id)}"><span class="n">${pick.indexOf(i.id) + 1 || ''}</span>${label(i)}</button>`).join('')}</div>
+    ${done ? `<p><strong>${hits} de ${list.length} posições iguais às do sistema.</strong> Ordem em que o sistema fechou as ocorrências na execução gravada:</p>
+      <ol>${sys.map((i, k) => `<li class="${pick[k] === i.id ? 'hit' : ''}">${label(i)} · ${i.reason === 'confirmed' ? `fechada aos ${num(endOf(i))} s` : 'não atendida: ' + esc(i.why)}</li>`).join('')}</ol>
+      <p class="note">Não há despachante central: cada recurso ordena a sua fila pela gravidade. Veja no replay.</p>` : ''}
+    ${pick.length ? `<div><button type="button" data-pick="">Recomeçar</button></div>` : ''}`;
+  drawScore();
+}
+
+// ---------- Página ----------
+function countUp() {
+  document.querySelectorAll('[data-n]').forEach(node => {
+    const to = +node.dataset.n, from = prev[node.dataset.k] ?? to, t0 = performance.now();
+    prev[node.dataset.k] = to;
+    if (from === to || still) return;
+    const frame = now => { const p = Math.min(1, (now - t0) / 450); node.textContent = Math.round(from + (to - from) * p); if (p < 1) requestAnimationFrame(frame); };
+    requestAnimationFrame(frame);
+  });
+}
+
+function render() {
+  const h = location.hash.slice(1).toUpperCase();
+  stop(); cur = h in D ? h : IDS[0]; ep = D[cur].replay.ep; rp.t = 0; rp.on = false; pick = [];
+  const c = D[cur], m = M[cur], [name, ...rest] = c.description.split(': '), text = rest.join(': ');
+  el('tabs').innerHTML = IDS.map(id => `<a href="#${id.toLowerCase()}"${id === cur ? ' aria-current="page"' : ''}><b>${id}</b>${esc(D[id].description.split(': ')[0])}</a>`).join('');
+  const threats = Math.max(...c.episodes.map(e => e.events.filter(v => v.kind === 'threat').length));
+  const starts = m.sensors.filter(s => s.starts).length, rangers = m.res.filter(r => r.type === 'ranger').length;
+  const runs = c.repetitions * c.episodes.length, kinds = [...new Set(m.sensors.map(s => s.kind))];
+  const evKinds = [...new Set(c.episodes.flatMap(e => e.events.map(v => v.kind)))];
+  const legend = [
+    ...kinds.map(k => [glyph[k]({ starts: true }), KIND[k]]),
+    [glyph.acoustic({ starts: true }), 'cheio: inicia'], [glyph.acoustic({ starts: false }), 'vazio: corrobora'],
+    ...[...new Set(m.res.map(r => r.type))].map(t => [glyph.res({ type: t }), RES[t][1]]),
+    ...evKinds.map(k => [glyph[k](), EVENT[k][0]]),
+  ];
+  const n = (k, v) => `<span data-k="${k}" data-n="${v}">${v}</span>`;
+  el('app').innerHTML = `
+    <div class="intro"><div class="letter">${cur}</div><h2>${esc(name)}</h2><p>${esc(text[0].toUpperCase() + text.slice(1))}</p></div>
+    <dl class="facts">
+      <div><dt>Mapa</dt><dd>${m.w} × ${m.h}<small>células</small></dd></div>
+      <div><dt>Ameaças em simultâneo</dt><dd>${n('threats', threats)}<small>no episódio mais carregado</small></dd></div>
+      <div><dt>Fontes</dt><dd>${n('sources', m.sensors.length)}<small>${starts} ${starts === 1 ? 'inicia' : 'iniciam'}, ${m.sensors.length - starts} ${m.sensors.length - starts === 1 ? 'corrobora' : 'corroboram'}</small></dd></div>
+      <div><dt>Recursos</dt><dd>${n('res', m.res.length)}<small>${plural(m.res.length - rangers, ['patrulha', 'patrulhas'])}, ${plural(rangers, ['guarda', 'guardas'])}</small></dd></div>
+      <div><dt>Execuções por variante</dt><dd>${n('runs', runs)}<small>${c.repetitions} sementes (${c.base_seed}–${c.base_seed + c.repetitions - 1}) × ${plural(c.episodes.length, ['episódio', 'episódios'])}</small></dd></div>
+    </dl>
+    <div class="cols">
+      <div class="left">
+        <section><h3>Mapa da reserva</h3>
+          <div class="mapbox scroll" id="map"></div>
+          <ul class="legend">${legend.map(([g, t]) => `<li>${icon(g)}${t}</li>`).join('')}</ul>
+          <label class="row"><input type="checkbox" id="range"${range ? ' checked' : ''}> Mostrar o alcance de deteção de cada fonte</label>
+        </section>
+        <section><h3>Replay de uma execução real</h3>
+          <div class="row player"><button type="button" class="btn" id="play"></button>
+            <input type="range" id="seek" min="0" max="${c.replay.tmax}" step="1" value="0" aria-label="Tempo simulado em segundos"><output id="clock" for="seek"></output></div>
+          <dl class="hud"><div><dt>Mensagens</dt><dd id="h-msg"></dd></div><div><dt>Energia gasta</dt><dd id="h-en"></dd></div><div><dt>Confirmadas</dt><dd id="h-ok"></dd></div></dl>
+          <ul class="chips" id="incs"></ul>
+          <ol class="log" id="log" aria-live="off"></ol>
+          <p class="note"><code>${esc(c.replay.run)}</code>, episódio <code>${esc(c.episodes[c.replay.ep].label)}</code>. ${esc(c.replay.note)}</p>
+        </section>
+        <section><h3>Episódios</h3>
+          <div class="row eps">${c.episodes.map((e, i) => `<button type="button" data-ep="${i}"><code>${esc(e.label)}</code><span>${epSummary(e)}</span></button>`).join('')}</div>
+          <p class="note" id="epnote"></p>
+        </section>
+        <section class="game" id="game"></section>
+      </div>
+      <div class="right">
+        ${cur === 'A' ? '' : `<p class="note"><mark>Destacado</mark> = valor diferente do cenário A.</p>`}
+        <section><h3>Fontes de observação</h3>${sourcesTable(cur, m)}</section>
+        <section><h3>Recursos</h3>${resourcesTable(cur, m)}</section>
+        <section><h3>Falhas de comunicação</h3>${faults(c.faults)}</section>
+        <section><h3>Política de decisão</h3>${policy(cur, c.response_settings)}</section>
+        <section><h3>Mecanismos de escala</h3>${options(c.options)}</section>
+      </div>
+    </div>`;
+  drawMap(true); drawGame(); drawScore(); countUp();
+}
+
+el('app').addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.id === 'play') play();
+  else if ('ep' in b.dataset) { stop(); rp.t = 0; rp.on = false; ep = +b.dataset.ep; drawMap(); }
+  else if ('pick' in b.dataset) {
+    const id = b.dataset.pick;
+    pick = !id ? [] : pick.includes(id) ? pick.filter(p => p !== id) : [...pick, id];
+    drawGame();
+  }
+});
+el('app').addEventListener('input', e => {
+  const id = e.target.id;
+  if (id === 'range') { range = e.target.checked; drawMap(); }
+  else if (id === 'seek') { stop(); if (ep !== D[cur].replay.ep) { ep = D[cur].replay.ep; drawMap(); } rp.on = true; rp.t = +e.target.value; el('map').style.setProperty('--step', '0ms'); drawReplay(); }
+});
+addEventListener('keydown', e => {
+  const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+  if (!step || e.target.closest('input, button') || e.altKey || e.ctrlKey || e.metaKey) return;
+  location.hash = IDS[(IDS.indexOf(cur) + step + IDS.length) % IDS.length].toLowerCase();
+});
+addEventListener('hashchange', render);
+render();
+</script>
