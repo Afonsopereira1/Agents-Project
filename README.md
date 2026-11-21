@@ -161,15 +161,10 @@ cat "$OUT/summary.csv"
 
 ### Gravações
 
-Para ver o sistema sem correr agentes, `results/demo/` contém:
-
-| Gravação | Conteúdo |
-|---|---|
-| [mvp.mp4](results/demo/mvp.mp4) (25 s) | Ocorrência de exemplo (`mvp-seed-6`), não um dos cenários A–E |
-| `d.json` | **Cenário D**, execução `D-full-003-busy` |
+Para ver uma execução gravada do cenário D sem correr agentes:
 
 ```bash
-python scripts/replay.py results/demo/d.json --delay 0.3   # cenário D
+python scripts/replay.py results/scenario-d/runs/D/full/D-full-003-busy.json --delay 0.3
 ```
 
 Os cenários estão também resumidos numa [página interativa](deliverables/cenarios.html).
@@ -223,7 +218,7 @@ src/isia/
 config/              mapa, política, falhas e cenários A–E
 scripts/             reprodução, replay, gráficos, stress e sensibilidade
 tests/               unit/, integration/, scenarios/
-results/             resultados publicados: CSV, gráficos e gravações
+results/             resultados publicados: CSV, gráficos e relatórios
 docs/                documentação técnica e relatório de desempenho
 deliverables/        entrega: README.txt, referência da API (api/), interface de exemplo (cenarios.html) e slides/
 ```
@@ -235,4 +230,4 @@ deliverables/        entrega: README.txt, referência da API (api/), interface d
 | Código SPADE e instruções | `src/`, este README, [README.txt](deliverables/README.txt), [referência da API](deliverables/api/isia.html) |
 | Arquitetura, agentes, mensagens e protocolos (P1, P2) | [architecture.md](docs/architecture.md), [protocols.md](docs/protocols.md), [reputation-policy.md](docs/reputation-policy.md) |
 | Relatório de desempenho (≥ 3 cenários, P3) | [experiments.md](docs/experiments.md), [evaluation.md](docs/evaluation.md), [scalability.md](docs/scalability.md), [faults.md](docs/faults.md), [sensitivity.md](docs/sensitivity.md) |
-| Visualização e demonstração | `scripts/replay.py`, [results/demo/](results/demo/), [cenarios.html](deliverables/cenarios.html) |
+| Visualização e demonstração | `scripts/replay.py`, [cenarios.html](deliverables/cenarios.html) |

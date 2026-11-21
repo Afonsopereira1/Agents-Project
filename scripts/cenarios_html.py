@@ -20,7 +20,7 @@ SCENARIOS = {
           "Falso alarme: trovão e turista geram dois sinais compatíveis e a patrulha não encontra nada."),
     "C": ("config/scenarios/C.json", "results/experiments/runs/C/full/C-full-007-threat.json",
           "Uma mensagem perdida: o guarda intervém, mas o resultado nunca chega ao sensor."),
-    "D": ("config/scenarios/demo/D.json", "results/demo/d.json",
+    "D": ("config/scenarios/demo/D.json", "results/scenario-d/runs/D/full/D-full-003-busy.json",
           "Seis ocorrências em paralelo; a ameaça de 15 s expira antes de ser atendida."),
     "E": ("config/scenarios/demo/E.json", "results/scenario-e/runs/E/full/E-full-005-wide.json",
           "Dezasseis ocorrências para seis recursos; duas leves ficam sem guarda com autonomia."),

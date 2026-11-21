@@ -126,8 +126,6 @@ Repetir a ocorrência visualmente no terminal:
   python scripts/replay.py /tmp/exemplo.json --delay 0.5
 
 O replay apenas lê o relatório; não executa agentes.
-A mesma ocorrência de exemplo está gravada em vídeo em results/demo/mvp.mp4
-(25 s). Não é nenhum dos cenários A a E.
 
 
 4. EXECUÇÃO COM POLÍTICA DE REPUTAÇÃO
@@ -216,7 +214,7 @@ src/isia/          código dos agentes, domínio, raciocínio e simulação
 config/            mapa, política, falhas e cenários A a E
 scripts/           replay, gráficos, stress, sensibilidade e reprodução
 tests/             testes unitários, de integração e de cenários
-results/           resultados publicados e demonstração gravada
+results/           resultados publicados (CSV, gráficos, relatórios)
 docs/              documentação técnica e relatório de desempenho
 deliverables/      este ficheiro, referência da API (api/), interface de
                    exemplo (cenarios.html) e slides/

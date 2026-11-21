@@ -696,7 +696,7 @@ Os resultados de A/B/C e os das Etapas F e G não foram alterados.
     0 1 2 3 4 5 6 7 8 9 0 1  x
 ```
 
-**Mundo lido da configuração.** O ficheiro de cenário aceita duas chaves opcionais, que o coletor converte em argumentos de `run_mvp` ([collector.py](../src/isia/evaluation/collector.py), `world_options`): `world` (tamanho do mapa e posições de sensores, iniciadores, informadores, patrulhas e guardas) e `options` (as opções da [tabela acima](#opções-valor-por-omissão-e-onde-estão-ligadas)). Sem elas, o cenário corre no mundo de exemplo e nas condições publicadas. Os cenários D e E estão em `config/scenarios/demo/` para não entrarem na recolha da Etapa 9. Para ver o D no visualizador: `python scripts/replay.py results/demo/d.json --delay 0.3`.
+**Mundo lido da configuração.** O ficheiro de cenário aceita duas chaves opcionais, que o coletor converte em argumentos de `run_mvp` ([collector.py](../src/isia/evaluation/collector.py), `world_options`): `world` (tamanho do mapa e posições de sensores, iniciadores, informadores, patrulhas e guardas) e `options` (as opções da [tabela acima](#opções-valor-por-omissão-e-onde-estão-ligadas)). Sem elas, o cenário corre no mundo de exemplo e nas condições publicadas. Os cenários D e E estão em `config/scenarios/demo/` para não entrarem na recolha da Etapa 9. Para ver o D no visualizador: `python scripts/replay.py results/scenario-d/runs/D/full/D-full-003-busy.json --delay 0.3`.
 
 **Resultados** ([results/scenario-d/](../results/scenario-d/), 10 execuções, 60 ameaças):
 
