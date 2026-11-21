@@ -6,7 +6,7 @@
 >
 > - Há dois protocolos, ambos inspirados em FIPA: **verificação** (FIPA Request) e **atribuição** (Contract Net com uma confirmação extra, o `STATUS`).
 > - As mensagens são JSON validado, transportadas pelo SPADE. A performativa vai nos metadados; o tipo (`CFP`, `PROPOSAL`, ...) vai no corpo.
-> - Uma ocorrência completa no MVP troca 15 mensagens: 2 de verificação e 13 de duas negociações (patrulha e guarda).
+> - Uma ocorrência completa na execução de exemplo troca 15 mensagens: 2 de verificação e 13 de duas negociações (patrulha e guarda).
 > - `INCIDENT_CLOSED` nunca é enviado. `ALERT` só é enviado com a opção `alert_distance` (cenário E).
 > - Fila, prazo dinâmico, reenvio e aviso entre iniciadores são **opções**. Os resultados dos cenários A, B e C foram recolhidos com todas desligadas.
 
@@ -73,7 +73,7 @@ O remetente é o JID dado pelo transporte. O `source_id` do corpo não autentica
 
 ### Exemplos reais
 
-Pedido de propostas e proposta do drone, tirados de uma execução do MVP (identificadores encurtados):
+Pedido de propostas e proposta do drone, tirados da execução de exemplo (identificadores encurtados):
 
 ```json
 {
@@ -139,7 +139,7 @@ O que o código envia hoje. «Iniciador» é o `IncidentSensorAgent` da ocorrên
 
 Notas:
 
-- Sem `alert_distance`, `ALERT` também fica só na linha temporal. É o caso do MVP e dos cenários A, B, C e D.
+- Sem `alert_distance`, `ALERT` também fica só na linha temporal. É o caso da execução de exemplo e dos cenários A, B, C e D.
 - Motivos de recusa de um CFP (`payload.reason`): `resource_unavailable`, `capability_mismatch`, `autonomy_insufficient`, `autonomy_unknown`, `cfp_expired`, `target_outside_map` e, com fila ordenada, `waiting_turn`.
 - O esquema é **«inspirado em FIPA»**, não conforme. Os desvios estão na [secção 9](#9-porquê-estes-protocolos-alternativas-prós-e-contras).
 
@@ -170,7 +170,7 @@ de espera usam tempo real e não entram nesta comparação. `no_data` e
 
 Como funciona:
 
-1. O iniciador envia **um** pedido a **uma** fonte. No MVP e nos cenários A, B e C é o `sensor-2`. Nos cenários D e E, cada iniciador pergunta ao informador mais próximo.
+1. O iniciador envia **um** pedido a **uma** fonte. Na execução de exemplo e nos cenários A, B e C é o `sensor-2`. Nos cenários D e E, cada iniciador pergunta ao informador mais próximo.
 2. O pedido leva a observação inicial e uma `hypothesis` (tipo de evento, posição e intervalo).
 3. A fonte responde com as observações da sua janela (5 s simulados). Não filtra nem avalia: devolve o que tem.
 4. O iniciador valida a resposta (remetente, `conversation-id`, `in-reply-to`, `request_message_id`) e classifica cada observação.
@@ -183,7 +183,7 @@ Como funciona:
 |---|---|
 | `SensorAgent` isolado | 10 s (`RESPONSE_TIMEOUT_SECONDS`) |
 | Cenários A, B e C publicados | 0,5 s |
-| MVP por omissão, cenário D | 2 s |
+| Execução de exemplo, cenário D | 2 s |
 | Cenário E (um reenvio) | 4 s, com o pedido repetido aos 2 s |
 
 Regra: `min(10, max_receive_timeout × (1 + retransmit))`.
@@ -280,7 +280,7 @@ custo = w_eta × ETA / 60 + w_energia × energia / 100 + w_carga × carga / 1
 
 Pesos 1,0 por omissão; ganha o menor custo; o desempate é por `resource_id` e depois por `message_id` (`select_best_proposal`, [allocation.py](../src/isia/reasoning/allocation.py)). As escalas (60 s, 100 %) são parâmetros de engenharia, não uma calibração física.
 
-Exemplo do MVP: drone com ETA 3 s e energia 6 % custa 0,11; veículo com ETA 5 s e 10 % custa 0,18. Ganha o drone.
+Na execução de exemplo: drone com ETA 3 s e energia 6 % custa 0,11; veículo com ETA 5 s e 10 % custa 0,18. Ganha o drone.
 
 Nos cenários A e B o drone tem carga 0,5, o que soma 0,5 ao seu custo: ganha o veículo em todas as execuções `full` de `results/experiments/runs.csv`. No cenário C o drone tem 15 % de autonomia e recusa (precisa de 6 % para a missão mais 10 % de reserva mínima).
 
@@ -408,7 +408,7 @@ Com SPADE 4.1.4 ([requirements.txt](../requirements.txt)) usamos `Agent`, `OneSh
 | [allocation.py](../src/isia/reasoning/allocation.py) | Construção e validação de `CFP`, `ACCEPT`, `STATUS`; escolha da proposta; reserva |
 | [agents/](../src/isia/agents/) | Os comportamentos que conduzem os dois protocolos |
 
-Para correr o MVP com XMPP real:
+Para correr a execução de exemplo com XMPP real:
 
 ```bash
 spade run --host localhost --memory                                         # terminal 1
@@ -417,7 +417,7 @@ XMPP_PASSWORD=<palavra-passe> PYTHONPATH=src python -m isia.simulation.runner --
 
 Limites do que foi validado sobre XMPP:
 
-- Só o MVP base (5 agentes). Falhas injetadas, iniciadores e recursos adicionais existem apenas no transporte local.
+- Só a execução base (5 agentes). Falhas injetadas, iniciadores e recursos adicionais existem apenas no transporte local.
 - Os agentes correm no mesmo processo, e o SPADE pode entregar mensagens internamente. Não é uma prova de rede com processos separados.
 - Usar metadados FIPA não é conformidade FIPA-ACL integral.
 

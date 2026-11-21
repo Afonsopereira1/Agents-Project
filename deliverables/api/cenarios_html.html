@@ -81,7 +81,7 @@
                     <h1 class="modulename">
 cenarios_html    </h1>
 
-                        <div class="docstring"><p>Embutir os cenários e uma execução gravada de cada um em docs/presentation/cenarios.html.</p>
+                        <div class="docstring"><p>Embutir os cenários e uma execução gravada de cada um em deliverables/cenarios.html.</p>
 
 <p>Só lê configurações e relatórios; não corre agentes. Substitui o bloco de dados da página.
 Os relatórios de A, B, C e E vêm de results/*/runs/, que não são versionados: é preciso
@@ -93,7 +93,7 @@ Uso, a partir da raiz:  python scripts/cenarios_html.py</p>
 
                         <label class="view-source-button" for="mod-cenarios_html-view-source"><span>View Source</span></label>
 
-                        <div class="pdoc-code codehilite"><pre><span></span><span id="L-1"><a href="#L-1"><span class="linenos">  1</span></a><span class="sd">"""Embutir os cenários e uma execução gravada de cada um em docs/presentation/cenarios.html.</span>
+                        <div class="pdoc-code codehilite"><pre><span></span><span id="L-1"><a href="#L-1"><span class="linenos">  1</span></a><span class="sd">"""Embutir os cenários e uma execução gravada de cada um em deliverables/cenarios.html.</span>
 </span><span id="L-2"><a href="#L-2"><span class="linenos">  2</span></a>
 </span><span id="L-3"><a href="#L-3"><span class="linenos">  3</span></a><span class="sd">Só lê configurações e relatórios; não corre agentes. Substitui o bloco de dados da página.</span>
 </span><span id="L-4"><a href="#L-4"><span class="linenos">  4</span></a><span class="sd">Os relatórios de A, B, C e E vêm de results/*/runs/, que não são versionados: é preciso</span>
@@ -106,7 +106,7 @@ Uso, a partir da raiz:  python scripts/cenarios_html.py</p>
 </span><span id="L-11"><a href="#L-11"><span class="linenos"> 11</span></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 </span><span id="L-12"><a href="#L-12"><span class="linenos"> 12</span></a>
 </span><span id="L-13"><a href="#L-13"><span class="linenos"> 13</span></a><span class="n">ROOT</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span><span class="o">.</span><span class="n">parents</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
-</span><span id="L-14"><a href="#L-14"><span class="linenos"> 14</span></a><span class="n">PAGE</span> <span class="o">=</span> <span class="n">ROOT</span> <span class="o">/</span> <span class="s2">"docs/presentation/cenarios.html"</span>
+</span><span id="L-14"><a href="#L-14"><span class="linenos"> 14</span></a><span class="n">PAGE</span> <span class="o">=</span> <span class="n">ROOT</span> <span class="o">/</span> <span class="s2">"deliverables/cenarios.html"</span>
 </span><span id="L-15"><a href="#L-15"><span class="linenos"> 15</span></a><span class="c1"># cenário: (configuração, relatório para o replay, porque foi escolhido)</span>
 </span><span id="L-16"><a href="#L-16"><span class="linenos"> 16</span></a><span class="n">SCENARIOS</span> <span class="o">=</span> <span class="p">{</span>
 </span><span id="L-17"><a href="#L-17"><span class="linenos"> 17</span></a>    <span class="s2">"A"</span><span class="p">:</span> <span class="p">(</span><span class="s2">"config/scenarios/A.json"</span><span class="p">,</span> <span class="s2">"results/experiments/runs/A/full/A-full-000-threat.json"</span><span class="p">,</span>
@@ -265,8 +265,7 @@ Uso, a partir da raiz:  python scripts/cenarios_html.py</p>
                 <section id="PAGE">
                     <div class="attr variable">
             <span class="name">PAGE</span>        =
-<input id="PAGE-view-value" class="view-value-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
-            <label class="view-value-button pdoc-button" for="PAGE-view-value"></label><span class="default_value">PosixPath(&#39;/home/guilhermekbatista/projetos/university/Agents-Project/docs/presentation/cenarios.html&#39;)</span>
+<span class="default_value">PosixPath(&#39;/home/guilhermekbatista/projetos/university/Agents-Project/deliverables/cenarios.html&#39;)</span>
 
         
     </div>
@@ -303,7 +302,7 @@ Uso, a partir da raiz:  python scripts/cenarios_html.py</p>
                 <section id="STATES">
                     <div class="attr variable">
             <span class="name">STATES</span>        =
-<span class="default_value">{&#39;allocating&#39;, &#39;closed&#39;, &#39;assessing&#39;, &#39;unresolved&#39;, &#39;verifying&#39;, &#39;responding&#39;, &#39;expired&#39;}</span>
+<span class="default_value">{&#39;assessing&#39;, &#39;allocating&#39;, &#39;verifying&#39;, &#39;unresolved&#39;, &#39;expired&#39;, &#39;closed&#39;, &#39;responding&#39;}</span>
 
         
     </div>

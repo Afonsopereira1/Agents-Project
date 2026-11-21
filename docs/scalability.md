@@ -1,6 +1,6 @@
 # Escalabilidade — Etapa 9A (P3)
 
-[Plano](development-plan.md#etapa-9a--escalabilidade-computacional-e-situacional) · [Experiências](experiments.md) · [Arquitetura](architecture.md) · [Pendentes](delivery-todo.md#bloco-c--p3-escalabilidade)
+[Experiências](experiments.md) · [Arquitetura](architecture.md)
 
 Resposta a P3: o que acontece ao custo quando o sistema cresce (computacional) e o que acontece ao resultado quando mudam as ameaças, os sensores, os recursos e as falhas (situacional). Os números agregados vêm dos ficheiros versionados em [`results/`](../results/); alguns detalhes por ocorrência dependem dos relatórios locais não versionados, como indicado nos cenários D e E. As tabelas foram conferidas a 18-11-2026; as ressalvas documentais desta revisão não alteram a recolha histórica.
 
@@ -53,7 +53,7 @@ Cada mecanismo é um argumento de `run_mvp` ([runner.py](../src/isia/simulation/
 | Um informador por iniciador | `extra_informants` | só o `sensor-2` | só o `sensor-2` | 6 câmaras | 2 câmaras e 2 humanos | situacional (sensores) |
 | Mais patrulhas e guardas | `extra_patrols`, `extra_rangers` | 2 patrulhas, 1 guarda | 2 patrulhas, 1 guarda | 4 patrulhas, 2 guardas | 4 patrulhas, 2 guardas | situacional (recursos) |
 
-O MVP na linha de comandos (`python -m isia.simulation.runner`) usa os valores por omissão: prazo dinâmico, fila e silêncio ligados. Iniciadores, informadores e recursos adicionais só existem no transporte local.
+A execução de exemplo na linha de comandos (`python -m isia.simulation.runner`) usa os valores por omissão: prazo dinâmico, fila e silêncio ligados. Iniciadores, informadores e recursos adicionais só existem no transporte local.
 
 ## Como reproduzir
 
@@ -369,7 +369,7 @@ Cada secção tem o mesmo molde: o que acontecia, o que mudámos, o efeito medid
 
 - **O teto é uma troca, não um ótimo:** é o maior atraso tolerado e também o tempo perdido quando ninguém responde.
 - **Quando há resposta, o teto não custa nada:** com 0,6 s de atraso, o tempo é o mesmo com teto de 1, 2 ou 4 s.
-- **Escolhemos 2,0 s:** é o prazo que o projeto já usa na rede XMPP, e perder 2 s é pouco face a uma missão (pelo menos 12 s simulados). É o item 5.1 da [ata](approvals.md), ainda por assinar.
+- **Escolhemos 2,0 s:** é o prazo que o projeto já usa na rede XMPP, e perder 2 s é pouco face a uma missão (pelo menos 12 s simulados).
 
 ## Fila para recursos ocupados (antes e depois)
 
@@ -696,7 +696,7 @@ Os resultados de A/B/C e os das Etapas F e G não foram alterados.
     0 1 2 3 4 5 6 7 8 9 0 1  x
 ```
 
-**Mundo lido da configuração.** O ficheiro de cenário aceita duas chaves opcionais, que o coletor converte em argumentos de `run_mvp` ([collector.py](../src/isia/evaluation/collector.py), `world_options`): `world` (tamanho do mapa e posições de sensores, iniciadores, informadores, patrulhas e guardas) e `options` (as opções da [tabela acima](#opções-valor-por-omissão-e-onde-estão-ligadas)). Sem elas, o cenário corre no mundo do MVP e nas condições publicadas. Os cenários D e E estão em `config/scenarios/demo/` para não entrarem na recolha da Etapa 9. Para ver o D no visualizador: `python scripts/replay.py results/demo/d.json --delay 0.3`.
+**Mundo lido da configuração.** O ficheiro de cenário aceita duas chaves opcionais, que o coletor converte em argumentos de `run_mvp` ([collector.py](../src/isia/evaluation/collector.py), `world_options`): `world` (tamanho do mapa e posições de sensores, iniciadores, informadores, patrulhas e guardas) e `options` (as opções da [tabela acima](#opções-valor-por-omissão-e-onde-estão-ligadas)). Sem elas, o cenário corre no mundo de exemplo e nas condições publicadas. Os cenários D e E estão em `config/scenarios/demo/` para não entrarem na recolha da Etapa 9. Para ver o D no visualizador: `python scripts/replay.py results/demo/d.json --delay 0.3`.
 
 **Resultados** ([results/scenario-d/](../results/scenario-d/), 10 execuções, 60 ameaças):
 
@@ -801,7 +801,7 @@ PYTHONPATH=src python scripts/sugestoes.py distancia  # um só grupo
 
 ## Estado de C1–C8
 
-Os oito limites identificados na análise inicial, conferidos com o código atual. C8 reunia dois aspetos na [tabela original](development-plan.md#etapa-9a--escalabilidade-computacional-e-situacional): histórico da reputação e processo partilhado. As duas linhas abaixo desdobram esse mesmo identificador histórico; não são dois limites numerados C8 por engano.
+Os oito limites identificados na análise inicial, conferidos com o código atual. C8 reunia dois aspetos na tabela original: histórico da reputação e processo partilhado. As duas linhas abaixo desdobram esse mesmo identificador histórico; não são dois limites numerados C8 por engano.
 
 | Ref. | Limite | Onde | Estado | O que existe hoje |
 |---|---|---|---|---|

@@ -1,4 +1,4 @@
-"""Embutir os cenários e uma execução gravada de cada um em docs/presentation/cenarios.html.
+"""Embutir os cenários e uma execução gravada de cada um em deliverables/cenarios.html.
 
 Só lê configurações e relatórios; não corre agentes. Substitui o bloco de dados da página.
 Os relatórios de A, B, C e E vêm de results/*/runs/, que não são versionados: é preciso
@@ -11,7 +11,7 @@ from math import hypot
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGE = ROOT / "docs/presentation/cenarios.html"
+PAGE = ROOT / "deliverables/cenarios.html"
 # cenário: (configuração, relatório para o replay, porque foi escolhido)
 SCENARIOS = {
     "A": ("config/scenarios/A.json", "results/experiments/runs/A/full/A-full-000-threat.json",

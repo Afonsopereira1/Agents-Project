@@ -49,7 +49,7 @@ O relatório JSON regista `faults` (a configuração completa), `scenario_seed` 
 
 ## O que acontece em cada falha
 
-Medido no MVP sem argumentos, uma falha de cada vez (18-11-2026). Os testes correspondentes estão em [test_faults.py](../tests/integration/test_faults.py).
+Medido na execução de exemplo, sem argumentos, uma falha de cada vez (18-11-2026). Os testes correspondentes estão em [test_faults.py](../tests/integration/test_faults.py).
 
 | Falha | Estado final | Motivo (`reason`) | O que acontece aos recursos |
 |---|---|---|---|
