@@ -63,4 +63,5 @@ async def go():
         w = csv.DictWriter(f, FIELDS); w.writeheader(); w.writerows(out)
     print("gravado:", OUT.relative_to(ROOT))
 
-asyncio.run(go())
+if __name__ == "__main__":
+    asyncio.run(go())

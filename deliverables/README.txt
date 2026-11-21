@@ -7,6 +7,14 @@ Sistema multiagente em SPADE que deteta atividade suspeita numa reserva,
 corrobora observações e coordena drones, veículos e guardas por Contract Net,
 sem despachante central.
 
+ONDE ESTÁ O QUÊ (abrir no navegador)
+
+  index.html                   documentação do código (docstrings de
+                               todos os módulos, classes e funções)
+  cenarios.html                interface dos cenários A a E, com replay
+  Presentation.pdf             apresentação
+  mvp.mp4                      vídeo de uma ocorrência, do alerta ao fecho
+
 
 1. ARQUITETURA
 
@@ -216,14 +224,15 @@ scripts/           replay, gráficos, stress, sensibilidade e reprodução
 tests/             testes unitários, de integração e de cenários
 results/           resultados publicados (CSV, gráficos, relatórios)
 docs/              documentação técnica e relatório de desempenho
-deliverables/      este ficheiro, referência da API (api/), interface de
-                   exemplo (cenarios.html) e slides/
+deliverables/      este ficheiro, documentação do código
+                   (documentacao-api/ e index.html), interface de
+                   exemplo (cenarios.html), Presentation.pdf e mvp.mp4
 
 Documentos principais:
   docs/architecture.md     arquitetura e agentes
   docs/protocols.md        protocolos P1 e P2
   docs/experiments.md      cenários e resultados
   docs/scalability.md      escalabilidade (P3)
-  deliverables/api/isia.html  referência da API
+  deliverables/documentacao-api/index.html  documentação do código (docstrings)
 
 Mais detalhes em README.md.

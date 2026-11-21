@@ -22,6 +22,8 @@ RESULTS = [
     ("Cenário E, «reserva alargada»", "python -m isia.evaluation.collector config/scenarios/demo/E.json --variants full --output results/scenario-e", "16 s", "results/scenario-e/"),
     ("Cenário E: câmaras contra informadores (depois do anterior)", "python scripts/scenario_e.py", "< 1 s", "results/scenario-e/informants.csv"),
     ("Sensibilidade dos parâmetros (ver docs/sensitivity.md)", "python scripts/sensitivity.py --list", "—", "results/sensitivity/"),
+    # isia.agents e isia.reasoning definem __all__, por isso os seus submódulos têm de ser passados à mão.
+    ("Documentação do código (requer pip install pdoc==16.0.0)", "rm -rf deliverables/documentacao-api && pdoc -t docs/pdoc --no-show-source -o deliverables/documentacao-api src/isia src/isia/agents/[!_]*.py src/isia/reasoning/[!_]*.py scripts/*.py", "3 s", "deliverables/documentacao-api/"),
 ]
 
 

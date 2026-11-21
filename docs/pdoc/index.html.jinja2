@@ -1,0 +1,65 @@
+{#- Página inicial: módulos agrupados por pacote, cada um com a primeira linha da sua docstring. -#}
+{% extends "frame.html.jinja2" %}
+{% macro summary(name) -%}
+    {{ all_modules[name].docstring.split("\n")[0] | replace("`", "") }}
+{%- endmacro %}
+{% macro href(name) %}{{ name.replace(".", "/") }}.html{% endmacro %}
+{% set packages, scripts = [], [] %}
+{% for name in all_modules | sort %}
+    {% if name.count(".") == 1 and name.startswith("isia.") %}{% set _ = packages.append(name) %}{% endif %}
+    {% if name != "isia" and not name.startswith("isia.") %}{% set _ = scripts.append(name) %}{% endif %}
+{% endfor %}
+{% block title %}Documentação do código · ISIA Tema C{% endblock %}
+{% block style %}
+    {{ super() | safe }}
+    <style>
+        header.pdoc h1 { margin: 1.75rem 0 .25rem; }
+        header.pdoc p { color: var(--muted); }
+        header.pdoc input[type=search] { width: 100%; font-size: 1.25rem; padding: .4rem .6rem; margin: .5rem 0 1.5rem; }
+        main.pdoc table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
+        main.pdoc td { padding: .35rem .75rem .35rem 0; border-bottom: 1px solid var(--accent); vertical-align: top; }
+        main.pdoc td:first-child { white-space: nowrap; width: 1%; }
+        main.pdoc h2 small { font-weight: normal; color: var(--muted); font-size: 1rem; }
+    </style>
+{% endblock %}
+{% block nav %}
+    <h2>Pacote isia</h2>
+    <ul>
+        <li><a href="isia.html">isia</a></li>
+        {% for p in packages %}<li><a href="#{{ p }}">{{ p }}</a></li>{% endfor %}
+    </ul>
+    <h2>Scripts</h2>
+    <ul>
+        {% for s in scripts %}<li><a href="{{ href(s) }}">{{ s }}</a></li>{% endfor %}
+    </ul>
+{% endblock %}
+{% block content %}
+    <header class="pdoc">
+        <h1>Documentação do código</h1>
+        <p>ISIA 2026/2027 · Tema C · Monitorização descentralizada da vida selvagem.
+            Gerada a partir das docstrings de <code>src/isia/</code> e <code>scripts/</code>.</p>
+        {% if search %}
+            <input type="search" placeholder="Pesquisar classes, funções e módulos…" aria-label="pesquisar">
+        {% endif %}
+    </header>
+    <main class="pdoc">
+        <p>Comece por <a href="isia.html"><code>isia</code></a>: as camadas do sistema e onde está cada requisito (P1, P2, P3).</p>
+        {% for p in packages %}
+            <h2 id="{{ p }}"><a href="{{ href(p) }}">{{ p }}</a> <small>{{ summary(p) }}</small></h2>
+            <table>
+                {% for m in all_modules | sort if m.startswith(p ~ ".") %}
+                    <tr><td><a href="{{ href(m) }}">{{ m.split(".")[-1] }}</a></td><td>{{ summary(m) }}</td></tr>
+                {% endfor %}
+            </table>
+        {% endfor %}
+        <h2 id="scripts">Scripts <small>experiências, gráficos e replay; correm a partir da raiz do projeto</small></h2>
+        <table>
+            {% for s in scripts %}
+                <tr><td><a href="{{ href(s) }}">{{ s }}</a></td><td>{{ summary(s) }}</td></tr>
+            {% endfor %}
+        </table>
+    </main>
+    {% if search %}
+        {% include "search.html.jinja2" %}
+    {% endif %}
+{% endblock %}

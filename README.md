@@ -220,14 +220,14 @@ scripts/             reprodução, replay, gráficos, stress e sensibilidade
 tests/               unit/, integration/, scenarios/
 results/             resultados publicados: CSV, gráficos e relatórios
 docs/                documentação técnica e relatório de desempenho
-deliverables/        entrega: README.txt, referência da API (api/), interface de exemplo (cenarios.html) e slides/
+deliverables/        entrega: README.txt, documentação do código (documentacao-api/), interface de exemplo (cenarios.html), apresentação (Presentation.pdf) e vídeo (mvp.mp4)
 ```
 
 ## Documentação
 
 | Entregável | Documentos |
 |---|---|
-| Código SPADE e instruções | `src/`, este README, [README.txt](deliverables/README.txt), [referência da API](deliverables/api/isia.html) |
+| Código SPADE e instruções | `src/`, este README, [README.txt](deliverables/README.txt), [documentação do código](deliverables/documentacao-api/index.html) |
 | Arquitetura, agentes, mensagens e protocolos (P1, P2) | [architecture.md](docs/architecture.md), [protocols.md](docs/protocols.md), [reputation-policy.md](docs/reputation-policy.md) |
 | Relatório de desempenho (≥ 3 cenários, P3) | [experiments.md](docs/experiments.md), [evaluation.md](docs/evaluation.md), [scalability.md](docs/scalability.md), [faults.md](docs/faults.md), [sensitivity.md](docs/sensitivity.md) |
 | Visualização e demonstração | `scripts/replay.py`, [cenarios.html](deliverables/cenarios.html) |

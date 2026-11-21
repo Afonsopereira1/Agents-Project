@@ -17,7 +17,6 @@ from isia.simulation.runner import PUBLISHED_CONDITIONS, run_mvp
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "results" / "stress" / "longa.csv"
 base = load_scenario(ROOT / "config" / "scenarios" / "A.json")
-N = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
 FIELDS = ["execucoes", "history_registos", "history_json_kb", "rss_pico_kb", "reputacao_sensor_1",
           "confirmou", "unresolved", "tempo_real_s"]
 
@@ -48,4 +47,6 @@ async def go():
         w = csv.DictWriter(f, FIELDS, lineterminator="\n"); w.writeheader(); w.writerows(out)
     print("gravado:", OUT.relative_to(ROOT))
 
-asyncio.run(go())
+if __name__ == "__main__":
+    N = int(sys.argv[1]) if len(sys.argv) > 1 else 1000
+    asyncio.run(go())
