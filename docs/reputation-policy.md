@@ -1,6 +1,6 @@
 # Reputação e política de resposta
 
-[README](../README.md) · [Arquitetura](architecture.md) · [Protocolos](protocols.md) · [Experiências](experiments.md) · [Ata de parâmetros](approvals.md)
+[README](../README.md) · [Arquitetura](architecture.md) · [Protocolos](protocols.md) · [Experiências](experiments.md)
 
 > **Em resumo**
 >
@@ -21,7 +21,7 @@ Verificado contra o código em 18-11-2026 (branch `fix/auditoria-correcoes`).
 
 O sensor nunca recebe a verdade de referência. Recebe uma cópia dos pesos (`book.snapshot(...)`) antes de começar, e essa cópia não muda durante a execução.
 
-A política é opcional. Sem ela (MVP sem `--policy`), o sensor usa a regra preliminar: pede verificação se a fonte devolver pelo menos uma observação compatível; caso contrário, observa.
+A política é opcional. Sem ela (sem `--policy`), o sensor usa a regra preliminar: pede verificação se a fonte devolver pelo menos uma observação compatível; caso contrário, observa.
 
 ## Reputação
 
@@ -100,7 +100,7 @@ Exemplo: com gravidade 0,8, o primeiro caso da tabela acima (score 0,15) passa o
 
 **O ramo `request_rangers` nunca dispara nos resultados publicados.** A reputação da fonte que corrobora fica em 0,5 (ver abaixo), por isso o score máximo é (1,0 × 0,8 + 0,5 × 0,8) / 2 = 0,60, abaixo de 0,65. Os guardas são sempre chamados depois de uma patrulha confirmar. O ramo está coberto por testes ([test_policy.py](../tests/unit/test_policy.py), [test_mvp_policy.py](../tests/scenarios/test_mvp_policy.py)).
 
-Estes valores são de engenharia: estão testados (os limiares são inclusivos), mas **não foram calibrados com dados reais** nem aprovados formalmente ([ata](approvals.md)). A sensibilidade a cada um está em [sensitivity.md](sensitivity.md).
+Estes valores são de engenharia: estão testados (os limiares são inclusivos), mas **não foram calibrados com dados reais** nem aprovados formalmente. A sensibilidade a cada um está em [sensitivity.md](sensitivity.md).
 
 ## Adjudicação: quando a reputação é atualizada
 

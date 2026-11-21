@@ -2,7 +2,7 @@
 
 > **Estado:** plano cumprido. Este documento diz o que se avalia e como. Os números estão em [experiências](experiments.md) e em [sensibilidade](sensitivity.md).
 
-[README](../README.md) · [Plano](development-plan.md) · [Estratégia](architecture.md#estratégia-técnica-e-algoritmos) · [Requisitos e fontes](../README.md#requisitos-e-fontes)
+[README](../README.md) · [Estratégia](architecture.md#estratégia-técnica-e-algoritmos) · [Requisitos e fontes](../README.md#requisitos-e-fontes)
 
 ## Em resumo
 
@@ -103,14 +103,14 @@ Onde estão os casos previstos no plano:
 
 | Caso | Teste |
 |---|---|
-| Posição inválida é rejeitada | `tests/test_models.py` (`test_coordenadas_negativas`) |
-| Mensagem sem campo obrigatório é rejeitada | `tests/test_messages.py` (`test_campos_obrigatorios`) |
+| Posição inválida é rejeitada | `tests/unit/test_models.py` (`test_coordenadas_negativas`) |
+| Mensagem sem campo obrigatório é rejeitada | `tests/unit/test_messages.py` (`test_campos_obrigatorios`) |
 | Observação repetida conta uma vez | `tests/unit/test_policy.py` (`test_duplicate_forwarded_and_reordered_observations_do_not_change_score`) |
 | Reputação com poucos dados não vai a extremos | `tests/unit/test_reputation.py` (`test_new_source_and_small_sample_are_smoothed`) |
 | Denominador zero dá `N/A` | `tests/unit/test_metrics.py` (`test_zero_denominators_are_none`) |
 | Recurso sem autonomia não parte | `tests/scenarios/test_mvp.py` (`test_outside_map_and_insufficient_round_trip_never_move`) |
 | Proposta atrasada ou duplicada é ignorada | `tests/unit/test_allocation.py` (`test_ignores_invalid_duplicate_and_late_proposals`) |
-| Mensagem perdida termina em timeout | `tests/test_sensor_timeout.py` (`test_termina_sem_resposta_e_regista_timeout`) |
+| Mensagem perdida termina em timeout | `tests/unit/test_sensor_timeout.py` (`test_termina_sem_resposta_e_regista_timeout`) |
 | Dois iniciadores sem dupla reserva | `tests/integration/test_stress_extensions.py` (`test_two_initiators_share_resources_without_double_booking`) |
 | Ocorrência completa, do alerta ao fecho | `tests/scenarios/test_mvp.py` (`test_alert_to_closure_two_sensors_two_candidates_and_ranger`) |
 | Falso positivo fecha sem chamar o guarda | `tests/scenarios/test_mvp.py` (`test_not_confirmed_closes_without_ranger`) |

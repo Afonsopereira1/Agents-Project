@@ -1,6 +1,6 @@
 # Experiências — Etapa 9
 
-[Plano](development-plan.md) · [Plano de avaliação](evaluation.md) · [Sensibilidade](sensitivity.md) · [Falhas](faults.md) · [Reputação e política](reputation-policy.md)
+[Plano de avaliação](evaluation.md) · [Sensibilidade](sensitivity.md) · [Falhas](faults.md) · [Reputação e política](reputation-policy.md)
 
 ## Em resumo
 
@@ -18,7 +18,7 @@ Definições implementadas em [`metrics.py`](../src/isia/evaluation/metrics.py) 
 
 | Termo | Definição |
 |---|---|
-| Unidade | Uma execução: o mundo 8×8 do MVP, uma janela única, um episódio. Não se avaliam observações isoladas. |
+| Unidade | Uma execução: o mundo de exemplo 8×8, uma janela única, um episódio. Não se avaliam observações isoladas. |
 | Positivo real | O episódio tem pelo menos um evento `threat`. |
 | Positivo previsto | A decisão final mobiliza recursos: `request_mobile_verification` ou `request_rangers`. Uma execução sem alerta conta como negativo previsto. |
 | TP / FP / TN / FN | Cruzamento dos dois anteriores, por execução. |
@@ -41,7 +41,7 @@ O movimento custa 1 s e 1 p.p. por célula, mais 1 s de inspeção. Uma ocorrên
 
 ## Cenários (`config/scenarios/*.json`)
 
-Todos usam o mundo do MVP. O `sensor-1` (acústico, em (2,2)) inicia a ocorrência e o `sensor-2` (visual, em (4,2)) corrobora. Os recursos são o drone em (0,2), o veículo em (0,0) e o guarda em (5,5). Os eventos ficam em (3,2). Cada cenário corre 20 repetições (sementes 1000 a 1019) de cada episódio.
+Todos usam o mundo de exemplo. O `sensor-1` (acústico, em (2,2)) inicia a ocorrência e o `sensor-2` (visual, em (4,2)) corrobora. Os recursos são o drone em (0,2), o veículo em (0,0) e o guarda em (5,5). Os eventos ficam em (3,2). Cada cenário corre 20 repetições (sementes 1000 a 1019) de cada episódio.
 
 | Cenário | Episódios | Execuções por variante | Fontes | Recursos e falhas |
 |---|---|---:|---|---|
@@ -54,6 +54,26 @@ Como o simulador gera as leituras (`Scenario._sample`):
 - Uma ameaça é detetada com probabilidade `sensitivity × (1 − FN)`: 0,90 e 0,81 em A e C; 0,72 e 0,64 em B.
 - Um evento benigno gera um falso sinal com probabilidade `sensitivity × FP`: 0,54 (trovão, `sensor-1`) e 0,43 (turista, `sensor-2`) em B.
 - O trovão só é audível e o turista só é visível. Um episódio `empty` não tem eventos e nunca gera sinal.
+
+### Modelo do mundo e parâmetros das fontes
+
+- **Mapa:** grelha sem obstáculos, com origem `(0, 0)` no canto inferior esquerdo.
+- **Relógio:** tempo simulado, que só avança por ordem explícita.
+- **Movimento:** primeiro no eixo x, depois no eixo y; uma célula por segundo e 1 % de energia por célula.
+- **Eventos:** `threat` é captado pelos três canais, `thunder` apenas pelo acústico e `tourist` pelo visual e humano.
+- **Verdade de referência:** os agentes só conhecem as suas observações; apenas a avaliação vê os eventos reais.
+
+Cada fonte é definida em `sources` no ficheiro do cenário:
+
+| Parâmetro | Descrição |
+|---|---|
+| `kind` | Tipo de fonte: `acoustic`, `visual` ou `human` |
+| `detection_range` | Alcance, em células |
+| `sensitivity` | Probabilidade de captar o sinal (0–1) |
+| `false_negative_rate` | Perante uma ameaça, deteta com probabilidade `sensitivity × (1 − false_negative_rate)` |
+| `false_positive_rate` | Perante um evento benigno, alerta com probabilidade `sensitivity × false_positive_rate` |
+| `position_error` | Erro máximo da posição reportada, por eixo |
+| `confidence` | Confiança declarada pela própria fonte |
 
 Cada cenário traz a sua cópia de `response_settings`. Os limiares e o prior são iguais aos de `config/agents.json`: patrulha 0,25, guarda 0,65, prior α=β=2. Os dois sensores pertencem a grupos e modalidades diferentes. A regra `compatibility_rules` permite que `suspicious_movement` corrobore `gunshot_like_sound`.
 

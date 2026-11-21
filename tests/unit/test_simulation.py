@@ -9,7 +9,7 @@ from isia.simulation.clock import SimulationClock
 from isia.simulation.world import World
 
 
-CONFIG = Path(__file__).resolve().parents[1] / "config" / "environment.json"
+CONFIG = Path(__file__).resolve().parents[2] / "config" / "environment.json"
 
 
 class TestSimulation(unittest.TestCase):

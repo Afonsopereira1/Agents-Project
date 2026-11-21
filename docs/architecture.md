@@ -151,7 +151,7 @@ Base, presente em todas as execuções (criada em `run_mvp`, [runner.py](../src/
 | JID | Classe | Fonte / capacidade |
 |---|---|---|
 | `sensor-mvp` | `IncidentSensorAgent` | `sensor-1`, acústica; inicia a ocorrência |
-| `sensor-peer-mvp` | `InformantAgent` | `sensor-2`: visual nos cenários A a E; acústica no MVP sem cenário |
+| `sensor-peer-mvp` | `InformantAgent` | `sensor-2`: visual nos cenários A a E; acústica sem cenário |
 | `drone-mvp`, `vehicle-mvp` | `DroneAgent`, `VehicleAgent` | `mobile_verification` |
 | `ranger-mvp` | `RangerAgent` | `incident_response` |
 
@@ -159,7 +159,7 @@ O que cada cenário acrescenta ([config/scenarios/](../config/scenarios/)):
 
 | Cenário | Mapa | Iniciadores | Fontes que corroboram | Patrulhas | Guardas |
 |---|---|---|---|---|---|
-| MVP sem cenário, A, B, C | 8×8 | 1 (`sensor-1`) | 1 (`sensor-2`) | 2 | 1 |
+| Sem cenário, A, B, C | 8×8 | 1 (`sensor-1`) | 1 (`sensor-2`) | 2 | 1 |
 | D, «dia movimentado» | 12×8 | 6 | 6 câmaras | 4 | 2 |
 | E, «reserva alargada» | 16×12 | 16 | 2 câmaras e 2 humanos | 4 | 2 |
 
@@ -304,7 +304,7 @@ Três notas:
 
 ## 7. Exemplo completo de execução
 
-Execução real do MVP sem argumentos (`PYTHONPATH=src python -m isia.simulation.runner`), no mapa 8×8. Tempos em segundos simulados.
+Execução real de exemplo, sem argumentos (`PYTHONPATH=src python -m isia.simulation.runner`), no mapa 8×8. Tempos em segundos simulados.
 
 | t | O que acontece |
 |---|---|
@@ -361,14 +361,14 @@ flowchart LR
 | Arquitetura | Prós | Contras | Veredicto |
 |---|---|---|---|
 | Despachante central | Vê tudo; permite atribuição ótima global (algoritmo húngaro); simples e consistente | Ponto único de falha e gargalo; precisa do estado de todos a toda a hora; o enunciado pede *«without a central authority»* | Não: contraria o tema |
-| **B1: iniciador temporário + Contract Net** | Sem gestor global; cada ocorrência tem o seu coordenador, por isso várias correm em paralelo (medido com 6 e 16 iniciadores nos cenários D e E); usa informação local; recursos autónomos; 15 mensagens por ocorrência no MVP | Guloso, não ótimo globalmente; se o iniciador cair, a ocorrência fica parada; dois sensores que ouvem a mesma ameaça abrem duas ocorrências, salvo com o aviso opcional `alert_distance` | **Sim:** melhor equilíbrio |
+| **B1: iniciador temporário + Contract Net** | Sem gestor global; cada ocorrência tem o seu coordenador, por isso várias correm em paralelo (medido com 6 e 16 iniciadores nos cenários D e E); usa informação local; recursos autónomos; 15 mensagens por ocorrência na execução de exemplo | Guloso, não ótimo globalmente; se o iniciador cair, a ocorrência fica parada; dois sensores que ouvem a mesma ameaça abrem duas ocorrências, salvo com o aviso opcional `alert_distance` | **Sim:** melhor equilíbrio |
 | Totalmente distribuída (consenso ou votação) | Robusta e simétrica | O(n²) mensagens; lenta; a votação não descobre a verdade: fontes correlacionadas enganam a maioria | Não: cara e resolve o problema errado |
 | Hierárquica (líderes de zona) | Escala bem em reservas grandes | Exige eleger líderes e tratar a falha de um líder | Não: excessivo para os mapas medidos (até 16×12); evolução futura |
 | Blackboard / tuple space | Simples | O quadro é central | Não |
 
 **Contras medidos** (os restantes são do desenho):
 
-- **O Contract Net espera pelo prazo.** Com o drone silencioso, cada execução demora mais um prazo de receção (0,5 s reais). Dez execuções passaram de 1,5 s para 5,5 s na medição registada em [delivery-todo.md](delivery-todo.md#verificação-de-partida-16-11-2026); repetida a 18-11-2026 deu 1,7 s e 6,9 s. O valor depende da máquina.
+- **O Contract Net espera pelo prazo.** Com o drone silencioso, cada execução demora mais um prazo de receção (0,5 s reais). Dez execuções passaram de 1,5 s para 5,5 s na medição de 16-11-2026; repetida a 18-11-2026 deu 1,7 s e 6,9 s. O valor depende da máquina.
 - **Corroborar custa recall.** No cenário B, `full` contra `no_corroboration` dá FPR 0,25 contra 0,75, mas recall 0,65 contra 0,80 ([experiments.md](experiments.md)). A baseline também baixa o limiar de patrulha, por isso não isola o efeito da corroboração.
 - **A reputação quase não muda decisões.** Entre `full` e `no_reputation` muda uma decisão em 140 pares de execuções ([experiments.md](experiments.md#desfechos-observados)).
 - **Com muitas ocorrências, os recursos não chegam.** No cenário E fecham 132 de 152 ocorrências abertas; 13 expiram e 7 ficam por resolver ([scalability.md](scalability.md#cenário-e--reserva-alargada)).
@@ -396,5 +396,5 @@ O que continua em aberto, sem implementação:
 | Descoberta de vizinhos | Não há. As listas de recursos, a fonte que corrobora e os vizinhos são fixados por `run_mvp` |
 | Várias ocorrências por sensor | Não há. Cada iniciador é OneShot e trata uma ocorrência por execução |
 | Vários iniciadores sobre XMPP | Não há. Iniciadores, informadores e recursos adicionais só existem no transporte local |
-| Aprovação formal dos parâmetros | Por assinar na [ata](approvals.md). Os limiares são valores de engenharia, não calibrados |
+| Aprovação formal dos parâmetros | Por assinar. Os limiares são valores de engenharia, não calibrados |
 | Queda do servidor XMPP | Não tratada nem simulada |

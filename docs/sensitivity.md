@@ -1,6 +1,6 @@
 # Sensibilidade dos parâmetros — Bloco G
 
-[Pendentes](delivery-todo.md#bloco-g--sensibilidade-dos-parâmetros-no-final) · [Experiências da Etapa 9](experiments.md) · [Ata de parâmetros](approvals.md)
+[Experiências da Etapa 9](experiments.md)
 
 ## Em resumo
 

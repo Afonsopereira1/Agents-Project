@@ -1,4 +1,4 @@
-"""Embutir os cenários e uma execução gravada de cada um em docs/presentation/cenarios.html.
+"""Embutir os cenários e uma execução gravada de cada um em deliverables/cenarios.html.
 
 Só lê configurações e relatórios; não corre agentes. Substitui o bloco de dados da página.
 Os relatórios de A, B, C e E vêm de results/*/runs/, que não são versionados: é preciso
@@ -11,7 +11,7 @@ from math import hypot
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PAGE = ROOT / "docs/presentation/cenarios.html"
+PAGE = ROOT / "deliverables/cenarios.html"
 # cenário: (configuração, relatório para o replay, porque foi escolhido)
 SCENARIOS = {
     "A": ("config/scenarios/A.json", "results/experiments/runs/A/full/A-full-000-threat.json",
@@ -20,7 +20,7 @@ SCENARIOS = {
           "Falso alarme: trovão e turista geram dois sinais compatíveis e a patrulha não encontra nada."),
     "C": ("config/scenarios/C.json", "results/experiments/runs/C/full/C-full-007-threat.json",
           "Uma mensagem perdida: o guarda intervém, mas o resultado nunca chega ao sensor."),
-    "D": ("config/scenarios/demo/D.json", "results/demo/d.json",
+    "D": ("config/scenarios/demo/D.json", "results/scenario-d/runs/D/full/D-full-003-busy.json",
           "Seis ocorrências em paralelo; a ameaça de 15 s expira antes de ser atendida."),
     "E": ("config/scenarios/demo/E.json", "results/scenario-e/runs/E/full/E-full-005-wide.json",
           "Dezasseis ocorrências para seis recursos; duas leves ficam sem guarda com autonomia."),
