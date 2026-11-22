@@ -8,6 +8,7 @@ import asyncio
 import json
 import os
 import random
+import sys
 from contextlib import suppress
 from copy import copy, deepcopy
 
@@ -598,7 +599,8 @@ def main():
 
     Raises:
         SystemExit: Via ``parser.error``, se ``--faults`` for usado com ``--xmpp`` ou se
-            ``--xmpp`` for pedido sem a variável XMPP_PASSWORD.
+            ``--xmpp`` for pedido sem a variável XMPP_PASSWORD; com código 1, se a corrida
+            ``--xmpp`` não produzir relatório (por exemplo, servidor desligado).
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--xmpp", action="store_true", help="Usar servidor XMPP em localhost")
@@ -623,9 +625,14 @@ def main():
         print(json.dumps(await run_mvp(xmpp=args.xmpp, password=password,
                                       response_settings=settings, faults=faults, run_id=args.run_id),
                          ensure_ascii=False, indent=2))
+        done.append(True)
+    done = []
     if args.xmpp:
         import spade
         spade.run(demo())
+        # spade.run regista a exceção e termina com código 0; sem relatório, a corrida falhou.
+        if not done:
+            sys.exit("Modo XMPP falhou: o servidor está ligado? (spade run --host localhost --memory)")
     else:
         asyncio.run(demo())
 
