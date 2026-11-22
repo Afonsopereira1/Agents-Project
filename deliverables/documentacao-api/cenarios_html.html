@@ -74,7 +74,7 @@
                     <h1 class="modulename">
 cenarios_html    </h1>
 
-                        <div class="docstring"><p>Embutir os cenários e uma execução gravada de cada um em deliverables/cenarios.html.</p>
+                        <div class="docstring"><p>Embutir os cenários e uma execução gravada de cada um em deliverables/extra/cenarios.html.</p>
 
 <p>Só lê configurações e relatórios; não corre agentes. Substitui o bloco de dados da página.
 Os relatórios de A, B, C e E vêm de results/*/runs/, que não são versionados: é preciso
@@ -101,7 +101,8 @@ Uso, a partir da raiz:  python scripts/cenarios_html.py</p>
         <section id="PAGE">
             <div class="attr variable">
             <span class="name">PAGE</span>        =
-<span class="default_value">PosixPath(&#39;/home/guilhermekbatista/projetos/university/Agents-Project/deliverables/cenarios.html&#39;)</span>
+<input id="PAGE-view-value" class="view-value-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+            <label class="view-value-button pdoc-button" for="PAGE-view-value"></label><span class="default_value">PosixPath(&#39;/home/guilhermekbatista/projetos/university/Agents-Project/deliverables/extra/cenarios.html&#39;)</span>
 
         
     </div>
@@ -138,7 +139,7 @@ Uso, a partir da raiz:  python scripts/cenarios_html.py</p>
         <section id="STATES">
             <div class="attr variable">
             <span class="name">STATES</span>        =
-<span class="default_value">{&#39;unresolved&#39;, &#39;responding&#39;, &#39;expired&#39;, &#39;allocating&#39;, &#39;assessing&#39;, &#39;verifying&#39;, &#39;closed&#39;}</span>
+<span class="default_value">{&#39;closed&#39;, &#39;assessing&#39;, &#39;unresolved&#39;, &#39;verifying&#39;, &#39;allocating&#39;, &#39;expired&#39;, &#39;responding&#39;}</span>
 
         
     </div>

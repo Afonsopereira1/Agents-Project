@@ -104,7 +104,7 @@
         <section id="MVP_RESOURCE_IDS">
             <div class="attr variable">
             <span class="name">MVP_RESOURCE_IDS</span>        =
-<span class="default_value">frozenset({&#39;ranger&#39;, &#39;vehicle&#39;, &#39;drone&#39;})</span>
+<span class="default_value">frozenset({&#39;vehicle&#39;, &#39;drone&#39;, &#39;ranger&#39;})</span>
 
         
     </div>
@@ -116,7 +116,7 @@
         <section id="MVP_AGENT_IDS">
             <div class="attr variable">
             <span class="name">MVP_AGENT_IDS</span>        =
-<span class="default_value">frozenset({&#39;sensor-mvp&#39;, &#39;vehicle-mvp&#39;, &#39;drone-mvp&#39;, &#39;sensor-peer-mvp&#39;, &#39;ranger-mvp&#39;})</span>
+<span class="default_value">frozenset({&#39;sensor-mvp&#39;, &#39;drone-mvp&#39;, &#39;sensor-peer-mvp&#39;, &#39;ranger-mvp&#39;, &#39;vehicle-mvp&#39;})</span>
 
         
     </div>
@@ -180,7 +180,7 @@
         <section id="RESOURCE_KEYS">
             <div class="attr variable">
             <span class="name">RESOURCE_KEYS</span>        =
-<span class="default_value">{&#39;position&#39;, &#39;autonomy_percent&#39;, &#39;load&#39;}</span>
+<span class="default_value">{&#39;load&#39;, &#39;autonomy_percent&#39;, &#39;position&#39;}</span>
 
         
     </div>
@@ -405,7 +405,8 @@ resultados recolhidos.</p>
 
 <p>Raises:
     SystemExit: Via <code>parser.error</code>, se <code>--faults</code> for usado com <code>--xmpp</code> ou se
-        <code>--xmpp</code> for pedido sem a variável XMPP_PASSWORD.</p>
+        <code>--xmpp</code> for pedido sem a variável XMPP_PASSWORD; com código 1, se a corrida
+        <code>--xmpp</code> não produzir relatório (por exemplo, servidor desligado).</p>
 </div>
 
 

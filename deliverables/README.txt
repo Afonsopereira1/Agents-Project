@@ -11,7 +11,7 @@ ONDE ESTÁ O QUÊ (abrir no navegador)
 
   index.html                   documentação do código (docstrings de
                                todos os módulos, classes e funções)
-  cenarios.html                interface dos cenários A a E, com replay
+  extra/cenarios.html          interface dos cenários A a E, com replay
   Presentation.pdf             apresentação
   mvp.mp4                      vídeo de uma ocorrência, do alerta ao fecho
 
@@ -226,7 +226,7 @@ results/           resultados publicados (CSV, gráficos, relatórios)
 docs/              documentação técnica e relatório de desempenho
 deliverables/      este ficheiro, documentação do código
                    (documentacao-api/ e index.html), interface de
-                   exemplo (cenarios.html), Presentation.pdf e mvp.mp4
+                   exemplo (extra/cenarios.html), Presentation.pdf e mvp.mp4
 
 Documentos principais:
   docs/architecture.md     arquitetura e agentes
